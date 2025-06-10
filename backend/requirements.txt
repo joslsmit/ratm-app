@@ -4,3 +4,4 @@ python-dotenv
 requests
 pandas
 google-generativeai
+requests-oauthlib

@@ -1,5 +1,5 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS # Import CORS
+from flask import Flask, request, jsonify, redirect, url_for, session
+from flask_cors import CORS
 import requests
 import os
 import pandas as pd
@@ -7,17 +7,47 @@ import re
 import json
 from dotenv import load_dotenv
 import google.generativeai as genai
-import traceback # Import traceback for detailed error logging
+import traceback
+from requests_oauthlib import OAuth1Session # Import OAuth1Session for Yahoo
 
 # Get the absolute path of the directory where this file is located
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 load_dotenv()
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}}) # Enable CORS for /api routes from frontend origin
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "supersecretkey") # Needed for Flask sessions
+CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}})
 
 # --- Configuration (API key will be passed per request) ---
-model = genai.GenerativeModel('gemini-2.0-flash') # Model object can be global, but configured per request
+model = genai.GenerativeModel('gemini-2.0-flash')
+
+# --- Yahoo OAuth Configuration ---
+# These should be set as environment variables on Render and in your local .env
+YAHOO_CLIENT_ID = os.getenv("YAHOO_CLIENT_ID")
+YAHOO_CLIENT_SECRET = os.getenv("YAHOO_CLIENT_SECRET")
+YAHOO_REDIRECT_URI = os.getenv("YAHOO_REDIRECT_URI") # e.g., https://ratm-yff.onrender.com/auth/yahoo/callback
+
+# Yahoo OAuth URLs
+REQUEST_TOKEN_URL = "https://api.login.yahoo.com/oauth/v2/get_request_token"
+AUTHORIZE_URL = "https://api.login.yahoo.com/oauth/v2/request_auth"
+ACCESS_TOKEN_URL = "https://api.login.yahoo.com/oauth/v2/get_token"
+PROFILE_URL = "https://social.yahooapis.com/v1/user/me/profile?format=json"
+
+# --- Token Storage (WARNING: Not persistent on Render Free Tier) ---
+TOKEN_FILE = os.path.join(basedir, 'yahoo_tokens.json')
+
+def save_yahoo_tokens(tokens):
+    with open(TOKEN_FILE, 'w') as f:
+        json.dump(tokens, f)
+    print("✅ Yahoo tokens saved.")
+
+def load_yahoo_tokens():
+    if os.path.exists(TOKEN_FILE):
+        with open(TOKEN_FILE, 'r') as f:
+            tokens = json.load(f)
+        print("✅ Yahoo tokens loaded.")
+        return tokens
+    return None
 
 # --- Data Caching ---
 player_data_cache, player_name_to_id, static_adp_data = None, None, {}
@@ -38,7 +68,7 @@ def load_adp_from_csv(file_path):
         return None
     except Exception as e:
         print(f"❌ FATAL ERROR loading CSV: {e}")
-        traceback.print_exc() # Print full traceback
+        traceback.print_exc()
         return None
 
 def get_all_players():
@@ -53,7 +83,7 @@ def get_all_players():
         print(f"✅ Successfully loaded {len(player_data_cache)} players from Sleeper API.")
     except Exception as e:
         print(f"❌ FATAL ERROR fetching players from Sleeper API: {e}")
-        traceback.print_exc() # Print full traceback
+        traceback.print_exc()
         player_data_cache, player_name_to_id = {}, {}
 
 def fuzzy_find_player_key(name_to_search, key_dictionary):
@@ -83,9 +113,8 @@ def get_player_context(player_name):
     context_lines.append(f"  - Consensus Market ADP: {adp_display}")
     return "\n".join(context_lines)
 
-def make_gemini_request(prompt, user_api_key): # user_api_key is now passed as a parameter
+def make_gemini_request(prompt, user_api_key):
     if not user_api_key: raise Exception("API key is missing from the request.")
-    # Configure genai per request with the user's key
     genai.configure(api_key=user_api_key)
     response = model.generate_content(prompt)
     if not response.candidates:
@@ -99,16 +128,14 @@ def process_ai_response(response_text):
         confidence = data.get('confidence', 'Medium').title()
         analysis_content = data.get('analysis', 'No analysis provided.')
 
-        # If analysis_content is a dictionary, format it into a Markdown string
         if isinstance(analysis_content, dict):
             formatted_analysis = []
             for key, value in analysis_content.items():
-                # Capitalize key for display, replace underscores with spaces
                 display_key = key.replace('_', ' ').title()
                 formatted_analysis.append(f"**{display_key}:** {value}")
             analysis_text = "\n\n".join(formatted_analysis)
         else:
-            analysis_text = analysis_content # Assume it's already a string
+            analysis_text = analysis_content
 
         emoji_map = {'High': '✅', 'Medium': '🤔', 'Low': '⚠️'}
         confidence_badge = f"**Confidence: {emoji_map.get(confidence, '🤔')} {confidence}**"
@@ -121,6 +148,78 @@ def process_ai_response(response_text):
 PROMPT_PREAMBLE = "You are 'The Analyst,' a data-driven, no-nonsense fantasy football expert providing advice for the upcoming 2025 NFL season. All analysis is for a 12-team, PPR league with standard Yahoo scoring rules..."
 JSON_OUTPUT_INSTRUCTION = "Your response MUST be a JSON object with two keys: \"confidence\" and \"analysis\"..."
 
+# --- Yahoo OAuth Endpoints ---
+@app.route('/auth/yahoo')
+def yahoo_authorize():
+    if not all([YAHOO_CLIENT_ID, YAHOO_CLIENT_SECRET, YAHOO_REDIRECT_URI]):
+        return jsonify({"error": "Yahoo OAuth credentials not configured on backend."}), 500
+
+    oauth = OAuth1Session(YAHOO_CLIENT_ID,
+                          client_secret=YAHOO_CLIENT_SECRET,
+                          callback_uri=YAHOO_REDIRECT_URI)
+    
+    try:
+        fetch_response = oauth.fetch_request_token(REQUEST_TOKEN_URL)
+        resource_owner_key = fetch_response.get('oauth_token')
+        resource_owner_secret = fetch_response.get('oauth_token_secret')
+
+        session['oauth_token'] = resource_owner_key
+        session['oauth_token_secret'] = resource_owner_secret
+
+        authorization_url = oauth.authorization_url(AUTHORIZE_URL)
+        return redirect(authorization_url)
+    except Exception as e:
+        print(f"Error during Yahoo authorization: {e}")
+        traceback.print_exc()
+        return jsonify({"error": f"Yahoo authorization failed: {e}"}), 500
+
+@app.route('/auth/yahoo/callback')
+def yahoo_callback():
+    if 'oauth_token' not in session or 'oauth_token_secret' not in session:
+        return jsonify({"error": "OAuth session data missing."}), 400
+
+    resource_owner_key = session['oauth_token']
+    resource_owner_secret = session['oauth_token_secret']
+    oauth_verifier = request.args.get('oauth_verifier')
+
+    if not oauth_verifier:
+        return jsonify({"error": "OAuth verifier missing."}), 400
+
+    oauth = OAuth1Session(YAHOO_CLIENT_ID,
+                          client_secret=YAHOO_CLIENT_SECRET,
+                          resource_owner_key=resource_owner_key,
+                          resource_owner_secret=resource_owner_secret,
+                          verifier=oauth_verifier)
+    try:
+        oauth_tokens = oauth.fetch_access_token(ACCESS_TOKEN_URL)
+        save_yahoo_tokens(oauth_tokens) # Save tokens to file
+        # For now, redirect to frontend success page or just a message
+        return redirect("http://localhost:3000/?auth_success=true") # Redirect to frontend
+    except Exception as e:
+        print(f"Error during Yahoo OAuth callback: {e}")
+        traceback.print_exc()
+        return jsonify({"error": f"Yahoo OAuth callback failed: {e}"}), 500
+
+@app.route('/api/yahoo/user_profile')
+def yahoo_user_profile():
+    tokens = load_yahoo_tokens()
+    if not tokens:
+        return jsonify({"error": "Yahoo tokens not found. Please authorize first."}), 401
+
+    oauth = OAuth1Session(YAHOO_CLIENT_ID,
+                          client_secret=YAHOO_CLIENT_SECRET,
+                          resource_owner_key=tokens['oauth_token'],
+                          resource_owner_secret=tokens['oauth_token_secret'])
+    try:
+        response = oauth.get(PROFILE_URL)
+        response.raise_for_status()
+        return jsonify(response.json())
+    except Exception as e:
+        print(f"Error fetching Yahoo user profile: {e}")
+        traceback.print_exc()
+        return jsonify({"error": f"Failed to fetch Yahoo user profile: {e}"}), 500
+
+# --- Existing API Endpoints (modified to pass user_key) ---
 @app.route('/api/player_dossier', methods=['POST'])
 def player_dossier():
     try:
