@@ -272,7 +272,7 @@ if __name__ == '__main__':
         csv_file_path = os.path.join(basedir, 'FantasyPros_2025_Overall_ADP_Rankings.csv')
         static_adp_data = load_adp_from_csv(csv_file_path)
         if static_adp_data and player_data_cache is not None:
-            app.run(debug=True, port=5001) # Run on a different port to avoid conflict with potential frontend dev server
+            app.run(debug=True, host='0.0.0.0', port=5001) # Bind to 0.0.0.0 for Render deployment
         else:
             print("Application will not start because essential data failed to load.")
     except Exception as e:
