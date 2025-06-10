@@ -16,12 +16,8 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}}) # Enable CORS for /api routes from frontend origin
 
-# --- Configuration ---
-api_key = os.getenv("GOOGLE_API_KEY")
-if not api_key:
-    raise ValueError("FATAL ERROR: GOOGLE_API_KEY not found in environment. The application cannot start.")
-genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-2.0-flash') 
+# --- Configuration (API key will be passed per request) ---
+model = genai.GenerativeModel('gemini-2.0-flash') # Model object can be global, but configured per request
 
 # --- Data Caching ---
 player_data_cache, player_name_to_id, static_adp_data = None, None, {}
@@ -87,8 +83,10 @@ def get_player_context(player_name):
     context_lines.append(f"  - Consensus Market ADP: {adp_display}")
     return "\n".join(context_lines)
 
-def make_gemini_request(prompt): # Removed user_api_key as it's now configured globally
-    if not api_key: raise Exception("API key is missing from the request.")
+def make_gemini_request(prompt, user_api_key): # user_api_key is now passed as a parameter
+    if not user_api_key: raise Exception("API key is missing from the request.")
+    # Configure genai per request with the user's key
+    genai.configure(api_key=user_api_key)
     response = model.generate_content(prompt)
     if not response.candidates:
         return "The AI model did not return a valid response. The content may have been blocked due to safety settings."
@@ -126,9 +124,10 @@ JSON_OUTPUT_INSTRUCTION = "Your response MUST be a JSON object with two keys: \"
 @app.route('/api/player_dossier', methods=['POST'])
 def player_dossier():
     try:
+        user_key = request.headers.get('X-API-Key')
         player_name = request.json.get('player_name')
         prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** First, create a detailed markdown report for the player with headers: ### Depth Chart Role, ### Value Analysis, ### Risk Factors, ### 2025 Outlook, and ### Final Verdict. Then, wrap this entire markdown report inside the 'analysis' key of your JSON output.\n\n**Player Data:**\n{get_player_context(player_name)}\n\n{JSON_OUTPUT_INSTRUCTION}"
-        response_text = make_gemini_request(prompt) # Use the new make_gemini_request
+        response_text = make_gemini_request(prompt, user_key)
         return jsonify({'result': process_ai_response(response_text)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -136,6 +135,7 @@ def player_dossier():
 @app.route('/api/rookie_rankings', methods=['POST'])
 def rookie_rankings():
     try:
+        user_key = request.headers.get('X-API-Key')
         position_filter = request.json.get('position', 'all')
         rookies = [
             {'name': p.get('full_name'),'position': p.get('position'),'team': p.get('team'), **static_adp_data.get(p.get('full_name', '').lower().strip(), {})}
@@ -144,7 +144,7 @@ def rookie_rankings():
         sorted_rookies = sorted(rookies, key=lambda x: x.get('adp') or 999)
         rookie_list_for_prompt = [f"- {r['name']} ({r['position']}, {r['team']}) - ADP: {r.get('adp') or 'N/A'}" for r in sorted_rookies[:50]]
         prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Create a ranked list of rookies.\n\n**Rookie Data:**\n{chr(10).join(rookie_list_for_prompt)}\n\n**Instructions:** Your response MUST be a single JSON object with one key: \"rookies\". The value must be a JSON array of objects. For each of the top 15 rookies, create an object with these keys: \"rank\", \"name\", \"position\", \"team\", \"adp\" (string or \"N/A\"), \"pos_rank\", and \"analysis\" (a 1-2 sentence summary of their outlook)."
-        response_text = make_gemini_request(prompt)
+        response_text = make_gemini_request(prompt, user_key)
         cleaned_text = re.sub(r'^```json\s*|```\s*$', '', response_text.strip(), flags=re.MULTILINE)
         return jsonify(json.loads(cleaned_text).get('rookies', []))
     except Exception as e:
@@ -153,10 +153,11 @@ def rookie_rankings():
 @app.route('/api/keeper_evaluation', methods=['POST'])
 def keeper_evaluation():
     try:
+        user_key = request.headers.get('X-API-Key')
         keepers = request.json.get('keepers')
         context_str = "\n".join([f"{get_player_context(k['name'])}\n  - Keeper Cost: A round {int(k['round']) - 1} pick\n" for k in keepers])
         prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Analyze these keepers. Compare Cost to ADP. Note bye week overlaps. Prioritize recommendations.\n\n**Data:**\n{context_str}\n\n{JSON_OUTPUT_INSTRUCTION}"
-        response_text = make_gemini_request(prompt)
+        response_text = make_gemini_request(prompt, user_key)
         return jsonify({'result': process_ai_response(response_text)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -164,10 +165,11 @@ def keeper_evaluation():
 @app.route('/api/trade_analyzer', methods=['POST'])
 def trade_analyzer():
     try:
+        user_key = request.headers.get('X-API-Key')
         my_assets_context = "\n".join([get_player_context(name) if "pick" not in name.lower() else f"- {name}" for name in request.json.get('my_assets', [])])
         partner_assets_context = "\n".join([get_player_context(name) if "pick" not in name.lower() else f"- {name}" for name in request.json.get('partner_assets', [])])
         prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Analyze this trade. Declare a winner or if it is fair. Justify your answer.\n\n**Assets My Team Receives:**\n{my_assets_context}\n\n**Assets My Partner Receives:**\n{partner_assets_context}\n\n{JSON_OUTPUT_INSTRUCTION}"
-        response_text = make_gemini_request(prompt)
+        response_text = make_gemini_request(prompt, user_key)
         return jsonify({'result': process_ai_response(response_text)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -175,10 +177,11 @@ def trade_analyzer():
 @app.route('/api/generate_tiers', methods=['POST'])
 def generate_tiers():
     try:
+        user_key = request.headers.get('X-API-Key')
         position = request.json.get('position')
         player_list_str = "\n".join([f"- {name.title()} ({p_data['pos_rank']}, {player_data_cache.get(player_name_to_id.get(name), {}).get('team', 'N/A')}) - ADP: {p_data['adp']}" for name, p_data in sorted(static_adp_data.items(), key=lambda item: item[1]['adp']) if p_data.get('pos_rank', '').startswith(position)])
         prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Group the following {position}s into Tiers. For each tier, give a header, a 1-sentence summary, and a bulleted list of players.\n\n**Player List:**\n{player_list_str}\n\n{JSON_OUTPUT_INSTRUCTION}"
-        response_text = make_gemini_request(prompt)
+        response_text = make_gemini_request(prompt, user_key)
         return jsonify({'result': process_ai_response(response_text)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -186,6 +189,7 @@ def generate_tiers():
 @app.route('/api/find_market_inefficiencies', methods=['POST'])
 def find_market_inefficiencies():
     try:
+        user_key = request.headers.get('X-API-Key')
         position = request.json.get('position', 'all')
         candidates_str = ""
         for name, adp_data in sorted(static_adp_data.items(), key=lambda item: item[1].get('adp') or 999):
@@ -195,7 +199,7 @@ def find_market_inefficiencies():
                 candidates_str += f"- {name.title()} ({adp_data.get('pos_rank', 'N/A')}, {sleeper_info.get('team', 'N/A')}): ADP={adp_data.get('adp')}, SleeperRank={sleeper_info.get('rank_ppr')}, Status={sleeper_info.get('status')}\n"
                 if len(candidates_str.splitlines()) >= 150: break
         prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Find market inefficiencies. Your response MUST be a single JSON object with two keys: \"sleepers\" and \"busts\". Each key must contain a JSON array of 3-5 player objects. Each player object must have two keys: \"name\" and \"justification\".\n\n**Data:**\n{candidates_str}"
-        response_text = make_gemini_request(prompt)
+        response_text = make_gemini_request(prompt, user_key)
         cleaned_text = re.sub(r'^```json\s*|```\s*$', '', response_text.strip(), flags=re.MULTILINE)
         return jsonify(json.loads(cleaned_text))
     except Exception as e:
@@ -204,10 +208,11 @@ def find_market_inefficiencies():
 @app.route('/api/suggest_position', methods=['POST'])
 def suggest_position():
     try:
+        user_key = request.headers.get('X-API-Key')
         data = request.json
         draft_summary = "\n".join([f"{rnd}: Drafted {get_player_context(name)}" for rnd, name in data.get('draft_board', {}).items() if name]) if data.get('draft_board') else "No picks made yet."
         prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** It is Round {data.get('current_round')}. Based on my detailed roster below, what are the top 2 positions I should target? Justify.\n\n**My Draft So Far:**\n{draft_summary}"
-        response_text = make_gemini_request(prompt)
+        response_text = make_gemini_request(prompt, user_key)
         return jsonify({'result': response_text})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -215,11 +220,12 @@ def suggest_position():
 @app.route('/api/pick_evaluator', methods=['POST'])
 def pick_evaluator():
     try:
+        user_key = request.headers.get('X-API-Key')
         data = request.json
         draft_summary = "\n".join([f"{rnd}: Drafted {get_player_context(name)}" for rnd, name in data.get('draft_board', {}).items() if name]) if data.get('draft_board') else "This is my first pick."
         player_context = get_player_context(data.get('player_to_pick'))
         prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Analyze if this is a good pick for me in Round {data.get('current_round')}. Compare ADP to the round and evaluate roster fit. Give a 'GOOD PICK', 'SOLID PICK,' or 'POOR PICK' verdict.\n\n**My Draft So Far:**\n{draft_summary}\n\n**Player Being Considered:**\n{player_context}\n\n{JSON_OUTPUT_INSTRUCTION}"
-        response_text = make_gemini_request(prompt)
+        response_text = make_gemini_request(prompt, user_key)
         return jsonify({'result': process_ai_response(response_text)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -227,11 +233,12 @@ def pick_evaluator():
 @app.route('/api/roster_composition_analysis', methods=['POST'])
 def roster_composition_analysis():
     try:
+        user_key = request.headers.get('X-API-Key')
         composition = request.json.get('composition')
         comp_str = ", ".join([f"{count} {pos}" for pos, count in composition.items()])
         prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Provide a brief, 2-3 sentence analysis of my roster balance based on these position counts.\n\n**Composition:**\n{comp_str}"
-        response_text = make_gemini_request(prompt)
-        return jsonify({'result': response_text})
+        response_text = make_gemini_request(prompt, user_key)
+        return jsonify({'result': response_ai_response(response_text)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
@@ -260,6 +267,7 @@ def trending_players():
 
 if __name__ == '__main__':
     try:
+        # No longer need to load API key globally here
         get_all_players()
         csv_file_path = os.path.join(basedir, 'FantasyPros_2025_Overall_ADP_Rankings.csv')
         static_adp_data = load_adp_from_csv(csv_file_path)
