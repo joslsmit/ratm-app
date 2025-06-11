@@ -9,9 +9,22 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 import traceback
 from requests_oauthlib import OAuth1Session # Import OAuth1Session for Yahoo
+import logging # Import logging module
+from datetime import datetime # Import datetime class
+
+print("--- APP.PY VERSION 3.0 LOADED ---") # Unique identifier for debugging
 
 # Get the absolute path of the directory where this file is located
 basedir = os.path.abspath(os.path.dirname(__file__))
+
+# Define log file path (no longer configuring logging.basicConfig here)
+log_file_path = os.path.join(basedir, 'ai_response.log')
+# Initial log message (optional, as direct writes will handle main debugging)
+try:
+    with open(log_file_path, 'a') as f:
+        f.write(f"{datetime.now()} - --- Backend Server Started ---\n")
+except Exception as e:
+    print(f"Error writing initial log message: {e}")
 
 load_dotenv()
 app = Flask(__name__)
@@ -118,12 +131,31 @@ def make_gemini_request(prompt, user_api_key):
     genai.configure(api_key=user_api_key)
     response = model.generate_content(prompt)
     if not response.candidates:
+        print("AI model did not return a valid response (no candidates).")
         return "The AI model did not return a valid response. The content may have been blocked due to safety settings."
-    return response.text
+    
+    raw_response_text = response.text
+    # Directly write to log file for robust debugging
+    try:
+        with open(log_file_path, 'a') as f: # 'a' for append mode
+            f.write("\n" + "="*50 + "\n")
+            f.write("--- RAW AI RESPONSE (FOR DEBUGGING) ---\n")
+            f.write(raw_response_text + "\n")
+            f.write("="*50 + "\n\n")
+    except Exception as log_e:
+        print(f"Error writing to log file: {log_e}")
+    return raw_response_text
 
 def process_ai_response(response_text):
     try:
-        cleaned_text = re.sub(r'^```json\s*|```\s*$', '', response_text.strip(), flags=re.MULTILINE)
+        # Attempt to find the JSON block more robustly
+        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+        if json_match:
+            cleaned_text = json_match.group(0)
+        else:
+            # Fallback to original cleaning if no curly braces found
+            cleaned_text = re.sub(r'^```json\s*|```\s*$', '', response_text.strip(), flags=re.MULTILINE)
+        
         data = json.loads(cleaned_text)
         confidence = data.get('confidence', 'Medium').title()
         analysis_content = data.get('analysis', 'No analysis provided.')
@@ -155,8 +187,8 @@ def yahoo_authorize():
         return jsonify({"error": "Yahoo OAuth credentials not configured on backend."}), 500
 
     oauth = OAuth1Session(YAHOO_CLIENT_ID,
-                          client_secret=YAHOO_CLIENT_SECRET,
-                          callback_uri=YAHOO_REDIRECT_URI)
+                            client_secret=YAHOO_CLIENT_SECRET,
+                            callback_uri=YAHOO_REDIRECT_URI)
     
     try:
         fetch_response = oauth.fetch_request_token(REQUEST_TOKEN_URL)
@@ -186,10 +218,10 @@ def yahoo_callback():
         return jsonify({"error": "OAuth verifier missing."}), 400
 
     oauth = OAuth1Session(YAHOO_CLIENT_ID,
-                          client_secret=YAHOO_CLIENT_SECRET,
-                          resource_owner_key=resource_owner_key,
-                          resource_owner_secret=resource_owner_secret,
-                          verifier=oauth_verifier)
+                            client_secret=YAHOO_CLIENT_SECRET,
+                            resource_owner_key=resource_owner_key,
+                            resource_owner_secret=resource_owner_secret,
+                            verifier=oauth_verifier)
     try:
         oauth_tokens = oauth.fetch_access_token(ACCESS_TOKEN_URL)
         save_yahoo_tokens(oauth_tokens) # Save tokens to file
@@ -207,9 +239,9 @@ def yahoo_user_profile():
         return jsonify({"error": "Yahoo tokens not found. Please authorize first."}), 401
 
     oauth = OAuth1Session(YAHOO_CLIENT_ID,
-                          client_secret=YAHOO_CLIENT_SECRET,
-                          resource_owner_key=tokens['oauth_token'],
-                          resource_owner_secret=tokens['oauth_token_secret'])
+                            client_secret=YAHOO_CLIENT_SECRET,
+                            resource_owner_key=tokens['oauth_token'],
+                            resource_owner_secret=tokens['oauth_token_secret'])
     try:
         response = oauth.get(PROFILE_URL)
         response.raise_for_status()
@@ -279,9 +311,31 @@ def generate_tiers():
         user_key = request.headers.get('X-API-Key')
         position = request.json.get('position')
         player_list_str = "\n".join([f"- {name.title()} ({p_data['pos_rank']}, {player_data_cache.get(player_name_to_id.get(name), {}).get('team', 'N/A')}) - ADP: {p_data['adp']}" for name, p_data in sorted(static_adp_data.items(), key=lambda item: item[1]['adp']) if p_data.get('pos_rank', '').startswith(position)])
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Group the following {position}s into Tiers. For each tier, give a header, a 1-sentence summary, and a bulleted list of players.\n\n**Player List:**\n{player_list_str}\n\n{JSON_OUTPUT_INSTRUCTION}"
+        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Group the following {position}s into Tiers. Return the tiers as a JSON object with a single key, 'tiers', whose value is a JSON array. Each object in the 'tiers' array should represent a tier and have the following keys: 'header' (string, e.g., 'Tier 1: Elite Quarterbacks'), 'summary' (string, a 1-sentence summary), and 'players' (JSON array of player names as strings).\n\n**Example Desired JSON Structure:**\n```json\n{{\n  \"tiers\": [\n    {{\n      \"header\": \"Tier 1: Elite Quarterbacks\",\n      \"summary\": \"These QBs are top-tier.\",\n      \"players\": [\"Player A\", \"Player B\"]\n    }},\n    {{\n      \"header\": \"Tier 2: High-Upside Quarterbacks\",\n      \"summary\": \"These QBs have potential.\",\n      \"players\": [\"Player C\", \"Player D\"]\n    }}\n  ]\n}}\n```\n\n**Player List for Tiers:**\n{player_list_str}\n\n{JSON_OUTPUT_INSTRUCTION}"
         response_text = make_gemini_request(prompt, user_key)
-        return jsonify({'result': process_ai_response(response_text)})
+        
+        try:
+            cleaned_text = re.sub(r'^```json\s*|```\s*$', '', response_text.strip(), flags=re.MULTILINE)
+            data = json.loads(cleaned_text)
+            # Correctly access the nested 'tiers' array
+            tiers_data = data.get('analysis', {}).get('tiers', [])
+            
+            markdown_output = []
+            for tier in tiers_data:
+                header = tier.get('header', 'Untitled Tier')
+                summary = tier.get('summary', 'No summary provided.')
+                players = tier.get('players', [])
+                
+                markdown_output.append(f"## {header}")
+                markdown_output.append(f"{summary}")
+                for player in players:
+                    markdown_output.append(f"* {player}")
+                markdown_output.append("") # Add a blank line between tiers
+            
+            return jsonify({'result': "\n".join(markdown_output).strip()})
+        except (json.JSONDecodeError, AttributeError) as e:
+            print(f"Error processing AI response for tiers: {e}")
+            return jsonify({'error': f"Failed to parse AI response for tiers: {e}"}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -337,7 +391,7 @@ def roster_composition_analysis():
         comp_str = ", ".join([f"{count} {pos}" for pos, count in composition.items()])
         prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Provide a brief, 2-3 sentence analysis of my roster balance based on these position counts.\n\n**Composition:**\n{comp_str}"
         response_text = make_gemini_request(prompt, user_key)
-        return jsonify({'result': response_ai_response(response_text)})
+        return jsonify({'result': process_ai_response(response_text)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     

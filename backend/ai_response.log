@@ -1,0 +1,796 @@
+2025-06-10 20:09:37,276 - INFO - --- Backend Server Started ---
+2025-06-10 20:09:37,783 - WARNING -  * Debugger is active!
+2025-06-10 20:09:37,794 - INFO -  * Debugger PIN: 122-349-389
+2025-06-10 20:10:16,970 - INFO - --- Backend Server Started ---
+2025-06-10 20:10:17,569 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://192.168.4.147:5001
+2025-06-10 20:10:17,570 - INFO - [33mPress CTRL+C to quit[0m
+2025-06-10 20:10:17,570 - INFO -  * Restarting with stat
+2025-06-10 20:10:17,989 - INFO - --- Backend Server Started ---
+2025-06-10 20:10:18,424 - WARNING -  * Debugger is active!
+2025-06-10 20:10:18,434 - INFO -  * Debugger PIN: 122-349-389
+2025-06-10 20:12:48,761 - INFO -  * Detected change in '/Users/joshua.smith/fantasy-football-app/fantasy-football-decoupled/backend/app.py', reloading
+2025-06-10 20:12:48,916 - INFO -  * Restarting with stat
+2025-06-10 20:12:49,527 - INFO - --- Backend Server Started ---
+2025-06-10 20:12:50,066 - WARNING -  * Debugger is active!
+2025-06-10 20:12:50,077 - INFO -  * Debugger PIN: 122-349-389
+2025-06-10 20:13:23,868 - INFO - --- Backend Server Started ---
+2025-06-10 20:13:24,391 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://192.168.4.147:5001
+2025-06-10 20:13:24,391 - INFO - [33mPress CTRL+C to quit[0m
+2025-06-10 20:13:24,392 - INFO -  * Restarting with stat
+2025-06-10 20:13:24,850 - INFO - --- Backend Server Started ---
+2025-06-10 20:13:25,394 - WARNING -  * Debugger is active!
+2025-06-10 20:13:25,406 - INFO -  * Debugger PIN: 122-349-389
+2025-06-10 20:26:49,989 - INFO - --- Backend Server Started ---
+2025-06-10 20:26:51,826 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://192.168.4.147:5001
+2025-06-10 20:26:51,827 - INFO - [33mPress CTRL+C to quit[0m
+2025-06-10 20:26:51,828 - INFO -  * Restarting with stat
+2025-06-10 20:26:52,306 - INFO - --- Backend Server Started ---
+2025-06-10 20:26:52,829 - WARNING -  * Debugger is active!
+2025-06-10 20:26:52,839 - INFO -  * Debugger PIN: 122-349-389
+2025-06-10 20:28:07,562 - INFO - --- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "confidence": "High",
+  "analysis": {
+    "tiers": [
+      {
+        "header": "Tier 1: Elite Dual-Threat Quarterbacks",
+        "summary": "These quarterbacks offer the highest floor and ceiling combination due to their rushing ability and proven passing production.",
+        "players": [
+          "Josh Allen",
+          "Lamar Jackson",
+          "Jayden Daniels",
+          "Jalen Hurts"
+        ]
+      },
+      {
+        "header": "Tier 2: High-End Passing Quarterbacks",
+        "summary": "These quarterbacks are excellent passers with demonstrated performance, but have either minimal rushing upside or some risk factors.",
+        "players": [
+          "Joe Burrow",
+          "Patrick Mahomes"
+        ]
+      },
+      {
+        "header": "Tier 3: Solid Starters with Upside",
+        "summary": "These quarterbacks should be considered viable starters in most weeks, with the potential to break into the top tier depending on their team's performance or individual development.",
+        "players": [
+          "Baker Mayfield",
+          "Kyler Murray",
+          "Bo Nix",
+          "Justin Fields",
+          "Caleb Williams",
+          "Brock Purdy"
+        ]
+      },
+      {
+        "header": "Tier 4: The Streamer Zone",
+        "summary": "These quarterbacks are viable streaming options in favorable matchups but lack the consistency to be considered every-week starters.",
+        "players": [
+          "Jared Goff",
+          "Drake Maye",
+          "Justin Herbert",
+          "Dak Prescott",
+          "Jordan Love",
+          "J.J. Mccarthy"
+        ]
+      },
+      {
+        "header": "Tier 5: Late-Round Fliers & Potential Sleepers",
+        "summary": "These quarterbacks could significantly outperform their ADP, due to their teams performance or individual development, but carry considerable risk.",
+        "players": [
+          "Trevor Lawrence",
+          "C.J. Stroud",
+          "Michael Penix Jr."
+        ]
+      },
+      {
+        "header": "Tier 6: Backups and Deep League Options",
+        "summary": "These quarterbacks should only be rostered in deeper leagues or as backups in 2QB formats, given their lack of consistent production or unclear roles.",
+        "players": [
+          "Tua Tagovailoa",
+          "Matthew Stafford",
+          "Bryce Young",
+          "Cameron Ward",
+          "Geno Smith",
+          "Sam Darnold",
+          "Anthony Richardson Sr.",
+          "Jaxson Dart",
+          "Aaron Rodgers",
+          "Russell Wilson",
+          "Daniel Jones",
+          "Jalen Milroe",
+          "Shedeur Sanders",
+          "Joe Flacco",
+          "Tyler Shough",
+          "Kirk Cousins",
+          "Jameis Winston",
+          "Dorian Thompson-Robinson",
+          "Joe Milton",
+          "Mac Jones",
+          "Kenny Pickett",
+          "Spencer Rattler",
+          "Tyler Van Dyke",
+          "Deshaun Watson",
+          "Will Howard",
+          "E.J. Perry",
+          "Emory Jones",
+          "Payton Thorne",
+          "Mason Rudolph",
+          "Jimmy Garoppolo",
+          "Sam Howell",
+          "Marcus Mariota",
+          "Quinn Ewers",
+          "Matt Corral",
+          "Andy Dalton",
+          "Zach Wilson",
+          "Dillon Gabriel",
+          "Jake Browning",
+          "Tyson Bagent",
+          "Mitchell Trubisky",
+          "Cooper Rush",
+          "Drew Lock",
+          "Gardner Minshew",
+          "Hendon Hooker",
+          "Jordan Travis"
+        ]
+      }
+    ]
+  }
+}
+```
+2025-06-10 20:28:07,566 - INFO - 127.0.0.1 - - [10/Jun/2025 20:28:07] "POST /api/generate_tiers HTTP/1.1" 200 -
+2025-06-10 20:28:43,402 - INFO -  * Detected change in '/Users/joshua.smith/fantasy-football-app/fantasy-football-decoupled/backend/app.py', reloading
+2025-06-10 20:28:45,582 - INFO -  * Restarting with stat
+
+==================================================
+--- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "confidence": "High",
+  "analysis": {
+    "tiers": [
+      {
+        "header": "Tier 1: Elite Dual-Threat Quarterbacks",
+        "summary": "These quarterbacks provide consistent rushing upside, making them weekly top-5 options.",
+        "players": [
+          "Josh Allen",
+          "Lamar Jackson",
+          "Jayden Daniels",
+          "Jalen Hurts"
+        ]
+      },
+      {
+        "header": "Tier 2: High-Floor Passing Quarterbacks",
+        "summary": "These quarterbacks have proven they can reliably sling it to accumulate points, but offer limited rushing yards",
+        "players": [
+          "Joe Burrow",
+          "Patrick Mahomes"
+        ]
+      },
+      {
+        "header": "Tier 3: Mid-Range Starters with Upside",
+        "summary": "These quarterbacks could provide QB1 production, but have a lower floor due to inconsistency.",
+        "players": [
+          "Baker Mayfield",
+          "Kyler Murray",
+          "Bo Nix",
+          "Justin Fields",
+          "Caleb Williams",
+          "Brock Purdy"
+        ]
+      },
+      {
+        "header": "Tier 4: Solid Starters with Limited Ceiling",
+        "summary": "These quarterbacks are serviceable starters, but unlikely to win you your week.",
+        "players": [
+          "Jared Goff",
+          "Drake Maye",
+          "Justin Herbert",
+          "Dak Prescott",
+          "Jordan Love"
+        ]
+      },
+      {
+        "header": "Tier 5: High-Risk/High-Reward Quarterbacks",
+        "summary": "These quarterbacks carry injury risks and are either unproven or have been inconsistent, but could break into the top 12.",
+        "players": [
+          "J.J. Mccarthy",
+          "Trevor Lawrence",
+          "C.J. Stroud",
+          "Michael Penix Jr.",
+          "Tua Tagovailoa"
+        ]
+      },
+      {
+        "header": "Tier 6: Streaming Options",
+        "summary": "These quarterbacks are suitable for streaming or as backups, but are not consistent starters.",
+        "players": [
+          "Matthew Stafford",
+          "Bryce Young",
+          "Cameron Ward",
+          "Geno Smith",
+          "Sam Darnold",
+          "Anthony Richardson Sr."
+        ]
+      },
+            {
+        "header": "Tier 7: Injury Fill-Ins/Deep League Stashes",
+        "summary": "These players are generally only relevant due to injuries or in very deep leagues",
+        "players": [
+            "Jaxson Dart",
+            "Aaron Rodgers",
+            "Russell Wilson",
+            "Daniel Jones",
+            "Jalen Milroe",
+            "Shedeur Sanders",
+            "Joe Flacco",
+            "Tyler Shough",
+            "Kirk Cousins",
+            "Jameis Winston",
+            "Dorian Thompson-Robinson",
+            "Joe Milton",
+            "Mac Jones",
+            "Kenny Pickett",
+            "Spencer Rattler",
+            "Tyler Van Dyke",
+            "Deshaun Watson",
+            "Will Howard",
+            "E.J. Perry",
+            "Emory Jones",
+            "Payton Thorne",
+            "Mason Rudolph",
+            "Jimmy Garoppolo",
+            "Sam Howell",
+            "Marcus Mariota",
+            "Quinn Ewers",
+            "Matt Corral",
+            "Andy Dalton",
+            "Zach Wilson",
+            "Dillon Gabriel",
+            "Jake Browning",
+            "Tyson Bagent",
+            "Mitchell Trubisky",
+            "Cooper Rush",
+            "Drew Lock",
+            "Gardner Minshew",
+            "Hendon Hooker",
+            "Jordan Travis"
+        ]
+      }
+    ]
+  }
+}
+```
+==================================================
+
+
+==================================================
+--- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "confidence": "High",
+  "analysis": {
+    "tiers": [
+      {
+        "header": "Tier 1: Elite Dual-Threat QBs",
+        "summary": "These quarterbacks offer the highest floor and ceiling combination due to their rushing ability and passing prowess, making them weekly must-starts.",
+        "players": [
+          "Josh Allen",
+          "Lamar Jackson",
+          "Jayden Daniels",
+          "Jalen Hurts"
+        ]
+      },
+      {
+        "header": "Tier 2: High-End Passers with Upside",
+        "summary": "These quarterbacks possess the passing ability to be weekly starters, but their rushing upside is limited, which introduces slight variability.",
+        "players": [
+          "Joe Burrow",
+          "Patrick Mahomes"
+        ]
+      },
+      {
+        "header": "Tier 3: Solid Starters with Questions",
+        "summary": "These quarterbacks are capable starters in 12-team leagues but have questions surrounding their supporting cast, consistency, or long-term upside.",
+        "players": [
+          "Baker Mayfield",
+          "Kyler Murray",
+          "Bo Nix",
+          "Justin Fields",
+          "Caleb Williams"
+        ]
+      },
+      {
+        "header": "Tier 4: Matchup-Based Starters or High-End Backups",
+        "summary": "These quarterbacks are best used in favorable matchups or as high-end backups, offering some upside but lacking the consistency for reliable weekly starts.",
+        "players": [
+          "Brock Purdy",
+          "Jared Goff",
+          "Drake Maye",
+          "Justin Herbert",
+          "Dak Prescott"
+        ]
+      },
+      {
+        "header": "Tier 5: Streaming Options and Developmental Projects",
+        "summary": "These quarterbacks are deep league streaming options or developmental projects with limited immediate value, primarily useful in deeper leagues or dynasty formats.",
+        "players": [
+          "Jordan Love",
+          "J.J. Mccarthy",
+          "Trevor Lawrence",
+          "C.J. Stroud",
+          "Michael Penix Jr.",
+          "Tua Tagovailoa",
+          "Matthew Stafford"
+        ]
+      },
+      {
+        "header": "Tier 6: Desperation Plays Only",
+        "summary": "These quarterbacks should only be considered in the deepest of leagues and as last-resort options, possessing significant limitations in their current situations.",
+        "players": [
+          "Bryce Young",
+          "Cameron Ward",
+          "Geno Smith",
+          "Sam Darnold",
+          "Anthony Richardson Sr.",
+          "Jaxson Dart",
+          "Aaron Rodgers",
+          "Russell Wilson",
+          "Daniel Jones",
+          "Jalen Milroe",
+          "Shedeur Sanders",
+          "Joe Flacco",
+          "Tyler Shough",
+          "Kirk Cousins",
+          "Jameis Winston",
+          "Dorian Thompson-Robinson",
+          "Joe Milton",
+          "Mac Jones",
+          "Kenny Pickett",
+          "Spencer Rattler",
+          "Tyler Van Dyke",
+          "Deshaun Watson",
+          "Will Howard",
+          "E.J. Perry",
+          "Emory Jones",
+          "Payton Thorne",
+          "Mason Rudolph",
+          "Jimmy Garoppolo",
+          "Sam Howell",
+          "Marcus Mariota",
+          "Quinn Ewers",
+          "Matt Corral",
+          "Andy Dalton",
+          "Zach Wilson",
+          "Dillon Gabriel",
+          "Jake Browning",
+          "Tyson Bagent",
+          "Mitchell Trubisky",
+          "Cooper Rush",
+          "Drew Lock",
+          "Gardner Minshew",
+          "Hendon Hooker",
+          "Jordan Travis"
+        ]
+      }
+    ]
+  }
+}
+```
+==================================================
+
+2025-06-10 20:33:52.189482 - --- Backend Server Started ---
+2025-06-10 20:34:40.684160 - --- Backend Server Started ---
+2025-06-10 20:34:41.821656 - --- Backend Server Started ---
+
+==================================================
+--- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "confidence": "High",
+  "analysis": {
+    "tiers": [
+      {
+        "header": "Tier 1: The Dual-Threat Dynamos",
+        "summary": "These quarterbacks offer the highest combination of passing and rushing upside, making them weekly difference-makers in PPR formats.",
+        "players": [
+          "Josh Allen",
+          "Lamar Jackson",
+          "Jayden Daniels",
+          "Jalen Hurts"
+        ]
+      },
+      {
+        "header": "Tier 2: High-End Passing Talent",
+        "summary": "These quarterbacks possess elite passing skills and are capable of putting up huge numbers, though they may lack the same rushing upside as Tier 1.",
+        "players": [
+          "Joe Burrow",
+          "Patrick Mahomes"
+        ]
+      },
+      {
+        "header": "Tier 3: Solid Starters with Upside",
+        "summary": "These QBs offer a relatively safe floor and the potential for boom weeks, making them reliable starters in 12-team leagues.",
+        "players": [
+          "Baker Mayfield",
+          "Kyler Murray",
+          "Bo Nix",
+          "Justin Fields",
+          "Caleb Williams"
+        ]
+      },
+      {
+        "header": "Tier 4: Mid-Tier Considerations",
+        "summary": "These quarterbacks are serviceable starters or high-upside backups depending on your league's format and depth.",
+        "players": [
+          "Brock Purdy",
+          "Jared Goff",
+          "Drake Maye",
+          "Justin Herbert",
+          "Dak Prescott",
+          "Jordan Love",
+          "J.J. Mccarthy",
+          "Trevor Lawrence",
+          "C.J. Stroud"
+        ]
+      },
+      {
+        "header": "Tier 5: Late-Round Fliers/Superflex Options",
+        "summary": "These quarterbacks are best suited for Superflex leagues or as late-round fliers with the potential for surprise production.",
+        "players": [
+          "Michael Penix Jr.",
+          "Tua Tagovailoa",
+          "Matthew Stafford",
+          "Bryce Young",
+          "Cameron Ward",
+          "Geno Smith",
+          "Sam Darnold",
+          "Anthony Richardson Sr."
+        ]
+      },
+      {
+        "header": "Tier 6: Desperation Plays/Deep League Stashes",
+        "summary": "These are the quarterbacks you consider only in the deepest of leagues or when facing dire circumstances due to injuries and bye weeks.",
+        "players": [
+          "Jaxson Dart",
+          "Aaron Rodgers",
+          "Russell Wilson",
+          "Daniel Jones",
+          "Jalen Milroe",
+          "Shedeur Sanders",
+          "Joe Flacco",
+          "Tyler Shough",
+          "Kirk Cousins",
+          "Jameis Winston",
+          "Dorian Thompson-Robinson",
+          "Joe Milton",
+          "Mac Jones",
+          "Kenny Pickett",
+          "Spencer Rattler",
+          "Tyler Van Dyke",
+          "Deshaun Watson",
+          "Will Howard",
+          "E.J. Perry",
+          "Emory Jones",
+          "Payton Thorne",
+          "Mason Rudolph",
+          "Jimmy Garoppolo",
+          "Sam Howell",
+          "Marcus Mariota",
+          "Quinn Ewers",
+          "Matt Corral",
+          "Andy Dalton",
+          "Zach Wilson",
+          "Dillon Gabriel",
+          "Jake Browning",
+          "Tyson Bagent",
+          "Mitchell Trubisky",
+          "Cooper Rush",
+          "Drew Lock",
+          "Gardner Minshew",
+          "Hendon Hooker",
+          "Jordan Travis"
+        ]
+      }
+    ]
+  }
+}
+```
+==================================================
+
+2025-06-10 20:35:50.083261 - --- Backend Server Started ---
+2025-06-10 20:35:51.177505 - --- Backend Server Started ---
+2025-06-10 20:38:18.260553 - --- Backend Server Started ---
+2025-06-10 22:04:07.411519 - --- Backend Server Started ---
+2025-06-10 22:04:08.347061 - --- Backend Server Started ---
+2025-06-10 22:09:46.711770 - --- Backend Server Started ---
+2025-06-10 22:09:47.706415 - --- Backend Server Started ---
+
+==================================================
+--- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "confidence": "High",
+  "analysis": "### Depth Chart Role\n\nDe'Von Achane enters 2025 as the clear RB1 in the Miami Dolphins' backfield. While Miami may add a complementary piece or utilize Jeff Wilson Jr. and Salvon Ahmed in certain situations, Achane's explosiveness and pass-catching ability make him the focal point of their rushing attack. Expect him to command the majority of early-down carries and be heavily involved in the passing game, particularly in high-leverage situations. His role within this high-powered offense provides a significant advantage.\n\n### Value Analysis\n\nWith a consensus ADP of 16.5 (late first/early second round), Achane presents a strong value proposition. As RB7, he's priced appropriately for his potential. Given his proven ability to produce explosive plays and the Dolphins' commitment to an up-tempo offense, Achane has the upside to significantly outperform his ADP and finish as a top-5 RB. Comparatively, other running backs in this ADP range carry similar or greater risk factors.\n\n### Risk Factors\n\nAchane's primary risk factor is durability. He missed time in 2024 due to injuries, raising concerns about his ability to withstand a full season workload. His size (5'9\", 188 lbs) also makes him potentially more susceptible to injury. Another concern is the presence of other capable backs in Miami. While Achane is the clear lead, Wilson Jr. and Ahmed could siphon touches, particularly if Achane struggles or gets injured. Finally, game script can influence Achane's usage. If Miami frequently plays from behind, they may lean more heavily on the passing game, limiting Achane's opportunities.\n\n### 2025 Outlook\n\nAchane's 2025 outlook is exceptionally bright. He is positioned as the lead back in one of the league's most dynamic offenses, led by Tua Tagovailoa and supported by elite receiving weapons. Expect significant opportunities in both the running and passing game. If he can stay healthy, Achane possesses the potential to be a league-winning running back. A realistic projection would see him accumulating 1,200+ total yards and 10+ touchdowns, making him a valuable asset in PPR formats.\n\n### Final Verdict\n\nDe'Von Achane is a high-upside, high-reward pick at his current ADP. While the injury risk is a legitimate concern, his potential to be a top-5 RB in PPR leagues makes him worth the gamble. Drafters should prioritize mitigating this risk by securing a reliable backup running back on their roster, but Achane's game-breaking ability justifies his selection in the late first or early second round."
+}
+```
+==================================================
+
+
+==================================================
+--- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "confidence": "High",
+  "analysis": {
+    "tiers": [
+      {
+        "header": "Tier 1: League Winners",
+        "summary": "These quarterbacks possess the highest ceilings and the most consistent production, making them potential league-winning assets.",
+        "players": [
+          "Josh Allen",
+          "Lamar Jackson",
+          "Jayden Daniels"
+        ]
+      },
+      {
+        "header": "Tier 2: Solid Starters with Upside",
+        "summary": "These quarterbacks are dependable weekly starters with the potential to elevate your team due to rushing ability or high-powered offenses.",
+        "players": [
+          "Jalen Hurts",
+          "Joe Burrow",
+          "Patrick Mahomes"
+        ]
+      },
+      {
+        "header": "Tier 3: Mid-Range Starters",
+        "summary": "These quarterbacks are reliable starters but may lack the explosive upside of the top tiers and are often dependent on game script.",
+        "players": [
+          "Baker Mayfield",
+          "Kyler Murray",
+          "Bo Nix",
+          "Justin Fields",
+          "Caleb Williams"
+        ]
+      },
+      {
+        "header": "Tier 4: Late-Round Value/Streamers",
+        "summary": "These quarterbacks can be valuable late-round picks or streaming options, especially in favorable matchups, but carry more week-to-week volatility.",
+        "players": [
+          "Brock Purdy",
+          "Jared Goff",
+          "Drake Maye",
+          "Justin Herbert",
+          "Dak Prescott",
+          "Jordan Love",
+          "J.J. Mccarthy",
+          "Trevor Lawrence"
+        ]
+      },
+      {
+        "header": "Tier 5: High-Risk/High-Reward",
+        "summary": "These quarterbacks have a wider range of outcomes, depending on surrounding talent, coaching schemes, or their own development; draft with caution.",
+        "players": [
+          "C.J. Stroud",
+          "Michael Penix Jr."
+        ]
+      },
+      {
+        "header": "Tier 6: Matchup Based Streamers",
+        "summary": "These QBs are very matchup-dependent, better suited for deep leagues or bye-week fill-ins.",
+        "players": [
+          "Tua Tagovailoa",
+          "Matthew Stafford",
+          "Bryce Young",
+          "Cameron Ward",
+          "Geno Smith"
+        ]
+      },
+      {
+        "header": "Tier 7: Backups/Desperation Plays Only",
+        "summary": "These QBs should only be rostered in the deepest of leagues or in 2-QB formats, and are not recommended for standard 12-team leagues.",
+        "players": [
+          "Sam Darnold",
+          "Anthony Richardson Sr.",
+          "Jaxson Dart",
+          "Aaron Rodgers",
+          "Russell Wilson",
+          "Daniel Jones",
+          "Jalen Milroe",
+          "Shedeur Sanders",
+          "Joe Flacco",
+          "Tyler Shough",
+          "Kirk Cousins",
+          "Jameis Winston",
+          "Dorian Thompson-Robinson",
+          "Joe Milton",
+          "Mac Jones",
+          "Kenny Pickett",
+          "Spencer Rattler",
+          "Tyler Van Dyke",
+          "Deshaun Watson",
+          "Will Howard",
+          "E.J. Perry",
+          "Emory Jones",
+          "Payton Thorne",
+          "Mason Rudolph",
+          "Jimmy Garoppolo",
+          "Sam Howell",
+          "Marcus Mariota",
+          "Quinn Ewers",
+          "Matt Corral",
+          "Andy Dalton",
+          "Zach Wilson",
+          "Dillon Gabriel",
+          "Jake Browning",
+          "Tyson Bagent",
+          "Mitchell Trubisky",
+          "Cooper Rush",
+          "Drew Lock",
+          "Gardner Minshew",
+          "Hendon Hooker",
+          "Jordan Travis"
+        ]
+      }
+    ]
+  }
+}
+```
+==================================================
+
+
+==================================================
+--- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "rookies": [
+    {
+      "rank": 1,
+      "name": "Ashton Jeanty",
+      "position": "RB",
+      "team": "LV",
+      "adp": "11.0",
+      "pos_rank": "RB1",
+      "analysis": "Jeanty's ADP reflects high expectations. The Raiders' backfield is unsettled, giving Jeanty the opportunity to become the primary ball carrier and a valuable PPR asset."
+    },
+    {
+      "rank": 2,
+      "name": "Omarion Hampton",
+      "position": "RB",
+      "team": "LAC",
+      "adp": "45.0",
+      "pos_rank": "RB2",
+      "analysis": "Hampton is a solid prospect joining a Chargers team in need of a reliable running back. His potential for volume makes him a high-upside pick if he can seize the opportunity."
+    },
+    {
+      "rank": 3,
+      "name": "TreVeyon Henderson",
+      "position": "RB",
+      "team": "NE",
+      "adp": "59.0",
+      "pos_rank": "RB3",
+      "analysis": "Henderson lands in New England, a team likely to lean on the run. Although he has injury concerns, if he can stay healthy, he has RB2 upside in PPR formats."
+    },
+    {
+      "rank": 4,
+      "name": "Quinshon Judkins",
+      "position": "RB",
+      "team": "CLE",
+      "adp": "74.0",
+      "pos_rank": "RB4",
+      "analysis": "Judkins has talent, but the Browns' backfield situation creates uncertainty. He is likely a handcuff with standalone value dependent on injuries to the starter."
+    },
+    {
+      "rank": 5,
+      "name": "Kaleb Johnson",
+      "position": "RB",
+      "team": "PIT",
+      "adp": "77.5",
+      "pos_rank": "RB5",
+      "analysis": "Johnson joins the Steelers, where he will compete for touches. His role as a rookie will likely be as a rotational player, limiting his early-season fantasy impact."
+    },
+    {
+      "rank": 6,
+      "name": "RJ Harvey",
+      "position": "RB",
+      "team": "DEN",
+      "adp": "101.5",
+      "pos_rank": "RB6",
+      "analysis": "Harvey is a late-round flier in Denver's backfield. He could potentially earn a role as the season progresses if he impresses in camp, but expectations should be tempered."
+    },
+    {
+      "rank": 7,
+      "name": "Cam Skattebo",
+      "position": "RB",
+      "team": "NYG",
+      "adp": "103.0",
+      "pos_rank": "RB7",
+      "analysis": "Skattebo joins a crowded Giants backfield. He'll need to display explosiveness to earn his touches."
+    },
+    {
+      "rank": 8,
+      "name": "Bhayshul Tuten",
+      "position": "RB",
+      "team": "JAX",
+      "adp": "123.0",
+      "pos_rank": "RB8",
+      "analysis": "Tuten is a dart throw in Jacksonville's backfield. He needs to beat out veteran players to make any fantasy impact."
+    },
+    {
+      "rank": 9,
+      "name": "Jaydon Blue",
+      "position": "RB",
+      "team": "DAL",
+      "adp": "170.5",
+      "pos_rank": "RB9",
+      "analysis": "Blue is a deep sleeper who must compete for touches on a run-first team. He's one injury away from being fantasy-relevant."
+    },
+    {
+      "rank": 10,
+      "name": "Dylan Sampson",
+      "position": "RB",
+      "team": "CLE",
+      "adp": "171.0",
+      "pos_rank": "RB10",
+      "analysis": "Sampson is another name in the Browns' backfield battle. His path to playing time is dependent on injuries and performance."
+    },
+    {
+      "rank": 11,
+      "name": "DJ Giddens",
+      "position": "RB",
+      "team": "IND",
+      "adp": "171.5",
+      "pos_rank": "RB11",
+      "analysis": "Giddens is a late-round flier that may provide handcuff value later in the season. Consider him a bench stash in deep leagues."
+    },
+    {
+      "rank": 12,
+      "name": "Damien Martinez",
+      "position": "RB",
+      "team": "SEA",
+      "adp": "174.0",
+      "pos_rank": "RB12",
+      "analysis": "Martinez will fight for scraps in a crowded backfield. He will be a long shot to produce."
+    },
+    {
+      "rank": 13,
+      "name": "Devin Neal",
+      "position": "RB",
+      "team": "NO",
+      "adp": "183.0",
+      "pos_rank": "RB13",
+      "analysis": "Neal needs several injuries to make a fantasy impact. Pass."
+    },
+    {
+      "rank": 14,
+      "name": "Brashard Smith",
+      "position": "RB",
+      "team": "KC",
+      "adp": "201.5",
+      "pos_rank": "RB14",
+      "analysis": "Smith has a slim chance of contributing in the Chiefs' backfield. Proceed with caution."
+    },
+    {
+      "rank": 15,
+      "name": "Jarquez Hunter",
+      "position": "RB",
+      "team": "LAR",
+      "adp": "202.0",
+      "pos_rank": "RB15",
+      "analysis": "Hunter is behind Kyren Williams. He's a handcuff with minimal upside."
+    }
+  ]
+}
+```
+==================================================
+
