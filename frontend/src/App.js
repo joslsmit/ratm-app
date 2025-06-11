@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import showdown from 'showdown';
 import autoComplete from '@tarekraafat/autocomplete.js';
 
-const API_BASE_URL = 'http://localhost:5001/api'; // Backend API URL
+const API_BASE_URL = 'https://ratm-yff.onrender.com/api'; // Backend API URL
 
 function App() {
   const [userApiKey, setUserApiKey] = useState(localStorage.getItem('geminiApiKey'));
@@ -230,6 +230,27 @@ function App() {
       window.location.href = '/';
     }
   };
+
+  const checkYahooAuthStatus = useCallback(async () => {
+    const statusDiv = document.getElementById('yahoo-auth-status');
+    const profileDiv = document.getElementById('yahoo-profile-data');
+    if (statusDiv) statusDiv.innerHTML = '<p style="color: var(--text-muted);">Checking authorization status...</p>';
+    if (profileDiv) profileDiv.innerHTML = '';
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/yahoo/user_profile`);
+      const data = await response.json();
+
+      if (response.ok) {
+        if (statusDiv) statusDiv.innerHTML = '<p style="color: var(--success-color);">✅ Successfully authorized with Yahoo!</p>';
+        if (profileDiv) profileDiv.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+      } else {
+        if (statusDiv) statusDiv.innerHTML = `<p style="color: var(--danger-color);">❌ Authorization failed: ${data.error || 'Unknown error'}</p>`;
+      }
+    } catch (error) {
+      if (statusDiv) statusDiv.innerHTML = `<p style="color: var(--danger-color);">❌ Could not connect to backend or check status: ${error.message}</p>`;
+    }
+  }, [makeApiRequest]); // makeApiRequest is a dependency
 
   const generateDossier = () => renderGeneric('dossier', '/player_dossier', { player_name: document.getElementById('dossier-player-name').value });
   
@@ -731,6 +752,12 @@ function App() {
                 <h3>Clear Saved Data</h3>
                 <p className="tool-header" style={{ textAlign: 'left', fontSize: '16px' }}>This action will permanently delete your saved Google API key and your saved Draft Board from this browser's local storage. The app will restart, and you will need to re-enter your API key.</p>
                 <button onClick={resetApplication} className="btn-danger">Clear All Data & Reset Application</button>
+                <h3 style={{ marginTop: '40px' }}>Yahoo Fantasy Integration</h3>
+                <p>Connect your Yahoo Fantasy account to unlock live data features.</p>
+                <button onClick={() => window.location.href = 'https://ratm-yff.onrender.com/auth/yahoo'}>Authorize with Yahoo</button>
+                <div id="yahoo-auth-status" style={{ marginTop: '20px' }}></div>
+                <button onClick={checkYahooAuthStatus} style={{ marginTop: '10px' }}>Check Authorization Status</button>
+                <div id="yahoo-profile-data" className="result-box" style={{ marginTop: '10px' }}></div>
               </div>
             </section>
           )}
