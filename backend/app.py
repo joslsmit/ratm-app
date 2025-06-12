@@ -8,7 +8,6 @@ import json
 from dotenv import load_dotenv
 import google.generativeai as genai
 import traceback
-from requests_oauthlib import OAuth1Session # Import OAuth1Session for Yahoo
 import logging # Import logging module
 from datetime import datetime # Import datetime class
 
@@ -34,33 +33,19 @@ CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}})
 # --- Configuration (API key will be passed per request) ---
 model = genai.GenerativeModel('gemini-2.0-flash')
 
-# --- Yahoo OAuth Configuration ---
-# These should be set as environment variables on Render and in your local .env
+# --- Yahoo OAuth 2.0 Configuration ---
 YAHOO_CLIENT_ID = os.getenv("YAHOO_CLIENT_ID")
 YAHOO_CLIENT_SECRET = os.getenv("YAHOO_CLIENT_SECRET")
-YAHOO_REDIRECT_URI = os.getenv("YAHOO_REDIRECT_URI") # e.g., https://ratm-yff.onrender.com/auth/yahoo/callback
+# This must match the redirect URI in your Yahoo Developer App settings
+YAHOO_REDIRECT_URI = os.getenv("YAHOO_REDIRECT_URI", "http://localhost:5001/auth/yahoo/callback") 
 
-# Yahoo OAuth URLs
-REQUEST_TOKEN_URL = "https://api.login.yahoo.com/oauth/v2/get_request_token"
-AUTHORIZE_URL = "https://api.login.yahoo.com/oauth/v2/request_auth"
-ACCESS_TOKEN_URL = "https://api.login.yahoo.com/oauth/v2/get_token"
-PROFILE_URL = "https://social.yahooapis.com/v1/user/me/profile?format=json"
-
-# --- Token Storage (WARNING: Not persistent on Render Free Tier) ---
-TOKEN_FILE = os.path.join(basedir, 'yahoo_tokens.json')
-
-def save_yahoo_tokens(tokens):
-    with open(TOKEN_FILE, 'w') as f:
-        json.dump(tokens, f)
-    print("✅ Yahoo tokens saved.")
-
-def load_yahoo_tokens():
-    if os.path.exists(TOKEN_FILE):
-        with open(TOKEN_FILE, 'r') as f:
-            tokens = json.load(f)
-        print("✅ Yahoo tokens loaded.")
-        return tokens
-    return None
+# Yahoo OAuth 2.0 URLs
+AUTHORIZATION_URL = "https://api.login.yahoo.com/oauth2/request_auth"
+TOKEN_URL = "https://api.login.yahoo.com/oauth2/get_token"
+PROFILE_URL = "https://social.yahooapis.com/v1/user/me/profile?format=json" # Example API endpoint
+# Using Flask's session to store tokens. A server-side session would be more secure,
+# but for ease of use for a novice, the default client-side session is a good starting point.
+# Ensure FLASK_SECRET_KEY is strong and kept secret in production.
 
 # --- Data Caching ---
 player_data_cache, player_name_to_id, static_adp_data = None, None, {}
@@ -179,77 +164,6 @@ def process_ai_response(response_text):
 
 PROMPT_PREAMBLE = "You are 'The Analyst,' a data-driven, no-nonsense fantasy football expert providing advice for the upcoming 2025 NFL season. All analysis is for a 12-team, PPR league with standard Yahoo scoring rules..."
 JSON_OUTPUT_INSTRUCTION = "Your response MUST be a JSON object with two keys: \"confidence\" and \"analysis\"..."
-
-# --- Yahoo OAuth Endpoints ---
-@app.route('/auth/yahoo')
-def yahoo_authorize():
-    if not all([YAHOO_CLIENT_ID, YAHOO_CLIENT_SECRET, YAHOO_REDIRECT_URI]):
-        return jsonify({"error": "Yahoo OAuth credentials not configured on backend."}), 500
-
-    oauth = OAuth1Session(YAHOO_CLIENT_ID,
-                            client_secret=YAHOO_CLIENT_SECRET,
-                            callback_uri=YAHOO_REDIRECT_URI)
-    
-    try:
-        fetch_response = oauth.fetch_request_token(REQUEST_TOKEN_URL)
-        resource_owner_key = fetch_response.get('oauth_token')
-        resource_owner_secret = fetch_response.get('oauth_token_secret')
-
-        session['oauth_token'] = resource_owner_key
-        session['oauth_token_secret'] = resource_owner_secret
-
-        authorization_url = oauth.authorization_url(AUTHORIZE_URL)
-        return redirect(authorization_url)
-    except Exception as e:
-        print(f"Error during Yahoo authorization: {e}")
-        traceback.print_exc()
-        return jsonify({"error": f"Yahoo authorization failed: {e}"}), 500
-
-@app.route('/auth/yahoo/callback')
-def yahoo_callback():
-    if 'oauth_token' not in session or 'oauth_token_secret' not in session:
-        return jsonify({"error": "OAuth session data missing."}), 400
-
-    resource_owner_key = session['oauth_token']
-    resource_owner_secret = session['oauth_token_secret']
-    oauth_verifier = request.args.get('oauth_verifier')
-
-    if not oauth_verifier:
-        return jsonify({"error": "OAuth verifier missing."}), 400
-
-    oauth = OAuth1Session(YAHOO_CLIENT_ID,
-                            client_secret=YAHOO_CLIENT_SECRET,
-                            resource_owner_key=resource_owner_key,
-                            resource_owner_secret=resource_owner_secret,
-                            verifier=oauth_verifier)
-    try:
-        oauth_tokens = oauth.fetch_access_token(ACCESS_TOKEN_URL)
-        save_yahoo_tokens(oauth_tokens) # Save tokens to file
-        # For now, redirect to frontend success page or just a message
-        return redirect("http://localhost:3000/?auth_success=true") # Redirect to frontend
-    except Exception as e:
-        print(f"Error during Yahoo OAuth callback: {e}")
-        traceback.print_exc()
-        return jsonify({"error": f"Yahoo OAuth callback failed: {e}"}), 500
-
-@app.route('/api/yahoo/user_profile')
-def yahoo_user_profile():
-    tokens = load_yahoo_tokens()
-    if not tokens:
-        return jsonify({"error": "Yahoo tokens not found. Please authorize first."}), 401
-
-    oauth = OAuth1Session(YAHOO_CLIENT_ID,
-                            client_secret=YAHOO_CLIENT_SECRET,
-                            resource_owner_key=tokens['oauth_token'],
-                            resource_owner_secret=tokens['oauth_token_secret'])
-    try:
-        response = oauth.get(PROFILE_URL)
-        response.raise_for_status()
-        return jsonify(response.json())
-    except Exception as e:
-        print(f"Error fetching Yahoo user profile: {e}")
-        traceback.print_exc()
-        return jsonify({"error": f"Failed to fetch Yahoo user profile: {e}"}), 500
 
 # --- Existing API Endpoints (modified to pass user_key) ---
 @app.route('/api/player_dossier', methods=['POST'])

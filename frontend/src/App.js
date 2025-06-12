@@ -391,7 +391,6 @@ function App() {
     return () => window.removeEventListener('hashchange', handleNavigation);
   }, [generateDossier]); // generateDossier is a dependency
 
-
   const resetApplication = () => {
     if (window.confirm("Are you sure you want to clear all saved data? This will remove your API key and saved draft board and cannot be undone.")) {
       localStorage.removeItem('geminiApiKey');
@@ -408,6 +407,7 @@ function App() {
     if (statusDiv) statusDiv.innerHTML = '<p style="color: var(--text-muted);">Checking authorization status...</p>';
     if (profileDiv) profileDiv.innerHTML = '';
     try {
+      // This needs to be a GET request, so we don't use makeApiRequest
       const response = await fetch(`${API_BASE_URL}/yahoo/user_profile`);
       const data = await response.json();
       if (response.ok) {
@@ -418,6 +418,25 @@ function App() {
       }
     } catch (error) {
       if (statusDiv) statusDiv.innerHTML = `<p style="color: var(--danger-color);">❌ Could not connect to backend to check status: ${error.message}</p>`;
+    }
+  }, []);
+
+  const yahooLogout = useCallback(async () => {
+    const statusDiv = document.getElementById('yahoo-auth-status');
+    const profileDiv = document.getElementById('yahoo-profile-data');
+    try {
+      // This needs to be a GET request, so we don't use makeApiRequest
+      const response = await fetch(`${API_BASE_URL}/yahoo/logout`);
+      const data = await response.json();
+      if (response.ok) {
+        alert(data.message); // Or some other UI feedback
+        if (statusDiv) statusDiv.innerHTML = '';
+        if (profileDiv) profileDiv.innerHTML = '';
+      } else {
+        throw new Error(data.error || 'Failed to logout.');
+      }
+    } catch (error) {
+      alert(`Error logging out: ${error.message}`);
     }
   }, []);
 
@@ -663,17 +682,11 @@ function App() {
 
           {activeTool === 'settings' && (
             <section id="settings">
-              <div className="tool-header"><h2>Settings</h2><p>Manage application data and integrations.</p></div>
+              <div className="tool-header"><h2>Settings</h2><p>Manage application data.</p></div>
               <div className="card">
                 <h3>Clear Saved Data</h3>
                 <p>This action will permanently delete your saved Google API key and your draft board from this browser.</p>
                 <button onClick={resetApplication} className="btn-danger">Clear All Data & Reset</button>
-                <h3 style={{ marginTop: '40px' }}>Yahoo Fantasy Integration</h3>
-                <p>Connect your Yahoo Fantasy account to unlock live data features (coming soon).</p>
-                <a href="https://ratm-yff.onrender.com/auth/yahoo" className="action-button">Authorize with Yahoo</a>
-                <div id="yahoo-auth-status" style={{ marginTop: '20px' }}></div>
-                <button onClick={checkYahooAuthStatus} style={{ marginTop: '10px' }}>Check Auth Status</button>
-                <div id="yahoo-profile-data" className="result-box" style={{ marginTop: '10px' }}></div>
               </div>
             </section>
           )}
