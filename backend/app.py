@@ -171,10 +171,34 @@ def player_dossier():
     try:
         user_key = request.headers.get('X-API-Key')
         player_name = request.json.get('player_name')
+
+        # --- Get Player Static Data ---
+        sleeper_key = fuzzy_find_player_key(player_name, player_name_to_id)
+        static_key = fuzzy_find_player_key(player_name, static_adp_data)
+        player_id = player_name_to_id.get(sleeper_key) if sleeper_key and player_name_to_id else None
+        player_info_live = player_data_cache.get(player_id, {}) if player_id and player_data_cache else {}
+        player_info_static = static_adp_data.get(static_key, {}) if static_key and static_adp_data else {}
+        
+        player_data_response = {
+            "name": player_info_live.get('full_name', player_name.title()),
+            "team": player_info_live.get('team', 'N/A'),
+            "position": player_info_live.get('position', 'N/A'),
+            "pos_rank": player_info_static.get('pos_rank', 'N/A'),
+            "adp": player_info_static.get('adp'),
+            "bye_week": player_info_live.get('bye_week')
+        }
+
+        # --- Generate AI Analysis ---
         prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** First, create a detailed markdown report for the player with headers: ### Depth Chart Role, ### Value Analysis, ### Risk Factors, ### 2025 Outlook, and ### Final Verdict. Then, wrap this entire markdown report inside the 'analysis' key of your JSON output.\n\n**Player Data:**\n{get_player_context(player_name)}\n\n{JSON_OUTPUT_INSTRUCTION}"
         response_text = make_gemini_request(prompt, user_key)
-        return jsonify({'result': process_ai_response(response_text)})
+        
+        # --- Combine and Return ---
+        return jsonify({
+            'player_data': player_data_response,
+            'analysis': process_ai_response(response_text)
+        })
     except Exception as e:
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/rookie_rankings', methods=['POST'])
@@ -311,8 +335,31 @@ def roster_composition_analysis():
     
 @app.route('/api/all_player_names_with_data')
 def all_player_names_with_data():
-    if not static_adp_data: return jsonify([])
-    return jsonify([{'name': name.title(), 'pos_rank': data.get('pos_rank', 'N/A')} for name, data in static_adp_data.items()])
+    if not static_adp_data or not player_data_cache:
+        return jsonify([])
+
+    sleeper_data_by_name = {
+        p['full_name'].lower().strip(): {
+            'bye_week': p.get('bye_week', 'N/A'),
+            'team': p.get('team', 'N/A'),
+            'position': p.get('position', 'N/A')
+        }
+        for p_id, p in player_data_cache.items() if p.get('full_name')
+    }
+
+    combined_data = []
+    for name, data in static_adp_data.items():
+        player_info = sleeper_data_by_name.get(name.lower().strip(), {})
+        combined_data.append({
+            'name': name.title(),
+            'pos_rank': data.get('pos_rank', 'N/A'),
+            'adp': data.get('adp'),
+            'bye_week': player_info.get('bye_week', 'N/A'),
+            'team': player_info.get('team', 'N/A'),
+            'position': player_info.get('position', 'N/A')
+        })
+        
+    return jsonify(combined_data)
 
 @app.route('/api/trending_players')
 def trending_players():

@@ -823,3 +823,308 @@
 ```
 ==================================================
 
+2025-06-12 16:57:20.248390 - --- Backend Server Started ---
+2025-06-12 16:59:57.755507 - --- Backend Server Started ---
+2025-06-12 16:59:59.039752 - --- Backend Server Started ---
+
+==================================================
+--- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "rookies": [
+    {
+      "rank": 1,
+      "name": "Cameron Ward",
+      "position": "QB",
+      "team": "TEN",
+      "adp": "157.0",
+      "pos_rank": 1,
+      "analysis": "Ward has the highest ADP among rookie QBs, suggesting potential for early playing time in Tennessee, which makes him the most valuable rookie QB in this draft. While the Titans' offense might not be a fantasy powerhouse, QB play is always in need so Ward's performance should be monitored."
+    },
+    {
+      "rank": 2,
+      "name": "Jaxson Dart",
+      "position": "QB",
+      "team": "NYG",
+      "adp": "205.0",
+      "pos_rank": 2,
+      "analysis": "Dart's draft position indicates that the Giants believe he has potential as a future starting quarterback. He will need time to develop, but given the state of the Giants QB situation, he could see playing time if he progresses quicker than expected, so keep him on your watchlist"
+    },
+    {
+      "rank": 3,
+      "name": "Jalen Milroe",
+      "position": "QB",
+      "team": "SEA",
+      "adp": "217.0",
+      "pos_rank": 3,
+      "analysis": "Milroe provides a dynamic rushing element that could translate to fantasy value if he earns the starting role. He is a project QB in a stable organization with a clear starter ahead of him, so his development path must be monitored closely."
+    },
+    {
+      "rank": 4,
+      "name": "Shedeur Sanders",
+      "position": "QB",
+      "team": "CLE",
+      "adp": "223.0",
+      "pos_rank": 4,
+      "analysis": "Sanders enters the league with name recognition and experience, but he must prove himself in Cleveland to become fantasy-relevant. He will need to beat out Deshaun Watson so he is a dart throw at best right now."
+    },
+    {
+      "rank": 5,
+      "name": "Tyler Shough",
+      "position": "QB",
+      "team": "NO",
+      "adp": "241.0",
+      "pos_rank": 5,
+      "analysis": "Shough represents a developmental prospect in New Orleans and will probably never be a fantasy asset. He will likely be a career backup and is not worth a roster spot."
+    },
+    {
+      "rank": 6,
+      "name": "Cam Miller",
+      "position": "QB",
+      "team": "LV",
+      "adp": "347.0",
+      "pos_rank": 6,
+      "analysis": "Miller is a very late-round flier in Las Vegas with limited opportunity to take the starting job anytime soon. He is strictly a dynasty stash that probably won't see the field."
+    },
+    {
+      "rank": 7,
+      "name": "Will Howard",
+      "position": "QB",
+      "team": "PIT",
+      "adp": "355.0",
+      "pos_rank": 7,
+      "analysis": "Howard is another later-round pick with an outside shot at developing into something. He is buried on the depth chart and likely won't start for at least 2 years."
+    },
+    {
+      "rank": 8,
+      "name": "Payton Thorne",
+      "position": "QB",
+      "team": "CIN",
+      "adp": "364.0",
+      "pos_rank": 8,
+      "analysis": "Thorne is a late-round dart throw that likely won't see the field unless disaster strikes. Not worth rostering."
+    },
+    {
+      "rank": 9,
+      "name": "Quinn Ewers",
+      "position": "QB",
+      "team": "MIA",
+      "adp": "403.0",
+      "pos_rank": 9,
+      "analysis": "Ewers is a long-term project sitting behind a entrenched starter in Tua Tagovailoa. He is not worth rostering."
+    },
+    {
+      "rank": 10,
+      "name": "Dillon Gabriel",
+      "position": "QB",
+      "team": "CLE",
+      "adp": "421.0",
+      "pos_rank": 10,
+      "analysis": "Gabriel is a fringe player with limited fantasy potential. He is not worth rostering."
+    },
+    {
+      "rank": 11,
+      "name": "Garrett Greene",
+      "position": "QB",
+      "team": "TB",
+      "adp": "N/A",
+      "pos_rank": 11,
+      "analysis": "Greene's lack of ADP indicates he is unlikely to make a significant impact this season. He is not worth rostering."
+    },
+    {
+      "rank": 12,
+      "name": "Tommy Mellott",
+      "position": "QB",
+      "team": "LV",
+      "adp": "N/A",
+      "pos_rank": 12,
+      "analysis": "Mellott is a longshot to even make the roster and is not fantasy-relevant. He is not worth rostering."
+    },
+    {
+      "rank": 13,
+      "name": "Taylor Elgersma",
+      "position": "QB",
+      "team": "GB",
+      "adp": "N/A",
+      "pos_rank": 13,
+      "analysis": "Elgersma is buried on the depth chart in Green Bay and has no fantasy value. He is not worth rostering."
+    },
+    {
+      "rank": 14,
+      "name": "Hunter Dekkers",
+      "position": "QB",
+      "team": "NO",
+      "adp": "N/A",
+      "pos_rank": 14,
+      "analysis": "Dekkers' lack of ADP makes him undraftable in most fantasy formats. He is not worth rostering."
+    },
+    {
+      "rank": 15,
+      "name": "Riley Leonard",
+      "position": "QB",
+      "team": "IND",
+      "adp": "N/A",
+      "pos_rank": 15,
+      "analysis": "Leonard is behind Anthony Richardson in the depth chart and has little to no chance to take the job. He is not worth rostering."
+    }
+  ]
+}
+```
+==================================================
+
+
+==================================================
+--- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "confidence": "High",
+  "analysis": {
+    "tiers": [
+      {
+        "header": "Tier 1: Elite Dual-Threat Quarterbacks",
+        "summary": "These quarterbacks offer the highest floor and ceiling combination due to their rushing ability and passing prowess.",
+        "players": [
+          "Josh Allen",
+          "Lamar Jackson",
+          "Jayden Daniels",
+          "Jalen Hurts"
+        ]
+      },
+      {
+        "header": "Tier 2: High-End Passing Quarterbacks with Upside",
+        "summary": "These quarterbacks are primarily pocket passers with strong potential, though their rushing contribution is less reliable.",
+        "players": [
+          "Joe Burrow",
+          "Patrick Mahomes"
+        ]
+      },
+      {
+        "header": "Tier 3: Solid Starters with Potential",
+        "summary": "These quarterbacks are viable weekly starters with the potential to outperform their ADP based on situation and talent.",
+        "players": [
+          "Baker Mayfield",
+          "Kyler Murray",
+          "Bo Nix",
+          "Justin Fields",
+          "Caleb Williams"
+        ]
+      },
+      {
+        "header": "Tier 4: Mid-Range Starters / High-End Backups",
+        "summary": "These quarterbacks offer a decent floor but lack the ceiling of the higher tiers and are best suited as QB2s or streaming options.",
+        "players": [
+          "Brock Purdy",
+          "Jared Goff",
+          "Drake Maye",
+          "Justin Herbert",
+          "Dak Prescott"
+        ]
+      },
+      {
+        "header": "Tier 5: Low-End Starters / Solid Backups",
+        "summary": "These quarterbacks have significant question marks surrounding their performance, making them unreliable starters unless in deep leagues.",
+        "players": [
+          "Jordan Love",
+          "J.J. Mccarthy",
+          "Trevor Lawrence",
+          "C.J. Stroud"
+        ]
+      },
+      {
+        "header": "Tier 6: Streaming Options and Deep League Stashes",
+        "summary": "These quarterbacks are primarily backups or high-risk, high-reward players only relevant in very deep leagues or as desperation streaming options.",
+        "players": [
+          "Michael Penix Jr.",
+          "Tua Tagovailoa",
+          "Matthew Stafford",
+          "Bryce Young",
+          "Cameron Ward",
+          "Geno Smith"
+        ]
+      },
+            {
+        "header": "Tier 7: Handcuffs and Afterthoughts",
+        "summary": "These quarterbacks have minimal standalone value and are primarily valuable as handcuffs in deeper leagues if at all.",
+        "players": [
+          "Sam Darnold",
+          "Anthony Richardson Sr.",
+          "Jaxson Dart",
+          "Aaron Rodgers",
+          "Russell Wilson",
+          "Daniel Jones",
+          "Jalen Milroe",
+          "Shedeur Sanders",
+          "Joe Flacco",
+          "Tyler Shough",
+          "Kirk Cousins",
+          "Jameis Winston",
+          "Dorian Thompson-Robinson",
+          "Joe Milton",
+          "Mac Jones",
+          "Kenny Pickett",
+          "Spencer Rattler",
+          "Tyler Van Dyke",
+          "Deshaun Watson",
+          "Will Howard",
+          "E.J. Perry",
+          "Emory Jones",
+          "Payton Thorne",
+          "Mason Rudolph",
+          "Jimmy Garoppolo",
+          "Sam Howell",
+          "Marcus Mariota",
+          "Quinn Ewers",
+          "Matt Corral",
+          "Andy Dalton",
+          "Zach Wilson",
+          "Dillon Gabriel",
+          "Jake Browning",
+          "Tyson Bagent",
+          "Mitchell Trubisky",
+          "Cooper Rush",
+          "Drew Lock",
+          "Gardner Minshew",
+          "Hendon Hooker",
+          "Jordan Travis"
+        ]
+      }
+    ]
+  }
+}
+```
+==================================================
+
+
+==================================================
+--- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "confidence": "High",
+  "analysis": "### Depth Chart Role\n\nTetairoa McMillan is projected to be a starting WR in the Carolina Panthers' offense in his rookie season. Given his draft capital (projected, as he is a 2025 rookie), and perceived talent, he's expected to compete for the WR1 role immediately. He will likely line up both outside and in the slot, giving him diverse usage.\n\n### Value Analysis\n\nAt a consensus ADP of 44.5, placing him in the late 3rd/early 4th round in a 12-team league, McMillan represents solid value. As WR25, he's priced appropriately given the uncertainty surrounding rookie production. If he lives up to the hype and performs like a high-end WR2, he significantly outkicks his ADP. However, if he struggles adjusting to the NFL or loses targets to other Panthers receivers, he becomes a sunk cost.\n\n### Risk Factors\n\n*   **Rookie Adjustment:** The biggest risk is the standard learning curve for rookie wide receivers. NFL defenses are complex, and it often takes time for even the most talented rookies to become consistent contributors.\n*   **Quarterback Play:** McMillan's fantasy value is directly tied to the quality of quarterback play in Carolina. If the QB struggles, McMillan will too.\n*   **Target Competition:** While McMillan is expected to be a key target, he will still have to compete for receptions with other receivers on the Panthers. A strong showing by other players could limit his ceiling.\n*   **Injury Risk:** As with any player, injury risk is always a factor. A significant injury would derail his rookie season.\n\n### 2025 Outlook\n\nThe 2025 season holds significant potential for McMillan. If he quickly adapts to the NFL, he could easily surpass his WR25 projection and establish himself as a reliable WR2 with WR1 upside in PPR formats. His size, athleticism, and potential target share create a favorable environment for fantasy success. A lot hinges on the Panthers' overall offensive performance; a better offense equates to better opportunity and performance.\n\n### Final Verdict\n\nTetairoa McMillan at an ADP of 44.5 presents a calculated risk worth taking. His potential upside as a high-end WR2, coupled with the likelihood of immediate playing time, makes him an intriguing pick. While rookie wide receivers are inherently risky, McMillan's talent and projected role in the Panthers' offense make him a valuable asset to target in PPR leagues. Investing a late 3rd/early 4th round pick on him could pay significant dividends if he hits his ceiling."
+}
+```
+==================================================
+
+
+==================================================
+--- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "confidence": "High",
+  "analysis": "### Depth Chart Role\n\nLadd McConkey is projected to be the WR1 for the Los Angeles Chargers in 2025. With a year of NFL experience under his belt and likely a further evolution in the Chargers' offensive scheme, he should command a significant target share. This positions him as the focal point of the passing game, making him a valuable asset in PPR formats.\n\n### Value Analysis\n\nWith a consensus ADP of 19.0, McConkey is being drafted as a high-end WR2 or even a WR1 on some teams. His WR11 positional rank suggests he's appropriately valued. Given his expected role and target volume, he offers potential upside if he performs above the WR11 range. If he truly becomes the WR1 for the Chargers, exceeding his ADP is plausible. His PPR upside is significant, making him a solid pick at his current ADP.\n\n### Risk Factors\n\n*   **Sophomore Slump:** While McConkey had a solid rookie season, the sophomore slump is always a possibility. Defenses may adjust their schemes to limit his effectiveness. \n*   **Quarterback Consistency:** The Chargers' quarterback situation needs to remain stable and productive for McConkey to thrive. Any injuries or underperformance at the QB position will negatively impact his value.\n*   **Target Competition:** While currently slated as the WR1, other receivers on the Chargers roster could emerge and steal targets. Monitor training camp reports for potential shifts in target hierarchy.\n*   **Injury Risk:** All players carry injury risk. Any significant injury would obviously derail his season and hurt his fantasy value. \n\n### 2025 Outlook\n\nThe 2025 season presents a high-ceiling opportunity for McConkey. If he continues to develop a strong rapport with his quarterback and commands the target share expected, he could significantly outperform his WR11 ranking. A strong performance in his second year could solidify him as a top-10 PPR WR. The Chargers' offensive scheme will be critical. A pass-heavy approach will greatly benefit McConkey's value.\n\n### Final Verdict\n\nLadd McConkey at an ADP of 19.0 represents a solid value, particularly in PPR leagues. His WR11 consensus ranking accurately reflects his potential. The risk factors are present but manageable. His projected role as the Chargers' primary receiver makes him a worthwhile investment. Target volume is king in PPR, and McConkey is positioned to see plenty of targets. Draft with confidence."
+}
+```
+==================================================
+
+2025-06-12 17:05:15.823544 - --- Backend Server Started ---
+
+==================================================
+--- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "confidence": "High",
+  "analysis": "### Depth Chart Role\nLadd McConkey enters his second NFL season as the presumptive WR1 for the Los Angeles Chargers. With a new coaching staff focused on the run, and the departures of Keenan Allen and Mike Williams, McConkey is expected to command a significant target share. He'll likely line up primarily in the slot but should also see snaps outside, making him a versatile option for the Chargers' offense. His role is secure and vital to the team's passing attack.\n\n### Value Analysis\nCurrently holding a consensus ADP of 19.0 and ranked WR11, McConkey represents solid value. His ADP suggests he's being drafted as a low-end WR1 or high-end WR2, which aligns with expectations given his projected target volume in PPR formats. Considering the scarcity of proven receiving options on the Chargers, McConkey has a high ceiling. Other players being drafted around him at WR include: [Hypothetical WRs listed for comparison]. His upside based on projected target share, youth, and talent, exceeds that of [Hypothetical WRs] , justifying his current ADP.\n\n### Risk Factors\nWhile the opportunity is clear, McConkey faces several risk factors. Firstly, the Chargers' offensive philosophy under the new coaching staff may be more run-heavy, limiting overall passing volume. Secondly, the quality of the Chargers' quarterback play is a concern. A drop-off in quarterback performance could impact McConkey's production. Thirdly, as a young player, McConkey is subject to potential sophomore slump. Finally, the emergence of another receiver in the Chargers offense could decrease target share. These risks are reflected in his WR11 ranking. \n\n### 2025 Outlook\nMcConkey's 2025 outlook is bright. He possesses the skill set to thrive in the NFL, demonstrating excellent route running, reliable hands, and an ability to create separation. If he establishes himself as the primary target, he has the potential to significantly outperform his current WR11 ranking. A successful 2025 would likely see him solidify his position as a top-10 WR in PPR formats, with a potential even higher ranking based on his performance and the trajectory of the Chargers offense.\n\n### Final Verdict\nLadd McConkey presents a compelling option at his current ADP. While risks exist, his projected target share and potential to be a focal point of the Chargers' passing game make him a valuable asset in PPR leagues. He should be viewed as a safe WR2 with WR1 upside. Drafting him at his ADP is a calculated risk worth taking."
+}
+```
+==================================================
+
