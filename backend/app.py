@@ -289,7 +289,7 @@ def find_market_inefficiencies():
                 sleeper_info = player_data_cache.get(player_id, {})
                 candidates_str += f"- {name.title()} ({adp_data.get('pos_rank', 'N/A')}, {sleeper_info.get('team', 'N/A')}): ADP={adp_data.get('adp')}, SleeperRank={sleeper_info.get('rank_ppr')}, Status={sleeper_info.get('status')}\n"
                 if len(candidates_str.splitlines()) >= 150: break
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Find market inefficiencies. Your response MUST be a single JSON object with two keys: \"sleepers\" and \"busts\". Each key must contain a JSON array of 3-5 player objects. Each player object must have two keys: \"name\" and \"justification\".\n\n**Data:**\n{candidates_str}"
+        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Find market inefficiencies. Your response MUST be a single JSON object with two keys: \"sleepers\" and \"busts\". Each key must contain a JSON array of 3-5 player objects. Each player object must have three keys: \"name\", \"justification\", and \"confidence\" (High, Medium, or Low).\n\n**Data:**\n{candidates_str}"
         response_text = make_gemini_request(prompt, user_key)
         cleaned_text = re.sub(r'^```json\s*|```\s*$', '', response_text.strip(), flags=re.MULTILINE)
         return jsonify(json.loads(cleaned_text))

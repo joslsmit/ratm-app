@@ -16,7 +16,7 @@ function App() {
   const [allPlayers, setAllPlayers] = useState([]);
   const [staticPlayerData, setStaticPlayerData] = useState({});
   const [trendingData, setTrendingData] = useState([]);
-  const [sortDirection, setSortDirection] = useState({ position: 'asc', adds: 'desc', team: 'asc', pos_rank: 'asc' });
+  const [sortDirection, setSortDirection] = useState({ name: 'asc', position: 'asc', adds: 'desc', team: 'asc', pos_rank: 'asc' });
   const [marketInefficiencies, setMarketInefficiencies] = useState({ sleepers: [], busts: [] });
   const [rookieRankings, setRookieRankings] = useState([]);
 
@@ -101,7 +101,7 @@ function App() {
     try {
       const data = await makeApiRequest(endpoint, body);
       if (data && (data.result || data.analysis)) { // Accommodate new dossier structure
-        setResult(data);
+        setResult(data.result || data.analysis);
       } else {
         const errorMessage = toolName === 'dossier' ? null : '<p style="color: var(--text-muted);">The Analyst returned an empty response.</p>';
 		setResult(errorMessage);
@@ -446,28 +446,44 @@ function App() {
   // Handle URL parameters and hash changes for tool navigation
   useEffect(() => {
     const handleNavigation = () => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const toolFromParam = urlParams.get('tool');
-        const playerFromParam = urlParams.get('player');
-        const hash = window.location.hash.substring(1);
-
-        if (toolFromParam === 'dossier' && playerFromParam) {
-            setActiveTool('dossier');
-            // Use a timeout to ensure the dossier tool is rendered before we manipulate its input
-            setTimeout(() => {
-                const dossierInput = document.getElementById('dossier-player-name');
-                if (dossierInput) {
-                    dossierInput.value = decodeURIComponent(playerFromParam);
-                    generateDossier();
-                }
-            }, 100);
-        } else {
-            setActiveTool(hash || 'dossier');
+      const hash = window.location.hash.substring(1);
+      if (hash) {
+        setActiveTool(hash);
+        // Clear search params when navigating via hash
+        if (window.location.search) {
+          window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
         }
+        return;
+      }
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const toolFromParam = urlParams.get('tool');
+      const playerFromParam = urlParams.get('player');
+
+      if (toolFromParam === 'dossier' && playerFromParam) {
+        setActiveTool('dossier');
+        setTimeout(() => {
+          const dossierInput = document.getElementById('dossier-player-name');
+          if (dossierInput) {
+            dossierInput.value = decodeURIComponent(playerFromParam);
+            generateDossier(decodeURIComponent(playerFromParam));
+          }
+        }, 100);
+      } else {
+        setActiveTool('dossier');
+      }
     };
+
     handleNavigation();
-    window.addEventListener('hashchange', handleNavigation);
-    return () => window.removeEventListener('hashchange', handleNavigation);
+    window.addEventListener('hashchange', handleNavigation, false);
+    
+    // Also handle popstate for back/forward browser buttons
+    window.addEventListener('popstate', handleNavigation, false);
+
+    return () => {
+      window.removeEventListener('hashchange', handleNavigation, false);
+      window.removeEventListener('popstate', handleNavigation, false);
+    };
   }, [generateDossier]); // generateDossier is a dependency
 
   const resetApplication = () => {
@@ -475,12 +491,26 @@ function App() {
       localStorage.removeItem('geminiApiKey');
       localStorage.removeItem('draftBoard');
       localStorage.removeItem('targetList');
+      localStorage.removeItem('theme');
       setUserApiKey('');
       setTargetList([]);
       setShowApiKeyModal(true);
+      document.documentElement.setAttribute('data-theme', 'dark');
       window.location.href = window.location.pathname; // Reload the page without hash/params
     }
   };
+
+  const toggleTheme = () => {
+    const currentTheme = document.body.getAttribute('data-theme') || 'dark';
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    document.body.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+  };
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    document.body.setAttribute('data-theme', savedTheme);
+  }, []);
 
   const checkYahooAuthStatus = useCallback(async () => {
     const statusDiv = document.getElementById('yahoo-auth-status');
@@ -521,6 +551,34 @@ function App() {
     }
   }, []);
 
+  const sortTrendingData = (key) => {
+    const newDirection = sortDirection[key] === 'asc' ? 'desc' : 'asc';
+    const sortedData = [...trendingData].sort((a, b) => {
+      let valA = a[key];
+      let valB = b[key];
+  
+      // Handle numeric sorting for 'adds' and 'pos_rank'
+      if (key === 'adds') {
+        valA = Number(valA);
+        valB = Number(valB);
+      } else if (key === 'pos_rank' && valA && valB) {
+        valA = parseInt(valA.replace(/\D/g, ''), 10);
+        valB = parseInt(valB.replace(/\D/g, ''), 10);
+      }
+  
+      if (valA < valB) {
+        return newDirection === 'asc' ? -1 : 1;
+      }
+      if (valA > valB) {
+        return newDirection === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  
+    setTrendingData(sortedData);
+    setSortDirection({ ...sortDirection, [key]: newDirection });
+  };
+
   // --- JSX ---
   return (
     <>
@@ -549,22 +607,25 @@ function App() {
         </div>
         <nav className="sidebar-nav">
           <ul>
-            <li><a href="#dossier" className={activeTool === 'dossier' ? 'active' : ''} onClick={() => setActiveTool('dossier')}>Player Dossier</a></li>
-            <li><a href="#rookie" className={activeTool === 'rookie' ? 'active' : ''} onClick={() => setActiveTool('rookie')}>Rookie Rankings</a></li>
-            <li><a href="#tiers" className={activeTool === 'tiers' ? 'active' : ''} onClick={() => setActiveTool('tiers')}>Positional Tiers</a></li>
-            <li><a href="#market" className={activeTool === 'market' ? 'active' : ''} onClick={() => setActiveTool('market')}>Sleepers & Busts</a></li>
-            <li><a href="#targets" className={activeTool === 'targets' ? 'active' : ''} onClick={() => setActiveTool('targets')}>Target List <span className="badge">{targetList.length}</span></a></li>
+            <li><a href="#dossier" className={activeTool === 'dossier' ? 'active' : ''}>Player Dossier</a></li>
+            <li><a href="#rookie" className={activeTool === 'rookie' ? 'active' : ''}>Rookie Rankings</a></li>
+            <li><a href="#tiers" className={activeTool === 'tiers' ? 'active' : ''}>Positional Tiers</a></li>
+            <li><a href="#market" className={activeTool === 'market' ? 'active' : ''}>Sleepers & Busts</a></li>
+            <li><a href="#targets" className={activeTool === 'targets' ? 'active' : ''}>Target List <span className="badge">{targetList.length}</span></a></li>
             <hr />
-            <li><a href="#keeper" className={activeTool === 'keeper' ? 'active' : ''} onClick={() => setActiveTool('keeper')}>Keeper Evaluator</a></li>
-            <li><a href="#trade" className={activeTool === 'trade' ? 'active' : ''} onClick={() => setActiveTool('trade')}>Trade Analyzer</a></li>
-            <li><a href="#draft" className={activeTool === 'draft' ? 'active' : ''} onClick={() => setActiveTool('draft')}>Draft Assistant</a></li>
+            <li><a href="#keeper" className={activeTool === 'keeper' ? 'active' : ''}>Keeper Evaluator</a></li>
+            <li><a href="#trade" className={activeTool === 'trade' ? 'active' : ''}>Trade Analyzer</a></li>
+            <li><a href="#draft" className={activeTool === 'draft' ? 'active' : ''}>Draft Assistant</a></li>
             <hr />
-            <li><a href="#trending" className={activeTool === 'trending' ? 'active' : ''} onClick={() => setActiveTool('trending')}>Trending Players</a></li>
+            <li><a href="#trending" className={activeTool === 'trending' ? 'active' : ''}>Trending Players</a></li>
           </ul>
         </nav>
         <div className="sidebar-footer">
           <nav className="utility-nav">
-             <a href="#settings" className={activeTool === 'settings' ? 'active' : ''} onClick={() => setActiveTool('settings')}>Settings</a>
+             <a href="#settings" className={activeTool === 'settings' ? 'active' : ''}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-settings"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                Settings
+             </a>
           </nav>
           <p>© 2025 RATM</p>
         </div>
@@ -583,7 +644,9 @@ function App() {
                 <div className="form-group-inline">
                   <div className="autoComplete_wrapper"><input id="dossier-player-name" type="text" placeholder="Enter player name..." /></div>
                   <button onClick={() => generateDossier()}>Generate</button>
-                  <button className="add-target-btn" title="Add to Target List" onClick={() => handleAddToTargets(document.getElementById('dossier-player-name')?.value)}>🎯</button>
+                  <button className="add-target-btn" title="Add to Target List" onClick={() => handleAddToTargets(document.getElementById('dossier-player-name')?.value)}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-plus-circle"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                  </button>
                 </div>
               </div>
               <div id="dossier-loader" className="loader" style={{ display: 'none' }}></div>
@@ -621,7 +684,9 @@ function App() {
                             <div className="rookie-header">
                                 <h3><a href={`/?tool=dossier&player=${encodeURIComponent(rookie.name)}`} className="player-link">{rookie.name}</a> ({rookie.position}, {rookie.team || 'N/A'})</h3>
                                 <div className="rookie-actions">
-                                  <button className="add-target-btn-small" title="Add to Target List" onClick={() => handleAddToTargets(rookie.name)}>🎯</button>
+                                  <button className="add-target-btn-small" title="Add to Target List" onClick={() => handleAddToTargets(rookie.name)}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                                  </button>
                                   <span className="rank">#{rookie.rank}</span>
                                 </div>
                             </div>
@@ -672,7 +737,11 @@ function App() {
                               <td>{playerData?.team || 'N/A'}</td>
                               <td>{playerData?.adp ? playerData.adp.toFixed(1) : 'N/A'}</td>
                               <td>{playerData?.bye_week || 'N/A'}</td>
-                              <td><button className="remove-btn-small" onClick={() => handleRemoveFromTargets(playerName)}>×</button></td>
+                              <td>
+                                <button className="remove-btn-small" onClick={() => handleRemoveFromTargets(playerName)}>
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                </button>
+                              </td>
                             </tr>
                           );
                         })}
@@ -698,7 +767,10 @@ function App() {
                               <div key={`sleeper-${index}`} className="analysis-card sleeper">
                                   <div className="analysis-card-header">
                                     <h4><a href={`/?tool=dossier&player=${encodeURIComponent(player.name)}`} className="player-link">{player.name}</a></h4>
-                                    <button className="add-target-btn-small" title="Add to Target List" onClick={() => handleAddToTargets(player.name)}>🎯</button>
+                                    <span className={`confidence-badge ${player.confidence}`}>{player.confidence}</span>
+                                    <button className="add-target-btn-small" title="Add to Target List" onClick={() => handleAddToTargets(player.name)}>
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                                    </button>
                                   </div>
                                   <p>{player.justification}</p>
                               </div>
@@ -710,7 +782,10 @@ function App() {
                               <div key={`bust-${index}`} className="analysis-card bust">
                                   <div className="analysis-card-header">
                                     <h4><a href={`/?tool=dossier&player=${encodeURIComponent(player.name)}`} className="player-link">{player.name}</a></h4>
-                                    <button className="add-target-btn-small" title="Add to Target List" onClick={() => handleAddToTargets(player.name)}>🎯</button>
+                                    <span className={`confidence-badge ${player.confidence}`}>{player.confidence}</span>
+                                    <button className="add-target-btn-small" title="Add to Target List" onClick={() => handleAddToTargets(player.name)}>
+                                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                                    </button>
                                   </div>
                                   <p>{player.justification}</p>
                               </div>
@@ -741,7 +816,9 @@ function App() {
                           <br />
                           <small>ADP: {adp ? adp.toFixed(1) : 'N/A'} {value !== null && `(Value: ${value > 0 ? '+' : ''}${(value / 12).toFixed(1)})`}</small>
                         </div>
-                        <button className="remove-btn" onClick={() => setKeeperList(prev => prev.filter((_, i) => i !== index))}>×</button>
+                        <button className="remove-btn" onClick={() => setKeeperList(prev => prev.filter((_, i) => i !== index))}>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
                       </li>
                     );
                   })}
@@ -766,7 +843,9 @@ function App() {
                       return (
                         <li key={index} className="list-item">
                           <span>{asset} {playerData && `(${playerData.pos_rank})`}</span>
-                          <button className="remove-btn" onClick={() => setMyTradeAssets(prev => prev.filter((_, i) => i !== index))}>×</button>
+                          <button className="remove-btn" onClick={() => setMyTradeAssets(prev => prev.filter((_, i) => i !== index))}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                          </button>
                         </li>
                       );
                     })}
@@ -781,7 +860,9 @@ function App() {
                       return (
                         <li key={index} className="list-item">
                           <span>{asset} {playerData && `(${playerData.pos_rank})`}</span>
-                          <button className="remove-btn" onClick={() => setPartnerTradeAssets(prev => prev.filter((_, i) => i !== index))}>×</button>
+                          <button className="remove-btn" onClick={() => setPartnerTradeAssets(prev => prev.filter((_, i) => i !== index))}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                          </button>
                         </li>
                       );
                     })}
@@ -860,11 +941,19 @@ function App() {
               <div className="tool-header"><h2>Trending Players</h2><p>See who's being added most on Sleeper in the last 48 hours.</p></div>
               <div className="card">
                 <table id="trending-table">
-                  <thead><tr><th>Player</th><th>Team</th><th>Position</th><th>Pos. Rank</th><th>Adds (48hr)</th></tr></thead>
+                  <thead>
+                    <tr>
+                      <th className="sortable" onClick={() => sortTrendingData('name')}>Player {sortDirection.name === 'asc' ? '▲' : '▼'}</th>
+                      <th className="sortable" onClick={() => sortTrendingData('team')}>Team {sortDirection.team === 'asc' ? '▲' : '▼'}</th>
+                      <th className="sortable" onClick={() => sortTrendingData('position')}>Position {sortDirection.position === 'asc' ? '▲' : '▼'}</th>
+                      <th className="sortable" onClick={() => sortTrendingData('pos_rank')}>Pos. Rank {sortDirection.pos_rank === 'asc' ? '▲' : '▼'}</th>
+                      <th className="sortable" onClick={() => sortTrendingData('adds')}>Adds (48hr) {sortDirection.adds === 'asc' ? '▲' : '▼'}</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {trendingData.length > 0 ? trendingData.map((player, index) => (
                       <tr key={index}>
-                        <td><a href={`/?tool=d_ossier&player=${encodeURIComponent(player.name)}`} className="player-link">{player.name}</a></td>
+                        <td><a href={`/?tool=dossier&player=${encodeURIComponent(player.name)}`} className="player-link">{player.name}</a></td>
                         <td>{player.team || 'N/A'}</td>
                         <td>{player.position}</td>
                         <td>{player.pos_rank || 'N/A'}</td>
@@ -882,10 +971,15 @@ function App() {
 
           {activeTool === 'settings' && (
             <section id="settings">
-              <div className="tool-header"><h2>Settings</h2><p>Manage application data.</p></div>
+              <div className="tool-header"><h2>Settings</h2><p>Manage application data and preferences.</p></div>
+              <div className="card">
+                <h3>Theme</h3>
+                <p>Switch between light and dark mode.</p>
+                <button onClick={toggleTheme}>Toggle Theme</button>
+              </div>
               <div className="card">
                 <h3>Clear Saved Data</h3>
-                <p>This action will permanently delete your saved Google API key and your draft board from this browser.</p>
+                <p>This action will permanently delete your saved Google API key, draft board, and target list from this browser.</p>
                 <button onClick={resetApplication} className="btn-danger">Clear All Data & Reset</button>
               </div>
             </section>
