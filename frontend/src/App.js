@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import showdown from 'showdown';
 import autoComplete from '@tarekraafat/autocomplete.js';
 import './App.css';
+import DynastyValues from './components/DynastyValues';
 
 // The backend API URL. This can be changed to your production URL when you deploy.
 const API_BASE_URL = 'http://localhost:5001/api';
@@ -27,6 +28,7 @@ function App() {
   const [tradeResult, setTradeResult] = useState('');
   const [draftAnalysisResult, setDraftAnalysisResult] = useState('');
   const [rosterCompositionResult, setRosterCompositionResult] = useState('');
+  const [waiverWireResult, setWaiverWireResult] = useState('');
   const [globalSearchPlayer, setGlobalSearchPlayer] = useState('');
 
   // States for list-based tools
@@ -425,6 +427,11 @@ function App() {
     }
   }, []);
 
+  const generateWaiverWireAnalysis = useCallback((teamRoster) => {
+    if (teamRoster.length === 0) { alert('Please enter your team roster.'); return; }
+    renderGeneric('waiver', '/waiver_wire_analysis', { team_roster: teamRoster }, setWaiverWireResult);
+  }, [renderGeneric]);
+
   // --- Effect Hooks for Initialization and Side Effects ---
 
   // Create and load the draft board on initial mount
@@ -618,6 +625,8 @@ function App() {
             <li><a href="#draft" className={activeTool === 'draft' ? 'active' : ''}>Draft Assistant</a></li>
             <hr />
             <li><a href="#trending" className={activeTool === 'trending' ? 'active' : ''}>Trending Players</a></li>
+            <li><a href="#waiver" className={activeTool === 'waiver' ? 'active' : ''}>Waiver Wire Assistant</a></li>
+            <li><a href="#dynasty" className={activeTool === 'dynasty' ? 'active' : ''}>Dynasty Values</a></li>
           </ul>
         </nav>
         <div className="sidebar-footer">
@@ -969,6 +978,19 @@ function App() {
             </section>
           )}
 
+          {activeTool === 'waiver' && (
+            <section id="waiver">
+              <div className="tool-header"><h2>Waiver Wire Assistant</h2><p>Get AI-powered recommendations for waiver wire pickups.</p></div>
+              <div className="card">
+                <h3>Your Team Roster (one player name per line):</h3>
+                <textarea id="team-roster-input" rows="10" placeholder="Enter your team's player names here..."></textarea>
+                <button onClick={() => generateWaiverWireAnalysis(document.getElementById('team-roster-input').value.split('\n').filter(name => name.trim() !== ''))} className="action-button">Get Waiver Wire Advice</button>
+              </div>
+              <div id="waiver-loader" className="loader" style={{ display: 'none' }}></div>
+              <div id="waiver-result" className="result-box" dangerouslySetInnerHTML={{ __html: converter.makeHtml(waiverWireResult) }}></div>
+            </section>
+          )}
+
           {activeTool === 'settings' && (
             <section id="settings">
               <div className="tool-header"><h2>Settings</h2><p>Manage application data and preferences.</p></div>
@@ -981,6 +1003,15 @@ function App() {
                 <h3>Clear Saved Data</h3>
                 <p>This action will permanently delete your saved Google API key, draft board, and target list from this browser.</p>
                 <button onClick={resetApplication} className="btn-danger">Clear All Data & Reset</button>
+              </div>
+            </section>
+          )}
+
+          {activeTool === 'dynasty' && (
+            <section id="dynasty">
+              <div className="tool-header"><h2>Dynasty Values</h2><p>View dynasty trade values for players and picks.</p></div>
+              <div className="card">
+                <DynastyValues />
               </div>
             </section>
           )}
