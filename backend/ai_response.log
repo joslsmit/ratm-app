@@ -2841,3 +2841,151 @@
 
 ==================================================
 
+2025-06-15 16:52:22.081020 - --- Backend Server Started ---
+
+==================================================
+--- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "rookies": [
+    {
+      "rank": 1,
+      "name": "Ashton Jeanty",
+      "position": "RB",
+      "team": "LV",
+      "adp": "5.13",
+      "pos_rank": 1,
+      "analysis": "Jeanty possesses a high ceiling as a potential bell-cow back in a run-heavy offense.  His ADP suggests significant fantasy potential, making him a top rookie target."
+    },
+    {
+      "rank": 2,
+      "name": "Omarion Hampton",
+      "position": "RB",
+      "team": "LAC",
+      "adp": "23.52",
+      "pos_rank": 2,
+      "analysis": "Hampton's landing spot in a high-powered offense gives him a chance to earn significant touches.  His potential for receiving work boosts his PPR value."
+    },
+    {
+      "rank": 3,
+      "name": "Quinshon Judkins",
+      "position": "RB",
+      "team": "CLE",
+      "adp": "28.57",
+      "pos_rank": 3,
+      "analysis": "Judkins's impressive college production translates well to the NFL, though opportunity in Cleveland's backfield remains uncertain.  He's a riskier but higher-reward pick compared to Hampton."
+    },
+    {
+      "rank": 4,
+      "name": "TreVeyon Henderson",
+      "position": "RB",
+      "team": "NE",
+      "adp": "27.07",
+      "pos_rank": 4,
+      "analysis": "Henderson's injury history is a concern, but his talent is undeniable.  A healthy season in New England could elevate him to RB2 status."
+    },
+    {
+      "rank": 5,
+      "name": "RJ Harvey",
+      "position": "RB",
+      "team": "DEN",
+      "adp": "27.02",
+      "pos_rank": 5,
+      "analysis": "Harvey's role in Denver's backfield is unclear, but his explosive ability makes him a high-upside pick.  However, a timeshare significantly limits his floor."
+    },
+    {
+      "rank": 6,
+      "name": "Tyler Warren",
+      "position": "TE",
+      "team": "IND",
+      "adp": "16.77",
+      "pos_rank": 1,
+      "analysis": "Warren has a good chance to be the Colts' starting tight end and could be a valuable PPR asset given his ADP.  His potential volume in a pass-happy offense is appealing."
+    },
+    {
+      "rank": 7,
+      "name": "Colston Loveland",
+      "position": "TE",
+      "team": "CHI",
+      "adp": "18.37",
+      "pos_rank": 2,
+      "analysis": "Loveland's athleticism and potential for a significant role in Chicago's offense give him a decent floor in PPR.  Competition for targets could limit his upside."
+    },
+    {
+      "rank": 8,
+      "name": "Kaleb Johnson",
+      "position": "RB",
+      "team": "PIT",
+      "adp": "30.5",
+      "pos_rank": 6,
+      "analysis": "Johnson faces stiff competition in Pittsburgh's backfield but his explosive potential makes him a late-round flier.  His opportunity is heavily dependent on injuries to other backs."
+    },
+    {
+      "rank": 9,
+      "name": "Mason Taylor",
+      "position": "TE",
+      "team": "NYJ",
+      "adp": "29.76",
+      "pos_rank": 3,
+      "analysis": "Taylor is an athletic tight end with upside in the Jets' offense but could see limited targets.  His development could impact his late-season value."
+    },
+    {
+      "rank": 10,
+      "name": "Cameron Ward",
+      "position": "QB",
+      "team": "TEN",
+      "adp": "26.44",
+      "pos_rank": 1,
+      "analysis": "Ward has a chance to be a late-round steal if he wins the starting job in Tennessee.  His potential for rushing yards adds value in fantasy."
+    },
+    {
+      "rank": 11,
+      "name": "Shedeur Sanders",
+      "position": "QB",
+      "team": "CLE",
+      "adp": "33.79",
+      "pos_rank": 2,
+      "analysis": "Sanders is a late-round flyer whose success depends entirely on winning a starting job and performing well.  His high-profile status doesn't automatically translate to fantasy value."
+    },
+    {
+      "rank": 12,
+      "name": "Jaxson Dart",
+      "position": "QB",
+      "team": "NYG",
+      "adp": "32.23",
+      "pos_rank": 3,
+      "analysis": "Similar to Sanders, Dart is a long shot with a potentially high reward if he becomes a starter.  He's a risky but intriguing late-round option for QB-needy teams."
+    },
+    {
+      "rank": 13,
+      "name": "Tetairoa McMillan",
+      "position": "WR",
+      "team": "CAR",
+      "adp": "33.2",
+      "pos_rank": 1,
+      "analysis": "McMillan has the potential to be a high-volume receiver, but a crowded depth chart makes his outlook uncertain.  His role could significantly shift based on the team's needs."
+    },
+    {
+      "rank": 14,
+      "name": "Travis Hunter",
+      "position": "WR",
+      "team": "JAX",
+      "adp": "34.31",
+      "pos_rank": 2,
+      "analysis": "Hunter's two-way prowess is unique, but translating that to significant fantasy points is a challenge.  He is a low-floor, high-ceiling risk."
+    },
+    {
+      "rank": 15,
+      "name": "Oronde Gadsden",
+      "position": "TE",
+      "team": "LAC",
+      "adp": "38.5",
+      "pos_rank": 4,
+      "analysis": "Gadsden's situation is similar to other late-round tight ends.  His ceiling depends on how much he is involved in the passing game. He is a low-risk, low-reward selection."
+    }
+  ]
+}
+```
+
+==================================================
+

@@ -539,45 +539,6 @@ function App() {
     document.body.setAttribute('data-theme', savedTheme);
   }, []);
 
-  const checkYahooAuthStatus = useCallback(async () => {
-    const statusDiv = document.getElementById('yahoo-auth-status');
-    const profileDiv = document.getElementById('yahoo-profile-data');
-    if (statusDiv) statusDiv.innerHTML = '<p style="color: var(--text-muted);">Checking authorization status...</p>';
-    if (profileDiv) profileDiv.innerHTML = '';
-    try {
-      // This needs to be a GET request, so we don't use makeApiRequest
-      const response = await fetch(`${API_BASE_URL}/yahoo/user_profile`);
-      const data = await response.json();
-      if (response.ok) {
-        if (statusDiv) statusDiv.innerHTML = '<p style="color: var(--success-color);">✅ Successfully authorized with Yahoo!</p>';
-        if (profileDiv) profileDiv.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
-      } else {
-        if (statusDiv) statusDiv.innerHTML = `<p style="color: var(--danger-color);">❌ Authorization failed: ${data.error || 'Unknown error'}</p>`;
-      }
-    } catch (error) {
-      if (statusDiv) statusDiv.innerHTML = `<p style="color: var(--danger-color);">❌ Could not connect to backend to check status: ${error.message}</p>`;
-    }
-  }, []);
-
-  const yahooLogout = useCallback(async () => {
-    const statusDiv = document.getElementById('yahoo-auth-status');
-    const profileDiv = document.getElementById('yahoo-profile-data');
-    try {
-      // This needs to be a GET request, so we don't use makeApiRequest
-      const response = await fetch(`${API_BASE_URL}/yahoo/logout`);
-      const data = await response.json();
-      if (response.ok) {
-        alert(data.message); // Or some other UI feedback
-        if (statusDiv) statusDiv.innerHTML = '';
-        if (profileDiv) profileDiv.innerHTML = '';
-      } else {
-        throw new Error(data.error || 'Failed to logout.');
-      }
-    } catch (error) {
-      alert(`Error logging out: ${error.message}`);
-    }
-  }, []);
-
   const sortTrendingData = (key) => {
     const newDirection = sortDirection[key] === 'asc' ? 'desc' : 'asc';
     const sortedData = [...trendingData].sort((a, b) => {

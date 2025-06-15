@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, redirect, url_for, session
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
 import os
@@ -36,19 +36,6 @@ CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}})
 # Using the latest available preview model as requested
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-# --- Yahoo OAuth 2.0 Configuration ---
-YAHOO_CLIENT_ID = os.getenv("YAHOO_CLIENT_ID")
-YAHOO_CLIENT_SECRET = os.getenv("YAHOO_CLIENT_SECRET")
-# This must match the redirect URI in your Yahoo Developer App settings
-YAHOO_REDIRECT_URI = os.getenv("YAHOO_REDIRECT_URI", "http://localhost:5001/auth/yahoo/callback") 
-
-# Yahoo OAuth 2.0 URLs
-AUTHORIZATION_URL = "https://api.login.yahoo.com/oauth2/request_auth"
-TOKEN_URL = "https://api.login.yahoo.com/oauth2/get_token"
-PROFILE_URL = "https://social.yahooapis.com/v1/user/me/profile?format=json" # Example API endpoint
-# Using Flask's session to store tokens. A server-side session would be more secure,
-# but for ease of use for a novice, the default client-side session is a good starting point.
-# Ensure FLASK_SECRET_KEY is strong and kept secret in production.
 
 # --- Data Caching ---
 player_data_cache, player_name_to_id, static_adp_data, player_values_cache, pick_values_cache, weekly_data_cache = None, None, {}, None, None, None
