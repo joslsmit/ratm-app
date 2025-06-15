@@ -30,6 +30,7 @@ function App() {
   const [rosterCompositionResult, setRosterCompositionResult] = useState('');
   const [waiverWireResult, setWaiverWireResult] = useState('');
   const [globalSearchPlayer, setGlobalSearchPlayer] = useState('');
+  const [lastUpdateDate, setLastUpdateDate] = useState('Loading...');
 
   // States for list-based tools
   const [targetList, setTargetList] = useState([]);
@@ -450,6 +451,25 @@ function App() {
     }
   }, [activeTool, trendingData.length, fetchTrending]);
 
+  // Fetch last update date when settings tool is active
+  useEffect(() => {
+    if (activeTool === 'settings') {
+      fetch(`${API_BASE_URL}/last_update_date`)
+        .then(response => response.json())
+        .then(data => {
+          if (data && data.last_update) {
+            setLastUpdateDate(data.last_update);
+          } else {
+            setLastUpdateDate('N/A');
+          }
+        })
+        .catch(error => {
+          console.error("Error fetching last update date:", error);
+          setLastUpdateDate('Error loading date.');
+        });
+    }
+  }, [activeTool]);
+
   // Handle URL parameters and hash changes for tool navigation
   useEffect(() => {
     const handleNavigation = () => {
@@ -868,7 +888,7 @@ function App() {
                       const playerData = staticPlayerData[asset.toLowerCase()];
                       return (
                         <li key={index} className="list-item">
-                          <span>{asset} {playerData && `(${playerData.pos_rank})`}</span>
+                          <span>{asset} {playerData && `(${player.pos_rank})`}</span>
                           <button className="remove-btn" onClick={() => setPartnerTradeAssets(prev => prev.filter((_, i) => i !== index))}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                           </button>
@@ -1003,6 +1023,10 @@ function App() {
                 <h3>Clear Saved Data</h3>
                 <p>This action will permanently delete your saved Google API key, draft board, and target list from this browser.</p>
                 <button onClick={resetApplication} className="btn-danger">Clear All Data & Reset</button>
+              </div>
+              <div className="card">
+                <h3>Data Last Updated</h3>
+                <p>Dynasty process files were last updated on: <strong>{lastUpdateDate}</strong></p>
               </div>
             </section>
           )}

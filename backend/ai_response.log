@@ -2639,3 +2639,205 @@
 
 ==================================================
 
+2025-06-15 16:39:27.223131 - --- Backend Server Started ---
+2025-06-15 16:39:31.605748 - --- Backend Server Started ---
+
+==================================================
+--- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "confidence": 0.85,
+  "analysis": "# Ladd McConkey: 2025 Fantasy Football Outlook\n\n### Depth Chart Role\n\nLadd McConkey enters the 2025 season in a highly competitive Chargers receiving corps.  While he showed flashes in his rookie season, establishing himself as a clear WR2 or even WR3 behind Keenan Allen and Mike Williams is far from guaranteed.  He'll likely be competing with other young receivers for targets and snaps. His role will heavily depend on his performance in training camp and preseason games.  A significant injury to a starter would drastically improve his outlook, but currently he's facing an uphill battle for consistent playing time.  We can expect him to have a defined role on third downs and in special teams. \n\n### Value Analysis\n\nMcConkey's ADP of 11.6 in a 12-team PPR league is currently inflated based on his potential rather than proven production.  His rookie year statistics were modest, failing to truly demonstrate high-volume receiving capabilities. His PPR value is largely tied to his potential for receptions and a high floor (catches) is more likely than a high ceiling (yards or touchdowns).  While his late-round ADP makes him a decent flier in deeper leagues, expecting consistent WR2 production at this ADP is unrealistic. The value proposition hinges on significant improvement and increased opportunity.\n\n### Risk Factors\n\n* **Depth Chart Competition:** The Chargers' WR room is crowded.  He faces stiff competition from established veterans and potentially other younger players.  A slight injury or a better performance from a teammate could easily limit his opportunities.\n* **Injury:** A key risk with any NFL player. Should he suffer an injury, his fantasy value would plummet. \n* **Offensive Scheme:** The Chargers' offensive scheme, whilst generally productive, may not consistently cater to a player of McConkey's profile.  His opportunity may depend heavily on offensive game planning and how often the Chargers utilize 3 or 4 receiver sets.\n* **Target Share Volatility:**  His target share is extremely unpredictable given the established receiving threats.\n\n### 2025 Outlook\n\nMcConkey has the potential to be a valuable fantasy asset, but it's far from guaranteed.  His 2025 season will likely fall into one of three scenarios:\n\n1. **Breakout Season (low probability):**  He secures a significant role, exceeding expectations and producing WR2-level numbers. \n2. **Solid Role Player (medium probability):**  He earns consistent playing time, but his production remains moderate, offering low-end WR3 value at best.\n3. **Bust (high probability):**  He struggles to gain playing time or is outperformed by other receivers, resulting in minimal fantasy impact.\n\nThe most likely outcome is a role as a low-end WR3 or flex option, especially in PPR formats where his reception floor is somewhat secured. His ADP currently doesn't reflect this probability distribution.\n\n### Final Verdict\n\nLadd McConkey is a high-risk, moderate-reward player in 2025.  His ADP of 11.6 is too high given the uncertainty surrounding his role and opportunities. Consider him only as a late-round flier in deeper leagues or in dynasty formats where his potential upside can be valuable for long-term build. In a 12-team PPR league, he should be avoided unless you are aggressively targeting upside.  Consider prioritizing more established, safer options earlier in your draft.\n"
+}
+```
+
+==================================================
+
+
+==================================================
+--- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "rookies": [
+    {
+      "rank": 1,
+      "name": "Ashton Jeanty",
+      "position": "RB",
+      "team": "LV",
+      "adp": "5.13",
+      "pos_rank": 1,
+      "analysis": "Jeanty's high ADP reflects significant early hype; however,  his path to significant playing time remains uncertain and highly dependent on Josh Jacobs' status."
+    },
+    {
+      "rank": 2,
+      "name": "Omarion Hampton",
+      "position": "RB",
+      "team": "LAC",
+      "adp": "23.52",
+      "pos_rank": 2,
+      "analysis": "Hampton possesses significant potential as a pass-catching back, but a crowded Chargers backfield limits his immediate upside; significant injury to a teammate would be necessary for him to become a fantasy asset."
+    },
+    {
+      "rank": 3,
+      "name": "RJ Harvey",
+      "position": "RB",
+      "team": "DEN",
+      "adp": "27.02",
+      "pos_rank": 3,
+      "analysis": "Harvey's draft capital suggests a potential role in Denver, but his path to significant touches is dependent on the Broncos' commitment to a true committee."
+    },
+    {
+      "rank": 4,
+      "name": "TreVeyon Henderson",
+      "position": "RB",
+      "team": "NE",
+      "adp": "27.07",
+      "pos_rank": 4,
+      "analysis": "Henderson's injury history is a major concern, but his talent is undeniable; if he can stay healthy, he has high ceiling within a relatively weak New England backfield."
+    },
+    {
+      "rank": 5,
+      "name": "Quinshon Judkins",
+      "position": "RB",
+      "team": "CLE",
+      "adp": "28.57",
+      "pos_rank": 5,
+      "analysis": "Judkins' strong college production translates well to the NFL; however, a committee approach in Cleveland limits his immediate fantasy value."
+    },
+    {
+      "rank": 6,
+      "name": "Kaleb Johnson",
+      "position": "RB",
+      "team": "PIT",
+      "adp": "30.5",
+      "pos_rank": 6,
+      "analysis": "Johnson has a realistic chance of a significant role in Pittsburgh, but  the Steelers' offensive scheme will determine his fantasy relevance."
+    },
+    {
+      "rank": 7,
+      "name": "Cam Skattebo",
+      "position": "RB",
+      "team": "NYG",
+      "adp": "41.65",
+      "pos_rank": 7,
+      "analysis": "Skattebo's ADP is a bit inflated given the crowded Giants backfield; his chances of becoming a relevant fantasy asset hinge entirely on injuries to Saquon Barkley and/or other backs."
+    },
+    {
+      "rank": 8,
+      "name": "Bhayshul Tuten",
+      "position": "RB",
+      "team": "JAX",
+      "adp": "50.49",
+      "pos_rank": 8,
+      "analysis": "Tuten faces an uphill battle for touches in Jacksonville; his fantasy value is highly dependent on injuries and the Jaguars' offensive approach."
+    },
+    {
+      "rank": 9,
+      "name": "Jaydon Blue",
+      "position": "RB",
+      "team": "DAL",
+      "adp": "57.41",
+      "pos_rank": 9,
+      "analysis": "Blue's path to significant playing time in Dallas is extremely limited;  he’s a high-risk, low-reward late-round flyer."
+    },
+    {
+      "rank": 10,
+      "name": "Devin Neal",
+      "position": "RB",
+      "team": "NO",
+      "adp": "63.82",
+      "pos_rank": 10,
+      "analysis": "Neal is a long shot to have any fantasy relevance in 2025;  he's likely destined for a minor role behind Alvin Kamara."
+    },
+    {
+      "rank": 11,
+      "name": "Dylan Sampson",
+      "position": "RB",
+      "team": "CLE",
+      "adp": "65.49",
+      "pos_rank": 11,
+      "analysis": "Sampson faces an uphill battle for playing time similar to teammate Judkins;  he's primarily a late-round flier."
+    },
+    {
+      "rank": 12,
+      "name": "Ollie Gordon",
+      "position": "RB",
+      "team": "MIA",
+      "adp": "71.29",
+      "pos_rank": 12,
+      "analysis": "Gordon's potential is limited by Miami's established backfield; he's primarily a long shot for fantasy relevance."
+    },
+    {
+      "rank": 13,
+      "name": "Jarquez Hunter",
+      "position": "RB",
+      "team": "LAR",
+      "adp": "72.54",
+      "pos_rank": 13,
+      "analysis": "Hunter could carve out a niche role in Los Angeles, but significant injuries are required for him to become a fantasy-relevant player."
+    },
+    {
+      "rank": 14,
+      "name": "Kyle Monangai",
+      "position": "RB",
+      "team": "CHI",
+      "adp": "73.6",
+      "pos_rank": 14,
+      "analysis": "Monangai's ADP is too high considering the depth chart in Chicago;  he is a longshot to make an impact."
+    },
+    {
+      "rank": 15,
+      "name": "Trevor Etienne",
+      "position": "RB",
+      "team": "CAR",
+      "adp": "74.98",
+      "pos_rank": 15,
+      "analysis": "Etienne has a chance to be the lead back in Carolina, but that will depend on how the team utilizes their backfield."
+    }
+  ]
+}
+```
+
+==================================================
+
+2025-06-15 16:44:28.804719 - --- Backend Server Started ---
+2025-06-15 16:44:31.798778 - --- Backend Server Started ---
+2025-06-15 16:46:43.588014 - --- Backend Server Started ---
+2025-06-15 16:46:45.981344 - --- Backend Server Started ---
+
+==================================================
+--- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "tiers": [
+    {
+      "header": "Tier 1: Elite RBs",
+      "summary": "These backs are expected to be top-five fantasy producers.",
+      "players": ["Bijan Robinson", "Jahmyr Gibbs", "Saquon Barkley", "Christian McCaffrey"]
+    },
+    {
+      "header": "Tier 2: High-End RB1s",
+      "summary": "These RBs offer strong RB1 upside with some risk.",
+      "players": ["Derrick Henry", "Austin Ekeler", "Josh Jacobs", "Jonathan Taylor"]
+    },
+    {
+      "header": "Tier 3: Solid RB1s / High-End RB2s",
+      "summary": "This tier contains a mix of reliable starters and players with potential to reach RB1 status.",
+      "players": ["De'Von Achane", "Breece Hall", "Tony Pollard", "Kenneth Walker", "Joe Mixon", "Rhamondre Stevenson", "Isiah Pacheco", "Aaron Jones Sr.", "Travis Etienne Jr.", "James Conner"]
+    },
+    {
+      "header": "Tier 4: RB2s with Upside",
+      "summary": "These running backs project as consistent RB2s with potential for higher production.",
+      "players": ["Alvin Kamara", "James Cook", "David Montgomery", "Chuba Hubbard", "D'Andre Swift", "Najee Harris", "Javonte Williams", "Zach Charbonnet", "Ashton Jeanty", "Tyjae Spears", "Rachaad White", "Jaylen Warren", "Quinshon Judkins", "Omarion Hampton", "Rj Harvey", "Treveyon Henderson", "Bucky Irving", "Chase Brown", "Kyren Williams", "Tank Bigsby", "Cam Skattebo", "Jordan Mason", "Rico Dowdle", "Tyler Allgeier", "Ray Davis", "Trey Benson", "Isaac Guerendo", "Jerome Ford", "Bhayshul Tuten", "J.K. Dobbins", "Braelon Allen", "Jaylen Wright", "Blake Corum", "Roschon Johnson", "Marshawn Lloyd", "Jaydon Blue", "Jaleel Mclaughlin", "Nick Chubb", "Audric Estime", "Devin Neal", "Kareem Hunt", "Kendre Miller", "Justice Hill", "Dylan Sampson", "Antonio Gibson", "Kenneth Gainwell", "Devin Singletary"]
+    },
+    {
+      "header": "Tier 5: RB2s / Flex Plays",
+      "summary": "These players are likely flex plays, with some offering occasional RB2 value.",
+      "players": ["Brian Robinson Jr.", "Tyrone Tracy Jr.", "Alexander Mattison",  "Ollie Gordon", "Elijah Mitchell", "Jarquez Hunter", "Sincere McCormick", "Kyle Monangai", "Miles Sanders", "Kimani Vidal", "Trevor Etienne", "Raheem Mostert", "Dj Giddens", "Keaton Mitchell", "Khalil Herbert", "Zack Moss", "Woody Marks", "Jordan James", "Will Shipley", "Ty Johnson", "Brashard Smith", "Dameon Pierce", "Damien Martinez", "Isaiah Davis", "Tahj Brooks", "Sean Tucker", "Gus Edwards", "Ty Chandler", "Raheim Sanders", "Ameer Abdullah", "Cam Akers", "Chris Brooks", "Donovan Edwards", "Phil Mafah", "Jacory Croskey-Merritt", "Zamir White", "Samaje Perine", "Chris Rodriguez Jr.", "Montrell Johnson Jr.", "Emanuel Wilson", "A.J. Dillon", "Lequint Allen Jr.", "Jonathon Brooks", "Trey Sermon", "Kalel Mullings", "D'Ernest Johnson", "Jaydn Ott", "Ja'Quinden Jackson", "Emari Demercado", "Lan Larison", "Chris Tyree", "Craig Reynolds", "Pierre Strong Jr.", "Marcus Yarns", "Clyde Edwards-Helaire", "Michael Carter", "Dylan Laube", "Ulysses Bentley", "Kenny Mcintosh", "Deuce Vaughn", "Jeremy Mcnichols", "Kyle Juszczyk", "Cordarrelle Patterson", "Patrick Taylor Jr.", "Eric Gray", "D'Onta Foreman", "Tyler Goodson", "Julius Chestnut", "Jamaal Williams", "Carson Steele", "Frank Gore Jr.", "George Holani", "Blake Watson", "Israel Abanikanda", "Jase Mcclellan", "Cody Schrader", "Rasheen Ali", "Deejay Dallas", "Hassan Haskins", "Jawhar Jordan", "Kendall Milton", "Raheem Blackshear", "Jeff Wilson Jr.", "Kene Nwangwu", "Keaontay Ingram", "Keilan Robinson", "Dare Ogunbowale", "Evan Hull", "Salvon Ahmed", "Zach Evans", "Gary Brightwell", "Trayveon Williams", "Dalvin Cook", "Jaret Patterson", "Louis Rees-Zammit", "Sione Vaki", "Mike Boone", "Tyrion Davis-Price", "Malik Davis", "Zonovan Knight", "Joshua Kelley", "Dillon Johnson", "Royce Freeman", "Darrynton Evans", "Chris Evans", "Chase Edmonds", "Jamycal Hasty", "Jerick Mckinnon", "Deneric Prince", "Daijun Edwards", "Isaiah Spiller", "Nyheim Hines", "Michael Wiley", "Ke'Shawn Vaughn", "Kevin Harris", "Latavius Murray", "Emani Bailey", "Dewayne Mcbride", "Demetric Felton Jr.", "Leonard Fournette", "Matt Breida", "Darrell Henderson Jr.", "Xazavian Valladay", "Boston Scott", "J.J. Taylor", "James Robinson", "Lew Nichols", "Myles Gaskin", "Deon Jackson", "Eno Benjamin", "Tony Jones Jr.", "Miyan Williams", "Snoop Conner", "Melvin Gordon", "Ronald Jones", "Dontrell Hilliard", "Jashaun Corbin", "Marlon Mack", "Mohamed Ibrahim", "Brandon Bolden", "La'Mical Perine", "Kenyan Drake", "Jake Funk", "Anthony Mcfarland Jr.", "Derrick Gore", "J.D. Mckissic", "Darrel Williams", "Ty Montgomery", "Trestan Ebner", "Qadree Ollison", "Larry Rountree", "Ezekiel Elliott", "Corey Kiner", "Travis Homer", "Ronnie Rivers"]
+    }
+  ]
+}
+```
+
+==================================================
+

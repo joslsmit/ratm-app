@@ -410,7 +410,23 @@ def dynasty_pick_values():
     if not pick_values_cache:
         return jsonify([])
     return jsonify(list(pick_values_cache.values()))
-    
+
+@app.route('/api/last_update_date')
+def get_last_update_date():
+    try:
+        file_path = os.path.join(basedir, 'values-players.csv')
+        if os.path.exists(file_path):
+            timestamp = os.path.getmtime(file_path)
+            dt_object = datetime.fromtimestamp(timestamp)
+            # Format as "Month Day, Year" e.g., "June 15, 2025"
+            formatted_date = dt_object.strftime("%B %d, %Y")
+            return jsonify({"last_update": formatted_date})
+        else:
+            return jsonify({"error": "File not found"}), 404
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/all_player_names_with_data')
 def all_player_names_with_data():
     if not static_adp_data or not player_data_cache:
