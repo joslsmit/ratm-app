@@ -13,6 +13,12 @@ function App() {
   const [userApiKey, setUserApiKey] = useState(() => localStorage.getItem('geminiApiKey') || '');
   const [showApiKeyModal, setShowApiKeyModal] = useState(() => !localStorage.getItem('geminiApiKey'));
 
+  // State for navigation sections collapse/expand
+  const [navSections, setNavSections] = useState({
+    playerAnalysis: false,
+    teamManagement: false,
+  });
+
   // State for active tool and data
   const [activeTool, setActiveTool] = useState('dossier');
   const [allPlayers, setAllPlayers] = useState([]);
@@ -531,6 +537,13 @@ function App() {
     };
   }, [generateDossier]); // generateDossier is a dependency
 
+  const toggleNavSection = (section) => {
+    setNavSections(prevSections => ({
+      ...prevSections,
+      [section]: !prevSections[section]
+    }));
+  };
+
   const resetApplication = () => {
     if (window.confirm("Are you sure you want to clear all saved data? This will remove your API key, saved draft board, and target list and cannot be undone.")) {
       localStorage.removeItem('geminiApiKey');
@@ -587,7 +600,7 @@ function App() {
 
   // --- JSX ---
   return (
-    <>
+    <div className="app-container">
       {showApiKeyModal && (
         <div id="api-key-modal" className="api-key-modal" style={{ display: 'flex' }}>
           <div className="api-key-modal-content">
@@ -613,20 +626,37 @@ function App() {
         </div>
         <nav className="sidebar-nav">
           <ul>
-            <li><a href="#dossier" className={activeTool === 'dossier' ? 'active' : ''}>Player Dossier</a></li>
-            <li><a href="#rookie" className={activeTool === 'rookie' ? 'active' : ''}>Rookie Rankings</a></li>
-            <li><a href="#tiers" className={activeTool === 'tiers' ? 'active' : ''}>Positional Tiers</a></li>
-            <li><a href="#market" className={activeTool === 'market' ? 'active' : ''}>Sleepers & Busts</a></li>
             <li><a href="#targets" className={activeTool === 'targets' ? 'active' : ''}>Target List <span className="badge">{targetList.length}</span></a></li>
-            <hr />
-            <li><a href="#keeper" className={activeTool === 'keeper' ? 'active' : ''}>Keeper Evaluator</a></li>
-            <li><a href="#trade" className={activeTool === 'trade' ? 'active' : ''}>Trade Analyzer</a></li>
-            <li><a href="#draft" className={activeTool === 'draft' ? 'active' : ''}>Draft Assistant</a></li>
-            <hr />
-            <li><a href="#trending" className={activeTool === 'trending' ? 'active' : ''}>Trending Players</a></li>
-            <li><a href="#waiver" className={activeTool === 'waiver' ? 'active' : ''}>Waiver Wire Assistant</a></li>
-            <li><a href="#dynasty" className={activeTool === 'dynasty' ? 'active' : ''}>Dynasty Values</a></li>
           </ul>
+          <div className="nav-section">
+            <h3 onClick={() => toggleNavSection('playerAnalysis')}>
+              Player Analysis <span className={navSections.playerAnalysis ? 'arrow down' : 'arrow right'}></span>
+            </h3>
+            {navSections.playerAnalysis && (
+              <ul>
+                <li><a href="#dossier" className={activeTool === 'dossier' ? 'active' : ''}>Player Dossier</a></li>
+                <li><a href="#rookie" className={activeTool === 'rookie' ? 'active' : ''}>Rookie Rankings</a></li>
+                <li><a href="#tiers" className={activeTool === 'tiers' ? 'active' : ''}>Positional Tiers</a></li>
+                <li><a href="#market" className={activeTool === 'market' ? 'active' : ''}>Sleepers & Busts</a></li>
+                <li><a href="#trending" className={activeTool === 'trending' ? 'active' : ''}>Trending Players</a></li>
+              </ul>
+            )}
+          </div>
+
+          <div className="nav-section">
+            <h3 onClick={() => toggleNavSection('teamManagement')}>
+              Team Management <span className={navSections.teamManagement ? 'arrow down' : 'arrow right'}></span>
+            </h3>
+            {navSections.teamManagement && (
+              <ul>
+                <li><a href="#keeper" className={activeTool === 'keeper' ? 'active' : ''}>Keeper Evaluator</a></li>
+                <li><a href="#trade" className={activeTool === 'trade' ? 'active' : ''}>Trade Analyzer</a></li>
+                <li><a href="#draft" className={activeTool === 'draft' ? 'active' : ''}>Draft Assistant</a></li>
+                <li><a href="#waiver" className={activeTool === 'waiver' ? 'active' : ''}>Waiver Wire Assistant</a></li>
+                <li><a href="#dynasty" className={activeTool === 'dynasty' ? 'active' : ''}>Dynasty Values</a></li>
+              </ul>
+            )}
+          </div>
         </nav>
         <div className="sidebar-footer">
           <nav className="utility-nav">
@@ -652,16 +682,18 @@ function App() {
                 <div className="form-group-inline">
                   <div className="autoComplete_wrapper"><input id="dossier-player-name" type="text" placeholder="Enter player name..." /></div>
                   <button onClick={() => generateDossier()}>Generate</button>
-                  <button className="add-target-btn" title="Add to Target List" onClick={() => handleAddToTargets(document.getElementById('dossier-player-name')?.value)}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-plus-circle"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
-                  </button>
                 </div>
               </div>
               <div id="dossier-loader" className="loader" style={{ display: 'none' }}></div>
               {dossierResult && !dossierResult.error && (
                 <div className="dossier-output">
                   <div className="dossier-header-card card">
-                    <h3>{dossierResult.player_data.name}</h3>
+                    <div className="dossier-title-container">
+                      <h3>{dossierResult.player_data.name}</h3>
+                      <button className="add-target-btn" title="Add to Target List" onClick={() => handleAddToTargets(dossierResult.player_data.name)}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-plus-circle"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                      </button>
+                    </div>
                     <div className="dossier-header-stats">
                       <span><strong>Team:</strong> {dossierResult.player_data.team}</span>
                       <span><strong>Position:</strong> {dossierResult.player_data.position}</span>
@@ -690,7 +722,7 @@ function App() {
                     {rookieRankings.length > 0 ? rookieRankings.map((rookie, index) => (
                         <div key={index} className="rookie-card">
                             <div className="rookie-header">
-                                <h3><a href={`/?tool=dossier&player=${encodeURIComponent(rookie.name)}`} className="player-link">{rookie.name}</a> ({rookie.position}, {rookie.team || 'N/A'})</h3>
+                                <h3><a href={`/?tool=dossier&player=${encodeURIComponent(rookie.name)}`} target="_blank" rel="noopener noreferrer" className="player-link">{rookie.name}</a> ({rookie.position}, {rookie.team || 'N/A'})</h3>
                                 <div className="rookie-actions">
                                   <button className="add-target-btn-small" title="Add to Target List" onClick={() => handleAddToTargets(rookie.name)}>
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
@@ -1017,7 +1049,7 @@ function App() {
 
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
