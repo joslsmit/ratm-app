@@ -38,7 +38,7 @@ model = genai.GenerativeModel('gemini-1.5-flash')
 
 
 # --- Data Caching ---
-player_data_cache, player_name_to_id, static_adp_data, player_values_cache, pick_values_cache, weekly_data_cache = None, None, {}, None, None, None
+player_data_cache, player_name_to_id, static_adp_data, player_values_cache, pick_values_cache, weekly_data_cache, combined_player_data_cache = None, None, {}, None, None, None, None
 
 # --- Data Loading & Helper Functions ---
 def load_weekly_data_from_csv(file_path):
@@ -96,11 +96,29 @@ def load_adp_from_csv(file_path):
             print(f"❌ FATAL ERROR: Could not find a player name column in {file_path}")
             return None
 
-        df_processed = df[[player_col, 'pos', 'ecr']].copy() # Changed 'adp' to 'ecr' based on db_fpecr_latest.csv
+        # Ensure 'bye', 'yahoo_id', and 'team' are read, if they exist
+        columns_to_process = [player_col, 'pos', 'ecr', 'bye', 'yahoo_id', 'team', 'Rank']
+        existing_columns = [col for col in columns_to_process if col in df.columns]
+        df_processed = df[existing_columns].copy()
+
         def clean_player_name(player_name):
-            return re.sub(r'\s[A-Z]{2,4}$', '', str(player_name)).lower().strip()
+            # More aggressive cleaning: remove suffixes, non-alphanumeric chars (except spaces), and extra whitespace
+            name = re.sub(r'\s[A-Z]{2,4}$', '', str(player_name)) # Remove team suffix
+            name = re.sub(r'[^a-zA-Z0-9\s]', '', name) # Remove non-alphanumeric chars
+            return name.lower().strip()
         df_processed['Player_Clean'] = df_processed[player_col].apply(clean_player_name)
-        adp_dict = {row['Player_Clean']: {'adp': row['ecr'], 'pos_rank': row['pos']} for index, row in df_processed.iterrows() if row['Player_Clean'] and row['Player_Clean'] != 'nan'}
+        
+        adp_dict = {
+            row['Player_Clean']: {
+                'adp': row.get('ecr'),
+                'pos_rank': row.get('Rank'),
+                'pos': row.get('pos'),
+                'bye': row.get('bye'),
+                'yahoo_id': row.get('yahoo_id'),
+                'team': row.get('team')
+            }
+            for index, row in df_processed.iterrows() if row['Player_Clean'] and row['Player_Clean'] != 'nan'
+        }
         print(f"✅ Successfully loaded {len(adp_dict)} players from {file_path}.")
         return adp_dict
     except FileNotFoundError:
@@ -119,6 +137,8 @@ def get_all_players():
         response = requests.get(url, timeout=15)
         response.raise_for_status()
         player_data_cache = response.json()
+
+
         player_name_to_id = { p['full_name'].lower().strip(): p_id for p_id, p in player_data_cache.items() if p.get('full_name') }
         print(f"✅ Successfully loaded {len(player_data_cache)} players from Sleeper API.")
     except Exception as e:
@@ -134,6 +154,43 @@ def fuzzy_find_player_key(name_to_search, key_dictionary):
         if lower_name in key: return key
     return None
 
+def create_combined_player_data_cache():
+    global combined_player_data_cache, static_adp_data, weekly_data_cache
+    if not static_adp_data or not weekly_data_cache:
+        print("❌ Cannot create combined player data cache: static_adp_data or weekly_data_cache is not loaded.")
+        return
+
+    temp_combined_data = {}
+    bye_week_found_count = 0
+    pos_rank_found_count = 0
+
+    for name, data in static_adp_data.items():
+        # Get bye week from static data
+        bye_week = data.get('bye')
+        if bye_week is not None and pd.notna(bye_week):
+            bye_week_found_count += 1
+
+        # Get positional rank from weekly data
+        weekly_info = weekly_data_cache.get(name.lower().strip(), {})
+        pos_rank = weekly_info.get('pos_rank', 'N/A')
+        if pos_rank != 'N/A':
+            pos_rank_found_count += 1
+
+        temp_combined_data[name.lower().strip()] = {
+            'name': name.title(),
+            'pos_rank': pos_rank,
+            'adp': data.get('adp'),
+            'bye_week': int(bye_week) if bye_week is not None and pd.notna(bye_week) else 'N/A',
+            'team': data.get('team', 'N/A'),
+            'position': data.get('pos', 'N/A'),
+            'yahoo_id': data.get('yahoo_id')
+        }
+    
+    combined_player_data_cache = temp_combined_data
+    print(f"✅ Successfully created combined_player_data_cache with {len(combined_player_data_cache)} players.")
+    print(f"📊 Bye week data found for {bye_week_found_count} out of {len(static_adp_data)} players.")
+    print(f"📊 Positional rank data found for {pos_rank_found_count} out of {len(static_adp_data)} players in weekly data.")
+
 def get_player_context(player_name):
     sleeper_key = fuzzy_find_player_key(player_name, player_name_to_id)
     static_key = fuzzy_find_player_key(player_name, static_adp_data)
@@ -142,10 +199,10 @@ def get_player_context(player_name):
     player_info_static = static_adp_data.get(static_key, {}) if static_key and static_adp_data else {}
     context_lines = []
     full_name = player_info_live.get('full_name', player_name)
-    context_lines.append(f"- Player: {full_name} ({player_info_live.get('position', 'N/A')}, {player_info_live.get('team', 'N/A')})")
+    context_lines.append(f"- Player: {full_name} ({player_info_static.get('pos', 'N/A')}, {player_info_live.get('team', 'N/A')})")
     context_lines.append(f"  - Status: {player_info_live.get('status', 'N/A')}")
     context_lines.append(f"  - Age: {player_info_live.get('age', 'N/A')}, Experience: {player_info_live.get('years_exp', 'N/A')} years")
-    if bye_week := player_info_live.get('bye_week'): context_lines.append(f"  - Bye Week: {bye_week}")
+    if bye_week := player_info_static.get('bye'): context_lines.append(f"  - Bye Week: {int(bye_week)}")
     pos_rank = player_info_static.get('pos_rank', 'N/A')
     adp = player_info_static.get('adp')
     adp_display = f"{adp:.1f}" if adp else "N/A"
@@ -203,10 +260,15 @@ def process_ai_response(response_text):
             formatted_analysis = []
             for key, value in analysis_content.items():
                 display_key = key.replace('_', ' ').title()
-                formatted_analysis.append(f"**{display_key}:** {value}")
-            analysis_text = "\n\n".join(formatted_analysis)
+                formatted_analysis.append(f"**{display_key}:** {value.strip()}") # Strip whitespace from value
+            analysis_text = "\n".join(formatted_analysis) # Use single newline
         else:
-            analysis_text = analysis_content
+            analysis_text = analysis_content.strip() # Strip whitespace from overall content
+
+        # Further clean up multiple newlines
+        analysis_text = re.sub(r'\n\s*\n', '\n\n', analysis_text) # Replace multiple newlines with just two
+        analysis_text = re.sub(r'^\s*\n', '', analysis_text) # Remove leading newline if any
+        analysis_text = re.sub(r'\n\s*$', '', analysis_text) # Remove trailing newline if any
 
         emoji_map = {'High': '✅', 'Medium': '🤔', 'Low': '⚠️'}
         confidence_badge = f"**Confidence: {emoji_map.get(confidence, '🤔')} {confidence}**"
@@ -214,7 +276,8 @@ def process_ai_response(response_text):
     except (json.JSONDecodeError, AttributeError) as e:
         print(f"Error processing AI response: {e}")
         traceback.print_exc()
-        return response_text
+        # Return a user-friendly error message instead of the raw text
+        return "There was an error processing the AI's response. The format was invalid. Please try again."
 
 PROMPT_PREAMBLE = "You are 'The Analyst,' a data-driven, no-nonsense fantasy football expert providing advice for the upcoming 2025 NFL season. All analysis is for a 12-team, PPR league with standard Yahoo scoring rules..."
 JSON_OUTPUT_INSTRUCTION = "Your response MUST be a JSON object with two keys: \"confidence\" and \"analysis\"..."
@@ -235,11 +298,11 @@ def player_dossier():
         
         player_data_response = {
             "name": player_info_live.get('full_name', player_name.title()),
-            "team": player_info_live.get('team', 'N/A'),
-            "position": player_info_live.get('position', 'N/A'),
-            "pos_rank": player_info_static.get('pos_rank', 'N/A'),
+            "team": player_info_static.get('team', 'N/A'),
+            "position": player_info_static.get('pos', 'N/A'),
+            "pos_rank": combined_player_data_cache.get(static_key, {}).get('pos_rank', 'N/A'),
             "adp": player_info_static.get('adp'),
-            "bye_week": player_info_live.get('bye_week')
+            "bye_week": int(player_info_static.get('bye')) if player_info_static.get('bye') and pd.notna(player_info_static.get('bye')) else 'N/A'
         }
 
         # --- Generate AI Analysis ---
@@ -289,9 +352,10 @@ def keeper_evaluation():
 def trade_analyzer():
     try:
         user_key = request.headers.get('X-API-Key')
+        scoring_format = request.json.get('scoring_format', 'PPR')
         my_assets_context = "\n".join([get_player_context(name) if "pick" not in name.lower() else f"- {name}" for name in request.json.get('my_assets', [])])
         partner_assets_context = "\n".join([get_player_context(name) if "pick" not in name.lower() else f"- {name}" for name in request.json.get('partner_assets', [])])
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Analyze this trade. Declare a winner or if it is fair. Justify your answer.\n\n**Assets My Team Receives:**\n{my_assets_context}\n\n**Assets My Partner Receives:**\n{partner_assets_context}\n\n{JSON_OUTPUT_INSTRUCTION}"
+        prompt = f"{PROMPT_PREAMBLE.replace('PPR', scoring_format)}\n\n**Task:** Analyze this trade from the perspective of 'My Team'. Declare a winner or if it is fair. Justify your answer, consistently referring to the sides as 'My Team' and 'The Other Team'.\n\n**Assets My Team Receives:**\n{my_assets_context}\n\n**Assets The Other Team Receives:**\n{partner_assets_context}\n\n{JSON_OUTPUT_INSTRUCTION}"
         response_text = make_gemini_request(prompt, user_key)
         return jsonify({'result': process_ai_response(response_text)})
     except Exception as e:
@@ -416,31 +480,16 @@ def get_last_update_date():
 
 @app.route('/api/all_player_names_with_data')
 def all_player_names_with_data():
-    if not static_adp_data or not player_data_cache:
-        return jsonify([])
-
-    sleeper_data_by_name = {
-        p['full_name'].lower().strip(): {
-            'bye_week': p.get('bye_week', 'N/A'),
-            'team': p.get('team', 'N/A'),
-            'position': p.get('position', 'N/A')
-        }
-        for p_id, p in player_data_cache.items() if p.get('full_name')
-    }
-
-    combined_data = []
-    for name, data in static_adp_data.items():
-        player_info = sleeper_data_by_name.get(name.lower().strip(), {})
-        combined_data.append({
-            'name': name.title(),
-            'pos_rank': data.get('pos_rank', 'N/A'),
-            'adp': data.get('adp'),
-            'bye_week': player_info.get('bye_week', 'N/A'),
-            'team': player_info.get('team', 'N/A'),
-            'position': player_info.get('position', 'N/A')
-        })
-        
-    return jsonify(combined_data)
+    if not combined_player_data_cache:
+        return jsonify({"error": "Combined player data cache not available."}), 500
+    # --- Diagnostic Logging ---
+    print("--- First 5 items in combined_player_data_cache ---")
+    for i, item in enumerate(combined_player_data_cache):
+        if i >= 5:
+            break
+        print(item)
+    print("--- End of inspection ---")
+    return jsonify(combined_player_data_cache)
 
 @app.route('/api/trending_players')
 def trending_players():
@@ -538,6 +587,28 @@ def waiver_wire_analysis():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/debug_player_cache/<player_name>', methods=['GET'])
+def debug_player_cache(player_name):
+    global player_data_cache, player_name_to_id
+    if player_data_cache is None:
+        get_all_players() # Attempt to load if not already loaded
+
+    if player_data_cache:
+        # Try to find by exact match first
+        player_id = player_name_to_id.get(player_name.lower().strip())
+        if player_id:
+            return jsonify(player_data_cache.get(player_id))
+        
+        # If not found by exact match, try fuzzy match
+        for p_id, p_data in player_data_cache.items():
+            if p_data.get('full_name', '').lower().strip() == player_name.lower().strip():
+                return jsonify(p_data)
+            if player_name.lower().strip() in p_data.get('full_name', '').lower().strip():
+                return jsonify(p_data) # Return first fuzzy match
+        
+        return jsonify({"message": "Player not found in cache"}), 404
+    return jsonify({"message": "Player data cache not loaded"}), 500
+
 if __name__ == '__main__':
     try:
         import_data()  # Initial data import
@@ -553,10 +624,19 @@ if __name__ == '__main__':
         pick_values_cache = load_values_from_csv(os.path.join(basedir, 'values-picks.csv'))
         weekly_data_cache = load_weekly_data_from_csv(os.path.join(basedir, 'fp_latest_weekly.csv'))
 
+        # Create the combined player data cache at startup
+        create_combined_player_data_cache()
+
+        print(f"Player data cache size: {len(player_data_cache) if player_data_cache else 0}")
+        print(f"Static ADP data size: {len(static_adp_data) if static_adp_data else 0}")
+        print(f"Weekly data cache size: {len(weekly_data_cache) if weekly_data_cache else 0}")
+
         if static_adp_data and player_data_cache is not None and weekly_data_cache is not None:
             app.run(debug=True, host='0.0.0.0', port=5001) # Bind to 0.0.0.0 for Render deployment
         else:
             print("Application will not start because essential data failed to load.")
+            # Optionally, raise an exception or exit if data is critical
+            # sys.exit(1) # Uncomment to force exit if data loading fails
     except Exception as e:
         print(f"❌ FATAL ERROR during application startup: {e}")
         traceback.print_exc()

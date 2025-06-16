@@ -291,7 +291,7 @@ body {
 }
 
 .content-wrapper {
-    max-width: 900px;
+    max-width: 1200px;
     margin: 0 auto;
 }
 
@@ -377,6 +377,11 @@ section {
 
 .action-button:hover {
     background-color: var(--button-hover-background);
+}
+
+.action-button.btn-small {
+    padding: 8px 12px;
+    font-size: 0.9em;
 }
 
 .btn-danger {
@@ -741,9 +746,14 @@ section {
 /* Trade Analyzer Specific */
 .trade-box {
     display: flex;
+    flex-wrap: wrap;
     gap: 20px;
     margin-bottom: 20px;
-    flex-wrap: wrap;
+}
+
+.trade-settings-card {
+    width: 100%;
+    margin-bottom: 0; /* Remove extra margin if it's part of trade-box */
 }
 
 .trade-side {
@@ -811,7 +821,7 @@ section {
 
 .draft-board {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: repeat(5, 1fr);
     gap: 15px;
 }
 
@@ -840,6 +850,26 @@ section {
     background-color: var(--input-background);
     color: var(--text-color);
     margin-bottom: 10px;
+}
+
+.round-card input::placeholder {
+    font-size: 0.8em;
+    color: var(--text-muted);
+}
+
+.player-display {
+    padding: 10px;
+    background-color: var(--input-background);
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-color);
+    margin-bottom: 10px;
+    text-align: center;
+    flex-grow: 1;
+}
+.round-card .remove-btn-small {
+    margin-top: 10px;
 }
 
 .draft-card-details {
@@ -1099,5 +1129,9 @@ section {
 
     .result-box-cards {
         grid-template-columns: 1fr;
+    }
+
+    .draft-board {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     }
 }
