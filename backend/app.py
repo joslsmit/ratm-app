@@ -460,6 +460,46 @@ def trending_players():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/waiver_swap_analysis', methods=['POST'])
+def waiver_swap_analysis():
+    try:
+        user_key = request.headers.get('X-API-Key')
+        data = request.json
+        roster = data.get('roster', {})
+        player_to_add = data.get('player_to_add')
+
+        if not roster or not player_to_add:
+            return jsonify({"error": "Roster and player_to_add are required."}), 400
+
+        roster_context = "\n".join([f"({pos}) {get_player_context(name)}" for pos, name in roster.items() if name])
+        waiver_player_context = get_player_context(player_to_add)
+
+        prompt = f"""
+{PROMPT_PREAMBLE}
+
+**Task:** You are tasked with evaluating a potential waiver wire transaction. A user wants to pick up a specific player and needs to know if it's a good move and, if so, who to drop from their current roster.
+
+1.  **Analyze the Waiver Candidate:** Evaluate the player to be added based on their current performance, role, and future outlook for the 2025 season.
+2.  **Analyze the User's Roster:** Examine the user's current roster to identify strengths, weaknesses, and potential players who could be dropped. Pay close attention to underperforming players, players with difficult upcoming schedules, or positions where the user has a surplus.
+3.  **Formulate a Recommendation:**
+    *   Provide a clear "verdict" on whether to **ADD** the player or **DO NOT ADD** the player.
+    *   If the verdict is to ADD the player, you MUST recommend a specific player to **DROP**.
+    *   Justify your recommendation with a detailed analysis, comparing the waiver candidate directly to the suggested drop candidate. Consider factors like positional need, bye weeks, short-term vs. long-term value, and overall impact on the team's strength.
+
+**My Current Roster:**
+{roster_context}
+
+**Waiver Wire Player to Consider Adding:**
+{waiver_player_context}
+
+{JSON_OUTPUT_INSTRUCTION}
+"""
+        response_text = make_gemini_request(prompt, user_key)
+        return jsonify({'result': process_ai_response(response_text)})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/waiver_wire_analysis', methods=['POST'])
 def waiver_wire_analysis():
     try:
@@ -519,4 +559,4 @@ if __name__ == '__main__':
             print("Application will not start because essential data failed to load.")
     except Exception as e:
         print(f"❌ FATAL ERROR during application startup: {e}")
-        traceback.print_exc() # Print full traceback
+        traceback.print_exc()

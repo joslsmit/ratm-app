@@ -3,6 +3,7 @@ import showdown from 'showdown';
 import autoComplete from '@tarekraafat/autocomplete.js';
 import './App.css';
 import DynastyValues from './components/DynastyValues';
+import WaiverWireAssistant from './components/WaiverWireAssistant';
 
 // The backend API URL. This can be changed to your production URL when you deploy.
 const API_BASE_URL = 'http://localhost:5001/api';
@@ -28,7 +29,8 @@ function App() {
   const [tradeResult, setTradeResult] = useState('');
   const [draftAnalysisResult, setDraftAnalysisResult] = useState('');
   const [rosterCompositionResult, setRosterCompositionResult] = useState('');
-  const [waiverWireResult, setWaiverWireResult] = useState('');
+  const [waiverSwapResult, setWaiverSwapResult] = useState('');
+  const [isWaiverSwapLoading, setIsWaiverSwapLoading] = useState(false);
   const [globalSearchPlayer, setGlobalSearchPlayer] = useState('');
   const [lastUpdateDate, setLastUpdateDate] = useState('Loading...');
 
@@ -428,10 +430,26 @@ function App() {
     }
   }, []);
 
-  const generateWaiverWireAnalysis = useCallback((teamRoster) => {
-    if (teamRoster.length === 0) { alert('Please enter your team roster.'); return; }
-    renderGeneric('waiver', '/waiver_wire_analysis', { team_roster: teamRoster }, setWaiverWireResult);
-  }, [renderGeneric]);
+  const handleWaiverSwapAnalysis = useCallback(async (roster, playerToAdd) => {
+    if (Object.keys(roster).length === 0 || !playerToAdd) {
+      alert('Please fill out your roster and specify a player to add.');
+      return;
+    }
+    setIsWaiverSwapLoading(true);
+    setWaiverSwapResult('');
+    try {
+      const data = await makeApiRequest('/waiver_swap_analysis', { roster, player_to_add: playerToAdd });
+      if (data && data.result) {
+        setWaiverSwapResult(converter.makeHtml(data.result));
+      } else {
+        setWaiverSwapResult('<p style="color: var(--text-muted);">The Analyst returned an empty response.</p>');
+      }
+    } catch (error) {
+      setWaiverSwapResult(`<p style="color: var(--danger-color);">An error occurred: ${error.message}</p>`);
+    } finally {
+      setIsWaiverSwapLoading(false);
+    }
+  }, [makeApiRequest, converter]);
 
   // --- Effect Hooks for Initialization and Side Effects ---
 
@@ -849,7 +867,7 @@ function App() {
                       const playerData = staticPlayerData[asset.toLowerCase()];
                       return (
                         <li key={index} className="list-item">
-                          <span>{asset} {playerData && `(${player.pos_rank})`}</span>
+                          <span>{asset} {playerData && `(${playerData.pos_rank})`}</span>
                           <button className="remove-btn" onClick={() => setPartnerTradeAssets(prev => prev.filter((_, i) => i !== index))}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                           </button>
@@ -960,16 +978,12 @@ function App() {
           )}
 
           {activeTool === 'waiver' && (
-            <section id="waiver">
-              <div className="tool-header"><h2>Waiver Wire Assistant</h2><p>Get AI-powered recommendations for waiver wire pickups.</p></div>
-              <div className="card">
-                <h3>Your Team Roster (one player name per line):</h3>
-                <textarea id="team-roster-input" rows="10" placeholder="Enter your team's player names here..."></textarea>
-                <button onClick={() => generateWaiverWireAnalysis(document.getElementById('team-roster-input').value.split('\n').filter(name => name.trim() !== ''))} className="action-button">Get Waiver Wire Advice</button>
-              </div>
-              <div id="waiver-loader" className="loader" style={{ display: 'none' }}></div>
-              <div id="waiver-result" className="result-box" dangerouslySetInnerHTML={{ __html: converter.makeHtml(waiverWireResult) }}></div>
-            </section>
+            <WaiverWireAssistant
+              allPlayers={allPlayers}
+              onAnalyze={handleWaiverSwapAnalysis}
+              analysisResult={waiverSwapResult}
+              isLoading={isWaiverSwapLoading}
+            />
           )}
 
           {activeTool === 'settings' && (
