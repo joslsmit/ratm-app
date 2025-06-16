@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import showdown from 'showdown';
 import autoComplete from '@tarekraafat/autocomplete.js';
 import './App.css';
+import DynastyValues from './components/DynastyValues';
+import WaiverWireAssistant from './components/WaiverWireAssistant';
 
 // The backend API URL. This can be changed to your production URL when you deploy.
 const API_BASE_URL = 'http://localhost:5001/api';
@@ -27,7 +29,10 @@ function App() {
   const [tradeResult, setTradeResult] = useState('');
   const [draftAnalysisResult, setDraftAnalysisResult] = useState('');
   const [rosterCompositionResult, setRosterCompositionResult] = useState('');
+  const [waiverSwapResult, setWaiverSwapResult] = useState('');
+  const [isWaiverSwapLoading, setIsWaiverSwapLoading] = useState(false);
   const [globalSearchPlayer, setGlobalSearchPlayer] = useState('');
+  const [lastUpdateDate, setLastUpdateDate] = useState('Loading...');
 
   // States for list-based tools
   const [targetList, setTargetList] = useState([]);
@@ -425,6 +430,27 @@ function App() {
     }
   }, []);
 
+  const handleWaiverSwapAnalysis = useCallback(async (roster, playerToAdd) => {
+    if (Object.keys(roster).length === 0 || !playerToAdd) {
+      alert('Please fill out your roster and specify a player to add.');
+      return;
+    }
+    setIsWaiverSwapLoading(true);
+    setWaiverSwapResult('');
+    try {
+      const data = await makeApiRequest('/waiver_swap_analysis', { roster, player_to_add: playerToAdd });
+      if (data && data.result) {
+        setWaiverSwapResult(converter.makeHtml(data.result));
+      } else {
+        setWaiverSwapResult('<p style="color: var(--text-muted);">The Analyst returned an empty response.</p>');
+      }
+    } catch (error) {
+      setWaiverSwapResult(`<p style="color: var(--danger-color);">An error occurred: ${error.message}</p>`);
+    } finally {
+      setIsWaiverSwapLoading(false);
+    }
+  }, [makeApiRequest, converter]);
+
   // --- Effect Hooks for Initialization and Side Effects ---
 
   // Create and load the draft board on initial mount
@@ -442,6 +468,25 @@ function App() {
       fetchTrending();
     }
   }, [activeTool, trendingData.length, fetchTrending]);
+
+  // Fetch last update date when settings tool is active
+  useEffect(() => {
+    if (activeTool === 'settings') {
+      fetch(`${API_BASE_URL}/last_update_date`)
+        .then(response => response.json())
+        .then(data => {
+          if (data && data.last_update) {
+            setLastUpdateDate(data.last_update);
+          } else {
+            setLastUpdateDate('N/A');
+          }
+        })
+        .catch(error => {
+          console.error("Error fetching last update date:", error);
+          setLastUpdateDate('Error loading date.');
+        });
+    }
+  }, [activeTool]);
 
   // Handle URL parameters and hash changes for tool navigation
   useEffect(() => {
@@ -512,45 +557,6 @@ function App() {
     document.body.setAttribute('data-theme', savedTheme);
   }, []);
 
-  const checkYahooAuthStatus = useCallback(async () => {
-    const statusDiv = document.getElementById('yahoo-auth-status');
-    const profileDiv = document.getElementById('yahoo-profile-data');
-    if (statusDiv) statusDiv.innerHTML = '<p style="color: var(--text-muted);">Checking authorization status...</p>';
-    if (profileDiv) profileDiv.innerHTML = '';
-    try {
-      // This needs to be a GET request, so we don't use makeApiRequest
-      const response = await fetch(`${API_BASE_URL}/yahoo/user_profile`);
-      const data = await response.json();
-      if (response.ok) {
-        if (statusDiv) statusDiv.innerHTML = '<p style="color: var(--success-color);">✅ Successfully authorized with Yahoo!</p>';
-        if (profileDiv) profileDiv.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
-      } else {
-        if (statusDiv) statusDiv.innerHTML = `<p style="color: var(--danger-color);">❌ Authorization failed: ${data.error || 'Unknown error'}</p>`;
-      }
-    } catch (error) {
-      if (statusDiv) statusDiv.innerHTML = `<p style="color: var(--danger-color);">❌ Could not connect to backend to check status: ${error.message}</p>`;
-    }
-  }, []);
-
-  const yahooLogout = useCallback(async () => {
-    const statusDiv = document.getElementById('yahoo-auth-status');
-    const profileDiv = document.getElementById('yahoo-profile-data');
-    try {
-      // This needs to be a GET request, so we don't use makeApiRequest
-      const response = await fetch(`${API_BASE_URL}/yahoo/logout`);
-      const data = await response.json();
-      if (response.ok) {
-        alert(data.message); // Or some other UI feedback
-        if (statusDiv) statusDiv.innerHTML = '';
-        if (profileDiv) profileDiv.innerHTML = '';
-      } else {
-        throw new Error(data.error || 'Failed to logout.');
-      }
-    } catch (error) {
-      alert(`Error logging out: ${error.message}`);
-    }
-  }, []);
-
   const sortTrendingData = (key) => {
     const newDirection = sortDirection[key] === 'asc' ? 'desc' : 'asc';
     const sortedData = [...trendingData].sort((a, b) => {
@@ -618,6 +624,8 @@ function App() {
             <li><a href="#draft" className={activeTool === 'draft' ? 'active' : ''}>Draft Assistant</a></li>
             <hr />
             <li><a href="#trending" className={activeTool === 'trending' ? 'active' : ''}>Trending Players</a></li>
+            <li><a href="#waiver" className={activeTool === 'waiver' ? 'active' : ''}>Waiver Wire Assistant</a></li>
+            <li><a href="#dynasty" className={activeTool === 'dynasty' ? 'active' : ''}>Dynasty Values</a></li>
           </ul>
         </nav>
         <div className="sidebar-footer">
@@ -969,6 +977,15 @@ function App() {
             </section>
           )}
 
+          {activeTool === 'waiver' && (
+            <WaiverWireAssistant
+              allPlayers={allPlayers}
+              onAnalyze={handleWaiverSwapAnalysis}
+              analysisResult={waiverSwapResult}
+              isLoading={isWaiverSwapLoading}
+            />
+          )}
+
           {activeTool === 'settings' && (
             <section id="settings">
               <div className="tool-header"><h2>Settings</h2><p>Manage application data and preferences.</p></div>
@@ -981,6 +998,19 @@ function App() {
                 <h3>Clear Saved Data</h3>
                 <p>This action will permanently delete your saved Google API key, draft board, and target list from this browser.</p>
                 <button onClick={resetApplication} className="btn-danger">Clear All Data & Reset</button>
+              </div>
+              <div className="card">
+                <h3>Data Last Updated</h3>
+                <p>Dynasty process files were last updated on: <strong>{lastUpdateDate}</strong></p>
+              </div>
+            </section>
+          )}
+
+          {activeTool === 'dynasty' && (
+            <section id="dynasty">
+              <div className="tool-header"><h2>Dynasty Values</h2><p>View dynasty trade values for players and picks.</p></div>
+              <div className="card">
+                <DynastyValues />
               </div>
             </section>
           )}
