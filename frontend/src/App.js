@@ -38,7 +38,6 @@ function App() {
   const [rosterCompositionResult, setRosterCompositionResult] = useState('');
   const [waiverSwapResult, setWaiverSwapResult] = useState('');
   const [isWaiverSwapLoading, setIsWaiverSwapLoading] = useState(false);
-  const [globalSearchPlayer, setGlobalSearchPlayer] = useState('');
   const [lastUpdateDate, setLastUpdateDate] = useState('Loading...');
 
   // States for list-based tools
@@ -225,11 +224,6 @@ function App() {
     return {};
   }, []);
 
-  const handleGlobalSearch = useCallback((playerName) => {
-    setActiveTool('dossier');
-    setGlobalSearchPlayer(playerName);
-  }, []);
-
   const generateDossier = useCallback((playerName) => {
     const nameToFetch = playerName || document.getElementById('dossier-player-name')?.value;
     if (!nameToFetch) { alert('Please enter a player name.'); return; }
@@ -253,6 +247,18 @@ function App() {
         if (loader) loader.style.display = 'none';
       });
   }, [makeApiRequest]);
+
+  const handleGlobalSearch = useCallback((playerName) => {
+    setActiveTool('dossier');
+    // Use a setTimeout to ensure the dossier section is rendered before trying to populate the input
+    setTimeout(() => {
+      const dossierInput = document.getElementById('dossier-player-name');
+      if (dossierInput) {
+        dossierInput.value = playerName;
+        generateDossier(playerName);
+      }
+    }, 100); // A small delay (e.g., 100ms)
+  }, [generateDossier]);
 
   const generateTiers = useCallback(() => {
     const position = document.getElementById('tiers-pos')?.value;
@@ -584,13 +590,14 @@ function App() {
 
       if (toolFromParam === 'dossier' && playerFromParam) {
         setActiveTool('dossier');
-        setTimeout(() => {
-          const dossierInput = document.getElementById('dossier-player-name');
-          if (dossierInput) {
-            dossierInput.value = decodeURIComponent(playerFromParam);
-            generateDossier(decodeURIComponent(playerFromParam));
-          }
-        }, 100);
+        const decodedPlayerName = decodeURIComponent(playerFromParam);
+        // Set the input value immediately
+        const dossierInput = document.getElementById('dossier-player-name');
+        if (dossierInput) {
+          dossierInput.value = decodedPlayerName;
+        }
+        // Then generate the dossier
+        generateDossier(decodedPlayerName);
       } else {
         setActiveTool('dossier');
       }
