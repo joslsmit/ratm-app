@@ -5553,3 +5553,361 @@
 
 ==================================================
 
+
+==================================================
+--- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "rookies": [
+    {
+      "rank": 1,
+      "name": "Ashton Jeanty",
+      "position": "RB",
+      "team": "LV",
+      "adp": "5.13",
+      "pos_rank": 1,
+      "analysis": "Jeanty boasts a high ADP suggesting significant early-round value.  His potential for a significant role in a run-heavy offense makes him a top rookie target."
+    },
+    {
+      "rank": 2,
+      "name": "Omarion Hampton",
+      "position": "RB",
+      "team": "LAC",
+      "adp": "23.52",
+      "pos_rank": 2,
+      "analysis": "Hampton's landing spot in a potent Chargers offense gives him considerable upside.  However, his path to significant touches might be initially congested."
+    },
+    {
+      "rank": 3,
+      "name": "TreVeyon Henderson",
+      "position": "RB",
+      "team": "NE",
+      "adp": "27.07",
+      "pos_rank": 3,
+      "analysis": "Henderson's injury history is a concern, but his talent is undeniable.  A healthy season in New England could result in significant fantasy value."
+    },
+    {
+      "rank": 4,
+      "name": "Quinshon Judkins",
+      "position": "RB",
+      "team": "CLE",
+      "adp": "28.57",
+      "pos_rank": 4,
+      "analysis": "Judkins' powerful running style translates well to the NFL, but opportunity shares with established backs make his projection uncertain."
+    },
+    {
+      "rank": 5,
+      "name": "RJ Harvey",
+      "position": "RB",
+      "team": "DEN",
+      "adp": "27.02",
+      "pos_rank": 5,
+      "analysis": "Harvey's explosive ability makes him a high-risk, high-reward prospect in Denver.  His role and usage will depend heavily on the team's offensive scheme."
+    },
+    {
+      "rank": 6,
+      "name": "Tyler Warren",
+      "position": "TE",
+      "team": "IND",
+      "adp": "16.77",
+      "pos_rank": 1,
+      "analysis": "Warren's high ADP reflects strong TE potential in Indianapolis.  A potential starting role increases his fantasy value significantly."
+    },
+    {
+      "rank": 7,
+      "name": "Colston Loveland",
+      "position": "TE",
+      "team": "CHI",
+      "adp": "18.37",
+      "pos_rank": 2,
+      "analysis": "Loveland's receiving skills could make him a solid fantasy option, but the Bears' depth chart at TE needs monitoring."
+    },
+    {
+      "rank": 8,
+      "name": "Kaleb Johnson",
+      "position": "RB",
+      "team": "PIT",
+      "adp": "30.5",
+      "pos_rank": 6,
+      "analysis": "Johnson's role in Pittsburgh is less defined than other top rookie backs.  His fantasy potential hinges on securing a sizable workload."
+    },
+    {
+      "rank": 9,
+      "name": "Mason Taylor",
+      "position": "TE",
+      "team": "NYJ",
+      "adp": "29.76",
+      "pos_rank": 3,
+      "analysis": "Taylor has the potential to be a valuable asset in a pass-heavy offense.  However, his rookie season might be more about development than immediate impact."
+    },
+    {
+      "rank": 10,
+      "name": "Cameron Ward",
+      "position": "QB",
+      "team": "TEN",
+      "adp": "26.44",
+      "pos_rank": 1,
+      "analysis": "Ward's opportunity for playing time will depend heavily on the Titans' QB situation.  A potential breakout season is possible but hinges on opportunity."
+    },
+    {
+      "rank": 11,
+      "name": "Shedeur Sanders",
+      "position": "QB",
+      "team": "CLE",
+      "adp": "33.79",
+      "pos_rank": 2,
+      "analysis": "Sanders' immediate fantasy relevance is uncertain due to competition.  His long-term potential and high upside make him an interesting late-round flier."
+    },
+    {
+      "rank": 12,
+      "name": "Jaxson Dart",
+      "position": "QB",
+      "team": "NYG",
+      "adp": "32.23",
+      "pos_rank": 3,
+      "analysis": "Dart's fantasy potential is similar to Sanders', relying on potential for a starting role.  His upside is significant but far from guaranteed."
+    },
+    {
+      "rank": 13,
+      "name": "Tetairoa McMillan",
+      "position": "WR",
+      "team": "CAR",
+      "adp": "33.2",
+      "pos_rank": 1,
+      "analysis": "McMillan's potential as a WR is high but depends on his development and opportunity in Carolina. He's a high-risk, high-reward pick."
+    },
+    {
+      "rank": 14,
+      "name": "Travis Hunter",
+      "position": "WR",
+      "team": "JAC",
+      "adp": "34.31",
+      "pos_rank": 2,
+      "analysis": "Hunter's two-way college career is unique.  His NFL role and fantasy impact will depend on how he adapts to a full-time receiver role."
+    },
+    {
+      "rank": 15,
+      "name": "Oronde Gadsden",
+      "position": "TE",
+      "team": "LAC",
+      "adp": "38.5",
+      "pos_rank": 4,
+      "analysis": "Gadsden is a long shot, yet his potential upside in the Chargers offense makes him a low-risk, potentially high-reward late-round gamble."
+    }
+  ]
+}
+```
+
+==================================================
+
+
+==================================================
+--- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "confidence": 0.75,
+  "analysis": "# Ashton Jeanty (RB, LV) - 2025 Fantasy Football Outlook\n\n### Depth Chart Role\n\nAshton Jeanty enters the league as a rookie with a very unclear path to significant playing time.  The Raiders' backfield situation is currently unsettled.  While Josh Jacobs' future is uncertain (contract negotiations, potential trade), Jeanty's role will heavily depend on several factors: Jacobs' presence/performance, the performance of other RBs on the roster, and Jeanty's own ability to showcase talent in preseason and early-season play.  He's likely to start as a depth player, potentially competing for third-down/passing-down work.  A breakout rookie season seems unlikely.  We'll need to see his role in preseason and possibly the first few games to truly assess. \n\n### Value Analysis\n\nAn ADP of 5.1 in a 12-team PPR league for an unproven rookie running back is incredibly high risk/high reward.  The potential upside is a significant return if he unexpectedly secures a workhorse role, but his floor is incredibly low.  His value is completely contingent on his ability to surpass expectations and outperform established veterans, or benefit from unexpected injuries to players ahead of him.  In a PPR league, his receiving potential could boost his value, but this remains speculative at this point. \n\n### Risk Factors\n\n* **Unproven Talent:**  Jeanty is a rookie with zero NFL experience.  His college performance may not translate to the pro level. \n* **Crowded Backfield:** The Raiders' backfield depth is uncertain, but a talented RB room means competition for touches.  Even if Jacobs leaves, other backs could emerge.\n* **Injury Risk:** All running backs face inherent injury risks, especially rookies adjusting to the rigors of the NFL.  One injury to Jeanty could significantly reduce his fantasy value. \n* **High ADP:**  His current ADP reflects considerable optimism.  There is a significant chance of a complete bust with this pick. \n\n### 2025 Outlook\n\nJeanty's 2025 season will likely be a developmental year.  He has the potential to be a valuable fantasy asset in the future, but 2025 will likely be focused on learning and contributing in a limited role.  Expect low-end RB3 numbers, or potentially even fewer touches.  His fantasy value hinges on unexpected circumstances.  This makes him a high-risk gamble.\n\n### Final Verdict\n\nAvoid.  His ADP of 5.1 is far too high given his current situation and lack of proven production.  There are far safer and more reliable options at this point in most 12-team drafts.  Consider him only in the later rounds as a high-risk, high-reward flier if you are comfortable with a substantial chance of a total bust.  The risk heavily outweighs the reward at his current ADP."
+}
+```
+
+==================================================
+
+
+==================================================
+--- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "confidence": 0.7,
+  "analysis": "# Ashton Jeanty (RB, LV) - 2025 Fantasy Football Outlook\n\n### Depth Chart Role\n\nAshton Jeanty enters the league as a rookie in 2025.  His depth chart role is currently highly uncertain.  The Raiders' backfield situation will significantly impact his fantasy value.  He'll likely compete for touches with established players and other rookies.  A clear indication of his role (lead back, change-of-pace, third-down specialist) will not emerge until training camp and preseason games.  Early projections suggest a timeshare at best, at least initially.\n\n### Value Analysis\n\nJeanty's ADP of 5.1 in a 12-team PPR league is exceptionally high for an unproven rookie with no established role. This ranking reflects significant hype, likely stemming from his pre-draft profile and athletic measurables.  The value proposition hinges entirely on him exceeding expectations and securing a significant portion of the Raiders' backfield touches.  At his current ADP, he represents a considerable risk.\n\nFrom a PPR perspective, his receiving potential is a key factor in his value, but that remains to be seen.  He must prove capable of handling passes out of the backfield consistently.\n\n### Risk Factors\n\n* **Rookie Uncertainty:**  The biggest risk is the inherent uncertainty associated with rookie running backs.  Many fail to meet preseason expectations due to injuries, poor performance, or an inability to secure a starting role.\n* **Crowded Backfield:** The Raiders' backfield situation is fluid.  Competition for snaps and touches is fierce, potentially limiting Jeanty's opportunities.  A sudden emergence of another player could significantly hinder his production.\n* **Injury Risk:** Running backs are prone to injuries.  A single significant injury could derail his entire season.\n* **ADP Inflation:**  His ADP of 5.1 is exceptionally high given his lack of proven NFL production.  This suggests substantial risk, as any regression from expectation will severely impact his fantasy value.\n* **Offensive Line Performance:** The quality of the Raiders' offensive line directly affects running back performance. A poor offensive line would impact his rushing and receiving efficiency.\n\n### 2025 Outlook\n\nJeanty has the potential to be a valuable fantasy asset, but it is far from guaranteed. His success is highly dependent on securing a significant role in the Raiders' offense.  A conservative outlook suggests he'll likely be a flex play at best in most weeks. His ceiling is high, but his floor is very low, given the risks outlined above.  Closely monitoring training camp and preseason reports is crucial to better assess his potential.\n\n### Final Verdict\n\nAvoid at current ADP.  Jeanty's high ADP doesn't align with his risk profile. While his potential is undeniable, the probability of him delivering on his current draft cost is low.  Consider other safer options at his ADP or target him much later in your draft after seeing how his role develops through the preseason.  He's a high-risk, high-reward player; the reward is not currently worth the high risk at his projected draft position."
+}
+```
+
+==================================================
+
+2025-06-16 09:15:35.089010 - --- Backend Server Started ---
+2025-06-16 09:15:37.626317 - --- Backend Server Started ---
+
+==================================================
+--- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "confidence": 0.95,
+  "analysis": "# Patrick Mahomes (QB, KC) - 2025 Fantasy Football Outlook\n\n### Depth Chart Role\n\nPatrick Mahomes is the undisputed starting quarterback for the Kansas City Chiefs.  He has no realistic competition for the starting role and is expected to remain the team's unquestioned leader on offense for the foreseeable future.  His role is secure, and barring injury, he'll play nearly every snap.  The Chiefs' offensive system is built around his strengths, maximizing his fantasy potential.\n\n### Value Analysis\n\nMahomes' ADP of 7.3 represents significant value in a 12-team PPR league. While a top QB rarely falls to the late first round,  his value stems from his consistently elite production. He's a proven top-3 QB annually, showcasing incredible consistency in passing yards, touchdowns, and even rushing stats.  His floor is exceptionally high; even in subpar games, he consistently delivers usable fantasy points.  The potential for a high ceiling is also always present, given his arm talent and the Chiefs' high-powered offense.\n\n### Risk Factors\n\nThe primary risk factor associated with Mahomes is injury.  While he's proven durable, football is inherently risky, and even a minor injury could significantly impact his season.  Another secondary risk, though less impactful, is a potential regression in offensive performance.  While unlikely given the Chiefs' coaching staff and offensive line, a downturn in the receiving corps' effectiveness could mildly affect his production. Age is also a factor to consider, although at 29, he's still in his prime and unlikely to show significant decline this season. \n\n### 2025 Outlook\n\nMahomes is projected to be a top-3 QB in 2025.  His consistent performance, strong supporting cast (assuming minimal roster turnover), and the Chiefs' offensive scheme create a highly favorable environment for him to continue his dominance. Expect another season with high passing yards, multiple touchdowns, and consistent fantasy point totals that easily surpass the QB1 benchmark in PPR leagues.\n\n### Final Verdict\n\nSelecting Patrick Mahomes at an ADP of 7.3 is a strong recommendation.  He's a near-guaranteed top-3 QB with a high floor and a considerable ceiling. Despite the inherent risks in the NFL, the reward of drafting Mahomes far outweighs those concerns in a 12-team PPR league.  He's an anchor for your fantasy team in 2025, offering significant value and a reliable path to consistent fantasy success.  Draft with confidence."
+}
+```
+
+==================================================
+
+2025-06-16 09:24:51.144321 - --- Backend Server Started ---
+2025-06-16 09:25:17.781975 - --- Backend Server Started ---
+2025-06-16 09:25:19.819724 - --- Backend Server Started ---
+2025-06-16 09:29:57.519673 - --- Backend Server Started ---
+2025-06-16 09:30:30.643111 - --- Backend Server Started ---
+2025-06-16 09:30:32.584605 - --- Backend Server Started ---
+
+==================================================
+--- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "rookies": [
+    {
+      "rank": 1,
+      "name": "Ashton Jeanty",
+      "position": "RB",
+      "team": "LV",
+      "adp": "5.13",
+      "pos_rank": 1,
+      "analysis": "Jeanty possesses a high ceiling as a potential lead back in a run-heavy offense.  His ADP reflects this considerable upside, though injury risk remains a concern."
+    },
+    {
+      "rank": 2,
+      "name": "Omarion Hampton",
+      "position": "RB",
+      "team": "LAC",
+      "adp": "23.52",
+      "pos_rank": 2,
+      "analysis": "A talented back with receiving skills, Hampton's role in the Chargers' backfield is uncertain but offers high reward if he secures significant touches."
+    },
+    {
+      "rank": 3,
+      "name": "Quinshon Judkins",
+      "position": "RB",
+      "team": "CLE",
+      "adp": "28.57",
+      "pos_rank": 3,
+      "analysis": "Judkins's powerful running style could translate to early success, but a crowded backfield in Cleveland makes his fantasy value less certain."
+    },
+    {
+      "rank": 4,
+      "name": "TreVeyon Henderson",
+      "position": "RB",
+      "team": "NE",
+      "adp": "27.07",
+      "pos_rank": 4,
+      "analysis": "Henderson's injury history is a major concern, but if healthy, he has the talent to be a valuable asset in New England's offense."
+    },
+    {
+      "rank": 5,
+      "name": "RJ Harvey",
+      "position": "RB",
+      "team": "DEN",
+      "adp": "27.02",
+      "pos_rank": 5,
+      "analysis": "Harvey's role in Denver's backfield is uncertain, but his athleticism and potential make him a worthwhile late-round flier."
+    },
+    {
+      "rank": 6,
+      "name": "Tyler Warren",
+      "position": "TE",
+      "team": "IND",
+      "adp": "16.77",
+      "pos_rank": 1,
+      "analysis": "Warren's ADP suggests he's considered the top rookie TE. His potential for a significant role in a rebuilding Colts offense is intriguing."
+    },
+    {
+      "rank": 7,
+      "name": "Colston Loveland",
+      "position": "TE",
+      "team": "CHI",
+      "adp": "18.37",
+      "pos_rank": 2,
+      "analysis": "Loveland has a chance to become a valuable pass-catching tight end in Chicago, but competition and offensive inconsistencies are factors."
+    },
+    {
+      "rank": 8,
+      "name": "Kaleb Johnson",
+      "position": "RB",
+      "team": "PIT",
+      "adp": "30.5",
+      "pos_rank": 6,
+      "analysis": "Johnson's role in Pittsburgh's backfield is unclear, but his physicality could lead to goal-line opportunities and fantasy points."
+    },
+    {
+      "rank": 9,
+      "name": "Cameron Ward",
+      "position": "QB",
+      "team": "TEN",
+      "adp": "26.44",
+      "pos_rank": 1,
+      "analysis": "Ward's potential as a starter in Tennessee makes him a high-upside QB prospect, though his rookie season likely involves limited playing time."
+    },
+    {
+      "rank": 10,
+      "name": "Mason Taylor",
+      "position": "TE",
+      "team": "NYJ",
+      "adp": "29.76",
+      "pos_rank": 3,
+      "analysis": "Taylor is an intriguing prospect with potential to contribute as a receiving threat in the Jets' offense. However, his role is far from guaranteed."
+    },
+    {
+      "rank": 11,
+      "name": "Shedeur Sanders",
+      "position": "QB",
+      "team": "CLE",
+      "adp": "33.79",
+      "pos_rank": 2,
+      "analysis": "Sanders's connection with his father's coaching staff may give him an edge in competing for playing time.  However, his ceiling is hard to project."
+    },
+    {
+      "rank": 12,
+      "name": "Jaxson Dart",
+      "position": "QB",
+      "team": "NYG",
+      "adp": "32.23",
+      "pos_rank": 3,
+      "analysis": "Dart's future is somewhat uncertain. He has the potential for some fantasy value if he makes a strong push in training camp."
+    },
+    {
+      "rank": 13,
+      "name": "Tetairoa McMillan",
+      "position": "WR",
+      "team": "CAR",
+      "adp": "33.2",
+      "pos_rank": 1,
+      "analysis": "McMillan's athleticism is undeniable, but his path to significant targets is blocked by established players, limiting his immediate fantasy impact."
+    },
+    {
+      "rank": 14,
+      "name": "Oronde Gadsden",
+      "position": "TE",
+      "team": "LAC",
+      "adp": "38.5",
+      "pos_rank": 4,
+      "analysis": "Gadsden's potential as a receiving TE is promising, but the Chargers' TE depth makes his early-season fantasy value questionable."
+    },
+    {
+      "rank": 15,
+      "name": "Travis Hunter",
+      "position": "WR",
+      "team": "JAC",
+      "adp": "34.31",
+      "pos_rank": 2,
+      "analysis": "Hunter's dual-sport background is impressive. His transition to the NFL is challenging, and his fantasy value this year depends on significant development."
+    }
+  ]
+}
+```
+
+==================================================
+
+2025-06-16 09:33:22.894239 - --- Backend Server Started ---
+2025-06-16 09:33:25.907566 - --- Backend Server Started ---
+2025-06-16 09:38:07.806525 - --- Backend Server Started ---
+2025-06-16 09:40:33.287645 - --- Backend Server Started ---
+2025-06-16 09:41:04.237132 - --- Backend Server Started ---
+2025-06-16 09:41:06.268782 - --- Backend Server Started ---
+
+==================================================
+--- RAW AI RESPONSE (FOR DEBUGGING) ---
+```json
+{
+  "confidence": 0.8,
+  "analysis": "# Ladd McConkey: 2025 Fantasy Football Outlook\n\n### Depth Chart Role\n\nLadd McConkey enters the 2025 season in a highly competitive Los Angeles Chargers receiving corps.  While he showed flashes of potential in his rookie year, he's likely to be competing with established veterans like Keenan Allen and Mike Williams, as well as any potential draft picks or free agent additions.  His role will largely depend on his performance in training camp and the preseason.  A realistic expectation is a WR3 or flex role, with significant boom/bust potential based on game script and the health of the other receivers.  He may also see some snaps on special teams.\n\n### Value Analysis\n\nMcConkey's ADP of 11.6 in a 12-team PPR league suggests significant optimism. This is high for a player with limited production and facing stiff competition.  His value hinges on his ability to surpass expectations and carve out a consistent role within the Chargers' offense.  His current ADP is based on his potential rather than proven production, making it a high-risk, high-reward pick.  The PPR format helps his value, as his receiving potential is paramount.  However, his low floor makes him a risky pick at this ADP.\n\n### Risk Factors\n\n* **Depth Chart Competition:**  The Chargers' wide receiver room is crowded.  A single injury to Allen or Williams could catapult McConkey's value, but the healthy competition significantly limits his floor. \n* **Injury Risk:**  As a young player, the risk of injury always exists.  McConkey's role is significantly impacted if he is injured. \n* **Offensive Scheme:** The Chargers' offensive scheme and play-calling will play a key role in his fantasy production.  A change in offensive coordinator or a shift in strategic emphasis could significantly alter McConkey's opportunities.\n* **ADP Volatility:**  His ADP is high for a player with uncertain production. Any negative news or a slow start in the season could easily lead to a substantial drop in his value.\n\n### 2025 Outlook\n\nMcConkey possesses the talent to become a valuable fantasy asset, however, his path to consistent production is uncertain.   A breakout season is entirely possible if he can consistently secure targets and outperform Allen and Williams in terms of efficiency. More realistic projections, however, suggest a role as a boom-or-bust WR3/flex option, with potential for high-scoring weeks interspersed with games where he barely registers fantasy points.  Expect significant week-to-week volatility.\n\n### Final Verdict\n\nAt his current ADP of 11.6, Ladd McConkey is a risky pick.  The high potential is undeniable, but the likelihood of achieving that potential given the depth chart and injury risk is not high enough to justify this draft position. I would not draft McConkey before round 10-12, depending on other players available at the time.  He's a potential late-round flier, but not a worthwhile investment at his current ADP."
+}
+```
+
+==================================================
+
+2025-06-16 09:44:04.529555 - --- Backend Server Started ---
+2025-06-16 09:44:08.194768 - --- Backend Server Started ---
