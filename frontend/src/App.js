@@ -13,6 +13,12 @@ function App() {
   const [userApiKey, setUserApiKey] = useState(() => localStorage.getItem('geminiApiKey') || '');
   const [showApiKeyModal, setShowApiKeyModal] = useState(() => !localStorage.getItem('geminiApiKey'));
 
+  // State for navigation sections collapse/expand
+  const [navSections, setNavSections] = useState({
+    playerAnalysis: false,
+    teamManagement: false,
+  });
+
   // State for active tool and data
   const [activeTool, setActiveTool] = useState('dossier');
   const [allPlayers, setAllPlayers] = useState([]);
@@ -21,6 +27,7 @@ function App() {
   const [sortDirection, setSortDirection] = useState({ name: 'asc', position: 'asc', adds: 'desc', team: 'asc', pos_rank: 'asc' });
   const [marketInefficiencies, setMarketInefficiencies] = useState({ sleepers: [], busts: [] });
   const [rookieRankings, setRookieRankings] = useState([]);
+  const [draftBoard, setDraftBoard] = useState({});
 
   // State for results that are simple markdown/HTML
   const [dossierResult, setDossierResult] = useState(null);
@@ -31,7 +38,6 @@ function App() {
   const [rosterCompositionResult, setRosterCompositionResult] = useState('');
   const [waiverSwapResult, setWaiverSwapResult] = useState('');
   const [isWaiverSwapLoading, setIsWaiverSwapLoading] = useState(false);
-  const [globalSearchPlayer, setGlobalSearchPlayer] = useState('');
   const [lastUpdateDate, setLastUpdateDate] = useState('Loading...');
 
   // States for list-based tools
@@ -41,6 +47,11 @@ function App() {
   const [partnerTradeAssets, setPartnerTradeAssets] = useState([]);
   const [keeperPlayerName, setKeeperPlayerName] = useState('');
   const [keeperRoundInput, setKeeperRoundInput] = useState('');
+  const [tradeScoringFormat, setTradeScoringFormat] = useState('PPR');
+  const [myPlayerInput, setMyPlayerInput] = useState('');
+  const [partnerPlayerInput, setPartnerPlayerInput] = useState('');
+  const [myPickInput, setMyPickInput] = useState('');
+  const [partnerPickInput, setPartnerPickInput] = useState('');
 
   // Memoize the Showdown converter to avoid recreating it on every render
   const converter = useMemo(() => new showdown.Converter({ simplifiedAutoLink: true, tables: true, strikethrough: true }), []);
@@ -71,8 +82,12 @@ function App() {
       setShowApiKeyModal(true);
       return null;
     }
+    if (!endpoint || typeof endpoint !== 'string') {
+      return null;
+    }
+    const url = `${API_BASE_URL}${endpoint}`;
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -80,16 +95,30 @@ function App() {
         },
         body: JSON.stringify(body),
       });
-      const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || `An unknown server error occurred on endpoint: ${endpoint}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `An unknown server error occurred on endpoint: ${endpoint}`);
       }
+      const data = await response.json();
       return data;
     } catch (error) {
-      console.error('API Request Error:', error);
       throw error; // Re-throw the error to be caught by the calling function
     }
   }, [userApiKey]);
+
+  // Verify API_BASE_URL port
+  useEffect(() => {
+    try {
+      const urlObj = new URL(API_BASE_URL);
+      if (urlObj.port !== '5001') {
+        // console.warn(`API_BASE_URL port is set to ${urlObj.port}, expected 5001.`);
+      } else {
+        // console.log(`API_BASE_URL port is correctly set to ${urlObj.port}.`);
+      }
+    } catch (e) {
+      // console.error('Invalid API_BASE_URL:', API_BASE_URL);
+    }
+  }, []);
 
   /**
    * Generic function to render results for tools that return simple markdown.
@@ -135,45 +164,10 @@ function App() {
     setTargetList(prevList => prevList.filter(p => p.toLowerCase() !== playerName.toLowerCase()));
   };
 
-  // Load target list from local storage on initial mount
-  useEffect(() => {
-    const savedTargets = localStorage.getItem('targetList');
-    if (savedTargets) {
-      setTargetList(JSON.parse(savedTargets));
-    }
-  }, []);
-
-  // Save target list to local storage when it changes
-  useEffect(() => {
-    if (targetList.length > 0) {
-      localStorage.setItem('targetList', JSON.stringify(targetList));
-    } else {
-      localStorage.removeItem('targetList'); // Clean up if list is empty
-    }
-  }, [targetList]);
-
-
-  // Fetch all player names for autocomplete functionality
-  useEffect(() => {
-    fetch(`${API_BASE_URL}/all_player_names_with_data`)
-      .then(response => response.json())
-      .then(data => {
-        if (data && Array.isArray(data)) {
-          setAllPlayers(data.map(p => p.name));
-          const staticData = data.reduce((acc, p) => {
-            acc[p.name.toLowerCase()] = p;
-            return acc;
-          }, {});
-          setStaticPlayerData(staticData);
-        }
-      })
-      .catch(error => console.error("Error fetching player names:", error));
-  }, []);
-
   const getDraftBoardState = useCallback(() => {
     const board = {};
     for (let i = 1; i <= 15; i++) {
-      const input = document.getElementById(`round-${i}-player`);
+      const input = document.getElementById(`round-${i}-player-hidden`);
       if (input && input.value) {
         board[`Round ${i}`] = input.value;
       }
@@ -210,7 +204,7 @@ function App() {
     const board = {};
     let hasChanges = false;
     for (let i = 1; i <= 15; i++) {
-      const playerName = document.getElementById(`round-${i}-player`)?.value;
+      const playerName = document.getElementById(`round-${i}-player-hidden`)?.value;
       if (playerName) {
         board[i] = playerName;
         hasChanges = true;
@@ -225,63 +219,10 @@ function App() {
   const loadDraftBoard = useCallback(() => {
     const savedBoard = localStorage.getItem('draftBoard');
     if (savedBoard) {
-      const board = JSON.parse(savedBoard);
-      for (const round in board) {
-        const input = document.getElementById(`round-${round}-player`);
-        if (input) {
-          input.value = board[round];
-        }
-      }
+        return JSON.parse(savedBoard);
     }
-    updateRosterComposition();
-  }, [updateRosterComposition]);
-
-
-  // Initialize autocomplete fields
-  useEffect(() => {
-    const initAutoComplete = (selector) => {
-      if (document.querySelector(selector) && allPlayers.length > 0) {
-        const autoCompleteInstance = new autoComplete({
-          selector: selector,
-          placeHolder: "Search for a player...",
-          data: { src: allPlayers, cache: true },
-          resultItem: { highlight: true },
-          events: {
-            input: {
-              selection: event => {
-                const inputElement = document.querySelector(selector);
-                const selectedValue = event.detail.selection.value;
-                inputElement.value = selectedValue;
-                if (selector === '#global-player-search') {
-                  handleGlobalSearch(selectedValue);
-                  inputElement.value = ''; // Clear after selection
-                }
-                if (selector === '#keeper-player-name') {
-                  setKeeperPlayerName(selectedValue);
-                }
-                if (inputElement.id.startsWith("round-")) {
-                  saveDraftBoard();
-                }
-              }
-            }
-          }
-        });
-      }
-    };
-
-    initAutoComplete('#global-player-search');
-    if (activeTool === 'dossier') initAutoComplete('#dossier-player-name');
-    if (activeTool === 'keeper') initAutoComplete('#keeper-player-name');
-    if (activeTool === 'draft') {
-      initAutoComplete('#draft-pick-player');
-      for (let i = 1; i <= 15; i++) {
-        initAutoComplete(`#round-${i}-player`);
-      }
-    }
-  }, [allPlayers, activeTool, saveDraftBoard]);
-
-
-  // --- Tool-Specific Functions ---
+    return {};
+  }, []);
 
   const generateDossier = useCallback((playerName) => {
     const nameToFetch = playerName || document.getElementById('dossier-player-name')?.value;
@@ -309,27 +250,121 @@ function App() {
 
   const handleGlobalSearch = useCallback((playerName) => {
     setActiveTool('dossier');
-    setGlobalSearchPlayer(playerName);
-  }, []);
-
-  useEffect(() => {
-    if (globalSearchPlayer && activeTool === 'dossier') {
-      // Use a timeout to ensure the dossier tool is rendered before we manipulate its input
-      setTimeout(() => {
-        const dossierInput = document.getElementById('dossier-player-name');
-        if (dossierInput) {
-          dossierInput.value = globalSearchPlayer;
-          generateDossier(globalSearchPlayer);
-          setGlobalSearchPlayer(''); // Reset after use
-        }
-      }, 100);
-    }
-  }, [globalSearchPlayer, activeTool, generateDossier]);
+    // Use a setTimeout to ensure the dossier section is rendered before trying to populate the input
+    setTimeout(() => {
+      const dossierInput = document.getElementById('dossier-player-name');
+      if (dossierInput) {
+        dossierInput.value = playerName;
+        generateDossier(playerName);
+      }
+    }, 100); // A small delay (e.g., 100ms)
+  }, [generateDossier]);
 
   const generateTiers = useCallback(() => {
     const position = document.getElementById('tiers-pos')?.value;
     renderGeneric('tiers', '/generate_tiers', { position }, setTiersResult);
   }, [renderGeneric]);
+
+  // Autocomplete for Global Search
+  useEffect(() => {
+    if (allPlayers.length === 0) return;
+    const ac = new autoComplete({
+        selector: '#global-player-search',
+        placeHolder: "Quick Find Player...",
+        data: { src: allPlayers, cache: true },
+        resultItem: { highlight: true },
+        events: {
+            input: {
+                selection: (event) => {
+                    const selection = event.detail.selection.value;
+                    handleGlobalSearch(selection);
+                    ac.input.value = '';
+                },
+            },
+        },
+    });
+    return () => ac.unInit();
+  }, [allPlayers, handleGlobalSearch]);
+
+  // Autocomplete for Dossier
+  useEffect(() => {
+    if (activeTool !== 'dossier' || allPlayers.length === 0) return;
+    const ac = new autoComplete({
+        selector: '#dossier-player-name',
+        placeHolder: "Enter player name...",
+        data: { src: allPlayers, cache: true },
+        resultItem: { highlight: true },
+        events: {
+            input: {
+                selection: (event) => {
+                    const selection = event.detail.selection.value;
+                    document.getElementById('dossier-player-name').value = selection;
+                },
+            },
+        },
+    });
+    return () => ac.unInit();
+  }, [allPlayers, activeTool]);
+
+  // Autocomplete for Keeper Evaluator
+  useEffect(() => {
+    if (activeTool !== 'keeper' || allPlayers.length === 0) return;
+    const ac = new autoComplete({
+        selector: '#keeper-player-name',
+        placeHolder: "Player Name...",
+        data: { src: allPlayers, cache: true },
+        resultItem: { highlight: true },
+        events: {
+            input: {
+                selection: (event) => {
+                    const selection = event.detail.selection.value;
+                    setKeeperPlayerName(selection);
+                },
+            },
+        },
+    });
+    return () => ac.unInit();
+  }, [allPlayers, activeTool]);
+
+  // Autocomplete for Trade Analyzer
+  useEffect(() => {
+    if (activeTool !== 'trade' || allPlayers.length === 0) return;
+
+    const myPlayerAC = new autoComplete({
+        selector: '#trade-my-player-input',
+        placeHolder: "Enter player name...",
+        data: { src: allPlayers, cache: true },
+        resultItem: { highlight: true },
+        events: {
+            input: {
+                selection: (event) => {
+                    const selection = event.detail.selection.value;
+                    setMyPlayerInput(selection);
+                },
+            },
+        },
+    });
+
+    const partnerPlayerAC = new autoComplete({
+        selector: '#trade-partner-player-input',
+        placeHolder: "Enter player name...",
+        data: { src: allPlayers, cache: true },
+        resultItem: { highlight: true },
+        events: {
+            input: {
+                selection: (event) => {
+                    const selection = event.detail.selection.value;
+                    setPartnerPlayerInput(selection);
+                },
+            },
+        },
+    });
+
+    return () => {
+        if (myPlayerAC) myPlayerAC.unInit();
+        if (partnerPlayerAC) partnerPlayerAC.unInit();
+    };
+  }, [allPlayers, activeTool]);
 
   const findMarketInefficiencies = useCallback(async () => {
     const loader = document.getElementById('market-loader');
@@ -370,8 +405,8 @@ function App() {
 
   const evaluateTrade = useCallback(() => {
     if (myTradeAssets.length === 0 || partnerTradeAssets.length === 0) { alert('Please add assets to both sides of the trade.'); return; }
-    renderGeneric('trade', '/trade_analyzer', { my_assets: myTradeAssets, partner_assets: partnerTradeAssets }, setTradeResult);
-  }, [renderGeneric, myTradeAssets, partnerTradeAssets]);
+    renderGeneric('trade', '/trade_analyzer', { my_assets: myTradeAssets, partner_assets: partnerTradeAssets, scoring_format: tradeScoringFormat }, setTradeResult);
+  }, [renderGeneric, myTradeAssets, partnerTradeAssets, tradeScoringFormat]);
 
   const suggestPosition = useCallback(() => {
     const currentRound = document.getElementById('draft-current-round')?.value;
@@ -402,16 +437,29 @@ function App() {
     }
   };
 
-  const addAsset = (side) => {
-    const input = document.getElementById(`trade-${side}-asset-input`);
-    if (input && input.value) {
-      if (side === 'my') {
-        setMyTradeAssets(prevAssets => [...prevAssets, input.value]);
+  const addAsset = (side, assetType) => {
+    const playerInput = side === 'my' ? myPlayerInput : partnerPlayerInput;
+    const pickInput = side === 'my' ? myPickInput : partnerPickInput;
+    const setAssets = side === 'my' ? setMyTradeAssets : setPartnerTradeAssets;
+    const setPlayerInput = side === 'my' ? setMyPlayerInput : setPartnerPlayerInput;
+    const setPickInput = side === 'my' ? setMyPickInput : setPartnerPickInput;
+
+    let assetToAdd = '';
+    if (assetType === 'player' && playerInput) {
+      assetToAdd = playerInput;
+    } else if (assetType === 'pick' && pickInput) {
+      assetToAdd = pickInput;
+    }
+
+    if (assetToAdd) {
+      setAssets(prevAssets => [...prevAssets, assetToAdd]);
+      if (assetType === 'player') {
+        setPlayerInput('');
+        document.getElementById(`trade-${side}-player-input`)?.focus();
       } else {
-        setPartnerTradeAssets(prevAssets => [...prevAssets, input.value]);
+        setPickInput('');
+        document.getElementById(`trade-${side}-pick-input`)?.focus();
       }
-      input.value = '';
-      input.focus();
     }
   };
   
@@ -453,11 +501,46 @@ function App() {
 
   // --- Effect Hooks for Initialization and Side Effects ---
 
+  // Load target list from local storage on initial mount
+  useEffect(() => {
+    const savedTargets = localStorage.getItem('targetList');
+    if (savedTargets) {
+      setTargetList(JSON.parse(savedTargets));
+    }
+  }, []);
+
+  // Save target list to local storage when it changes
+  useEffect(() => {
+    if (targetList.length > 0) {
+      localStorage.setItem('targetList', JSON.stringify(targetList));
+    } else {
+      localStorage.removeItem('targetList'); // Clean up if list is empty
+    }
+  }, [targetList]);
+
+  // Fetch all player names for autocomplete functionality
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/all_player_names_with_data`)
+      .then(response => response.json())
+      .then(data => {
+        if (data && Array.isArray(data)) {
+          setAllPlayers(data.map(p => p.name));
+          const staticData = data.reduce((acc, p) => {
+            acc[p.name.toLowerCase()] = p;
+            return acc;
+          }, {});
+          setStaticPlayerData(staticData);
+        }
+      })
+      .catch(error => console.error("Error fetching player names:", error));
+  }, []);
+
   // Create and load the draft board on initial mount
   useEffect(() => {
     // Only run if the draft tool is the active one initially
     if (activeTool === 'draft') {
-        loadDraftBoard();
+        const board = loadDraftBoard();
+        setDraftBoard(board);
     }
   }, [activeTool, loadDraftBoard]);
 
@@ -507,13 +590,14 @@ function App() {
 
       if (toolFromParam === 'dossier' && playerFromParam) {
         setActiveTool('dossier');
-        setTimeout(() => {
-          const dossierInput = document.getElementById('dossier-player-name');
-          if (dossierInput) {
-            dossierInput.value = decodeURIComponent(playerFromParam);
-            generateDossier(decodeURIComponent(playerFromParam));
-          }
-        }, 100);
+        const decodedPlayerName = decodeURIComponent(playerFromParam);
+        // Set the input value immediately
+        const dossierInput = document.getElementById('dossier-player-name');
+        if (dossierInput) {
+          dossierInput.value = decodedPlayerName;
+        }
+        // Then generate the dossier
+        generateDossier(decodedPlayerName);
       } else {
         setActiveTool('dossier');
       }
@@ -530,6 +614,13 @@ function App() {
       window.removeEventListener('popstate', handleNavigation, false);
     };
   }, [generateDossier]); // generateDossier is a dependency
+
+  const toggleNavSection = (section) => {
+    setNavSections(prevSections => ({
+      ...prevSections,
+      [section]: !prevSections[section]
+    }));
+  };
 
   const resetApplication = () => {
     if (window.confirm("Are you sure you want to clear all saved data? This will remove your API key, saved draft board, and target list and cannot be undone.")) {
@@ -587,7 +678,7 @@ function App() {
 
   // --- JSX ---
   return (
-    <>
+    <div className="app-container">
       {showApiKeyModal && (
         <div id="api-key-modal" className="api-key-modal" style={{ display: 'flex' }}>
           <div className="api-key-modal-content">
@@ -613,20 +704,37 @@ function App() {
         </div>
         <nav className="sidebar-nav">
           <ul>
-            <li><a href="#dossier" className={activeTool === 'dossier' ? 'active' : ''}>Player Dossier</a></li>
-            <li><a href="#rookie" className={activeTool === 'rookie' ? 'active' : ''}>Rookie Rankings</a></li>
-            <li><a href="#tiers" className={activeTool === 'tiers' ? 'active' : ''}>Positional Tiers</a></li>
-            <li><a href="#market" className={activeTool === 'market' ? 'active' : ''}>Sleepers & Busts</a></li>
             <li><a href="#targets" className={activeTool === 'targets' ? 'active' : ''}>Target List <span className="badge">{targetList.length}</span></a></li>
-            <hr />
-            <li><a href="#keeper" className={activeTool === 'keeper' ? 'active' : ''}>Keeper Evaluator</a></li>
-            <li><a href="#trade" className={activeTool === 'trade' ? 'active' : ''}>Trade Analyzer</a></li>
-            <li><a href="#draft" className={activeTool === 'draft' ? 'active' : ''}>Draft Assistant</a></li>
-            <hr />
-            <li><a href="#trending" className={activeTool === 'trending' ? 'active' : ''}>Trending Players</a></li>
-            <li><a href="#waiver" className={activeTool === 'waiver' ? 'active' : ''}>Waiver Wire Assistant</a></li>
-            <li><a href="#dynasty" className={activeTool === 'dynasty' ? 'active' : ''}>Dynasty Values</a></li>
           </ul>
+          <div className="nav-section">
+            <h3 onClick={() => toggleNavSection('playerAnalysis')}>
+              Player Analysis <span className={navSections.playerAnalysis ? 'arrow down' : 'arrow right'}></span>
+            </h3>
+            {navSections.playerAnalysis && (
+              <ul>
+                <li><a href="#dossier" className={activeTool === 'dossier' ? 'active' : ''}>Player Dossier</a></li>
+                <li><a href="#rookie" className={activeTool === 'rookie' ? 'active' : ''}>Rookie Rankings</a></li>
+                <li><a href="#tiers" className={activeTool === 'tiers' ? 'active' : ''}>Positional Tiers</a></li>
+                <li><a href="#market" className={activeTool === 'market' ? 'active' : ''}>Sleepers & Busts</a></li>
+                <li><a href="#trending" className={activeTool === 'trending' ? 'active' : ''}>Trending Players</a></li>
+              </ul>
+            )}
+          </div>
+
+          <div className="nav-section">
+            <h3 onClick={() => toggleNavSection('teamManagement')}>
+              Team Management <span className={navSections.teamManagement ? 'arrow down' : 'arrow right'}></span>
+            </h3>
+            {navSections.teamManagement && (
+              <ul>
+                <li><a href="#keeper" className={activeTool === 'keeper' ? 'active' : ''}>Keeper Evaluator</a></li>
+                <li><a href="#trade" className={activeTool === 'trade' ? 'active' : ''}>Trade Analyzer</a></li>
+                <li><a href="#draft" className={activeTool === 'draft' ? 'active' : ''}>Draft Assistant</a></li>
+                <li><a href="#waiver" className={activeTool === 'waiver' ? 'active' : ''}>Waiver Wire Assistant</a></li>
+                <li><a href="#dynasty" className={activeTool === 'dynasty' ? 'active' : ''}>Dynasty Values</a></li>
+              </ul>
+            )}
+          </div>
         </nav>
         <div className="sidebar-footer">
           <nav className="utility-nav">
@@ -652,16 +760,18 @@ function App() {
                 <div className="form-group-inline">
                   <div className="autoComplete_wrapper"><input id="dossier-player-name" type="text" placeholder="Enter player name..." /></div>
                   <button onClick={() => generateDossier()}>Generate</button>
-                  <button className="add-target-btn" title="Add to Target List" onClick={() => handleAddToTargets(document.getElementById('dossier-player-name')?.value)}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-plus-circle"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
-                  </button>
                 </div>
               </div>
               <div id="dossier-loader" className="loader" style={{ display: 'none' }}></div>
               {dossierResult && !dossierResult.error && (
                 <div className="dossier-output">
                   <div className="dossier-header-card card">
-                    <h3>{dossierResult.player_data.name}</h3>
+                    <div className="dossier-title-container">
+                      <h3>{dossierResult.player_data.name}</h3>
+                      <button className="add-target-btn" title="Add to Target List" onClick={() => handleAddToTargets(dossierResult.player_data.name)}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-plus-circle"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                      </button>
+                    </div>
                     <div className="dossier-header-stats">
                       <span><strong>Team:</strong> {dossierResult.player_data.team}</span>
                       <span><strong>Position:</strong> {dossierResult.player_data.position}</span>
@@ -690,7 +800,7 @@ function App() {
                     {rookieRankings.length > 0 ? rookieRankings.map((rookie, index) => (
                         <div key={index} className="rookie-card">
                             <div className="rookie-header">
-                                <h3><a href={`/?tool=dossier&player=${encodeURIComponent(rookie.name)}`} className="player-link">{rookie.name}</a> ({rookie.position}, {rookie.team || 'N/A'})</h3>
+                                <h3><a href={`/?tool=dossier&player=${encodeURIComponent(rookie.name)}`} target="_blank" rel="noopener noreferrer" className="player-link">{rookie.name}</a> ({rookie.position}, {rookie.team || 'N/A'})</h3>
                                 <div className="rookie-actions">
                                   <button className="add-target-btn-small" title="Add to Target List" onClick={() => handleAddToTargets(rookie.name)}>
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
@@ -840,40 +950,65 @@ function App() {
           
           {activeTool === 'trade' && (
             <section id="trade">
-              <div className="tool-header"><h2>Trade Analyzer</h2><p>Get an unbiased analysis of any trade proposal.</p></div>
+              <div className="tool-header">
+                <h2>Trade Analyzer</h2>
+                <p>Get an unbiased analysis of any trade proposal.</p>
+              </div>
               <div className="trade-box">
+                <div className="card trade-settings-card">
+                  <div className="form-group-inline">
+                    <label htmlFor="scoring-format">Scoring Format:</label>
+                    <select id="scoring-format" value={tradeScoringFormat} onChange={(e) => setTradeScoringFormat(e.target.value)}>
+                      <option value="PPR">PPR</option>
+                      <option value="Half-PPR">Half-PPR</option>
+                      <option value="Standard">Standard</option>
+                    </select>
+                  </div>
+                </div>
                 <div className="trade-side card">
-                  <h3>I Receive:</h3>
-                  <div className="form-group-inline"><input type="text" id="trade-my-asset-input" placeholder="Add player or pick..." /><button onClick={() => addAsset('my')}>Add</button></div>
+                  <h3>Your Team Receives:</h3>
+                  <div className="form-group-inline">
+                    <div className="autoComplete_wrapper">
+                      <input id="trade-my-player-input" type="text" placeholder="Enter player name..." value={myPlayerInput} onChange={(e) => setMyPlayerInput(e.target.value)} />
+                    </div>
+                    <button onClick={() => addAsset('my', 'player')}>Add Player</button>
+                  </div>
+                  <div className="form-group-inline">
+                    <input id="trade-my-pick-input" type="text" placeholder="e.g., 2025 1st or Pick 1.05" value={myPickInput} onChange={(e) => setMyPickInput(e.target.value)} />
+                    <button onClick={() => addAsset('my', 'pick')}>Add Pick</button>
+                  </div>
                   <ul className="item-list">
-                    {myTradeAssets.map((asset, index) => {
-                      const playerData = staticPlayerData[asset.toLowerCase()];
-                      return (
-                        <li key={index} className="list-item">
-                          <span>{asset} {playerData && `(${playerData.pos_rank})`}</span>
-                          <button className="remove-btn" onClick={() => setMyTradeAssets(prev => prev.filter((_, i) => i !== index))}>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                          </button>
-                        </li>
-                      );
-                    })}
+                    {myTradeAssets.map((asset, index) => (
+                      <li key={index} className="list-item">
+                        <span>{asset}</span>
+                        <button className="remove-btn" onClick={() => setMyTradeAssets(prev => prev.filter((_, i) => i !== index))}>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                      </li>
+                    ))}
                   </ul>
                 </div>
                 <div className="trade-side card">
-                  <h3>I Give Away:</h3>
-                  <div className="form-group-inline"><input type="text" id="trade-partner-asset-input" placeholder="Add player or pick..." /><button onClick={() => addAsset('partner')}>Add</button></div>
+                  <h3>Your Team Gives Away:</h3>
+                  <div className="form-group-inline">
+                    <div className="autoComplete_wrapper">
+                      <input id="trade-partner-player-input" type="text" placeholder="Enter player name..." value={partnerPlayerInput} onChange={(e) => setPartnerPlayerInput(e.target.value)} />
+                    </div>
+                    <button onClick={() => addAsset('partner', 'player')}>Add Player</button>
+                  </div>
+                  <div className="form-group-inline">
+                    <input id="trade-partner-pick-input" type="text" placeholder="e.g., 2025 1st or Pick 1.05" value={partnerPickInput} onChange={(e) => setPartnerPickInput(e.target.value)} />
+                    <button onClick={() => addAsset('partner', 'pick')}>Add Pick</button>
+                  </div>
                   <ul className="item-list">
-                    {partnerTradeAssets.map((asset, index) => {
-                      const playerData = staticPlayerData[asset.toLowerCase()];
-                      return (
-                        <li key={index} className="list-item">
-                          <span>{asset} {playerData && `(${playerData.pos_rank})`}</span>
-                          <button className="remove-btn" onClick={() => setPartnerTradeAssets(prev => prev.filter((_, i) => i !== index))}>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                          </button>
-                        </li>
-                      );
-                    })}
+                    {partnerTradeAssets.map((asset, index) => (
+                      <li key={index} className="list-item">
+                        <span>{asset}</span>
+                        <button className="remove-btn" onClick={() => setPartnerTradeAssets(prev => prev.filter((_, i) => i !== index))}>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                      </li>
+                    ))}
                   </ul>
                 </div>
               </div>
@@ -917,29 +1052,27 @@ function App() {
                         </div>
                     </div>
                 </div>
-                <div className="draft-board-container" style={{ display: activeTool === 'draft' ? 'flex' : 'none' }}>
+                <div className="draft-board-container" style={{ display: activeTool === 'draft' ? 'flex' : 'none', flexDirection: 'column' }}>
                     <h3>Your Draft Board</h3>
                     <div className="draft-board">
-                        {Array.from({ length: 15 }, (_, i) => i + 1).map(round => {
-                            const playerName = document.getElementById(`round-${round}-player`)?.value;
-                            const playerData = playerName ? staticPlayerData[playerName.toLowerCase()] : null;
-                            const position = playerData?.pos_rank?.replace(/\d/g, '');
-                            return (
-                                <div key={round} className={`round-card pos-${position?.toLowerCase()}`}>
-                                    <label htmlFor={`round-${round}-player`}>Round {round}</label>
-                                    <div className="autoComplete_wrapper">
-                                        <input id={`round-${round}-player`} type="text" placeholder="Enter player..." onChange={saveDraftBoard} />
-                                    </div>
-                                    {playerData && (
-                                        <div className="draft-card-details">
-                                            <span>ADP: {playerData.adp ? playerData.adp.toFixed(1) : 'N/A'}</span>
-                                            <span>Bye: {playerData.bye_week || 'N/A'}</span>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
+                        {Array.from({ length: 15 }, (_, i) => i + 1).map(round => (
+                            <DraftCard
+                                key={round}
+                                round={round}
+                                staticPlayerData={staticPlayerData}
+                                saveDraftBoard={saveDraftBoard}
+                                allPlayers={allPlayers}
+                                handleGlobalSearch={handleGlobalSearch}
+                                initialPlayerName={draftBoard[round]}
+                            />
+                        ))}
                     </div>
+                    <button onClick={() => {
+                        if(window.confirm("Are you sure you want to reset the entire draft board?")) {
+                            localStorage.removeItem('draftBoard');
+                            setDraftBoard({});
+                        }
+                    }} className="action-button btn-danger btn-small" style={{marginTop: "20px", alignSelf: "center"}}>Reset Board</button>
                 </div>
             </section>
           )}
@@ -1017,8 +1150,96 @@ function App() {
 
         </div>
       </div>
-    </>
+    </div>
   );
+}
+
+function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handleGlobalSearch, initialPlayerName }) {
+    const [isEditing, setIsEditing] = useState(false);
+    const [playerName, setPlayerName] = useState(initialPlayerName || '');
+    const autoCompleteRef = React.useRef(null);
+
+    useEffect(() => {
+        setPlayerName(initialPlayerName || '');
+    }, [initialPlayerName]);
+
+    useEffect(() => {
+        if (isEditing && !autoCompleteRef.current) {
+            const inputId = `round-${round}-player`;
+            autoCompleteRef.current = new autoComplete({
+                selector: `#${inputId}`,
+                placeHolder: "Player...",
+                data: { src: allPlayers, cache: true },
+                resultItem: { highlight: true },
+                events: {
+                    input: {
+                        selection: event => {
+                            const selectedValue = event.detail.selection.value;
+                            setPlayerName(selectedValue);
+                            const hiddenInput = document.getElementById(`round-${round}-player-hidden`);
+                            if(hiddenInput) {
+                                hiddenInput.value = selectedValue;
+                            }
+                            saveDraftBoard();
+                            if (autoCompleteRef.current) {
+                                autoCompleteRef.current.unInit();
+                                autoCompleteRef.current = null;
+                            }
+                            setIsEditing(false);
+                        }
+                    }
+                }
+            });
+        }
+    }, [isEditing, round, allPlayers, saveDraftBoard]);
+
+    const handleEdit = () => {
+        setIsEditing(true);
+    };
+
+    const handleCancel = () => {
+        if (autoCompleteRef.current) {
+            autoCompleteRef.current.unInit();
+            autoCompleteRef.current = null;
+        }
+        setIsEditing(false);
+    };
+
+    const handleClear = () => {
+        setPlayerName('');
+        const hiddenInput = document.getElementById(`round-${round}-player-hidden`);
+        if(hiddenInput) {
+            hiddenInput.value = '';
+        }
+        saveDraftBoard();
+    };
+
+    const playerData = playerName ? staticPlayerData[playerName.toLowerCase()] : null;
+    const position = playerData?.pos_rank?.replace(/\d/g, '');
+
+    return (
+        <div className={`round-card pos-${position?.toLowerCase()}`}>
+            <input type="hidden" id={`round-${round}-player-hidden`} value={playerName} />
+            <label>Round {round}</label>
+            {isEditing ? (
+                <div className="autoComplete_wrapper">
+                    <input id={`round-${round}-player`} type="text" placeholder="Player..." />
+                    <button onClick={handleCancel}>Cancel</button>
+                </div>
+            ) : (
+                <div className="player-display" onClick={handleEdit}>
+                    {playerName || 'Click to add player'}
+                </div>
+            )}
+            {playerName && <button onClick={handleClear} className="remove-btn-small">Clear</button>}
+            {playerData && (
+                <div className="draft-card-details">
+                    <span>ADP: {playerData.adp ? playerData.adp.toFixed(1) : 'N/A'}</span>
+                    <span>Bye: {playerData.bye_week || 'N/A'}</span>
+                </div>
+            )}
+        </div>
+    );
 }
 
 export default App;
