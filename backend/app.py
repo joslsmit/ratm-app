@@ -114,7 +114,6 @@ def load_adp_from_csv(file_path):
                 'pos_rank': row.get('Rank'),
                 'pos': row.get('pos'),
                 'bye': row.get('bye'),
-                'yahoo_id': row.get('yahoo_id'),
                 'team': row.get('team')
             }
             for index, row in df_processed.iterrows() if row['Player_Clean'] and row['Player_Clean'] != 'nan'
@@ -176,14 +175,18 @@ def create_combined_player_data_cache():
         if pos_rank != 'N/A':
             pos_rank_found_count += 1
 
+        # Sanitize values to avoid NaN in JSON
+        adp_value = data.get('adp')
+        if adp_value is not None and (isinstance(adp_value, float) and (pd.isna(adp_value) or adp_value != adp_value)):
+            adp_value = None
+
         temp_combined_data[name.lower().strip()] = {
             'name': name.title(),
             'pos_rank': pos_rank,
-            'adp': data.get('adp'),
+            'adp': adp_value,
             'bye_week': int(bye_week) if bye_week is not None and pd.notna(bye_week) else 'N/A',
             'team': data.get('team', 'N/A'),
-            'position': data.get('pos', 'N/A'),
-            'yahoo_id': data.get('yahoo_id')
+            'position': data.get('pos', 'N/A')
         }
     
     combined_player_data_cache = temp_combined_data
@@ -478,18 +481,45 @@ def get_last_update_date():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/search_players')
+def search_players():
+    query = request.args.get('query', '').lower()
+    if not query:
+        return jsonify([])
+
+    # Filter combined_player_data_cache based on query
+    # combined_player_data_cache stores data with cleaned names as keys
+    # We need to search by the 'name' field within the dictionary values
+    results = []
+    for player_key, player_data in combined_player_data_cache.items():
+        if query in player_data.get('name', '').lower():
+            results.append({
+                'id': player_key, # Using the cleaned name as ID for simplicity
+                'name': player_data.get('name'),
+                'position': player_data.get('position'),
+                'team': player_data.get('team')
+            })
+    
+    # Limit results to a reasonable number, e.g., 10
+    return jsonify(results[:10])
+
 @app.route('/api/all_player_names_with_data')
 def all_player_names_with_data():
     if not combined_player_data_cache:
         return jsonify({"error": "Combined player data cache not available."}), 500
+    
+    # Convert the dictionary of players into a list of players
+    player_list = list(combined_player_data_cache.values())
+    
     # --- Diagnostic Logging ---
-    print("--- First 5 items in combined_player_data_cache ---")
-    for i, item in enumerate(combined_player_data_cache):
+    print("--- First 5 items in combined_player_data_cache (as a list) ---")
+    for i, item in enumerate(player_list):
         if i >= 5:
             break
         print(item)
     print("--- End of inspection ---")
-    return jsonify(combined_player_data_cache)
+    
+    return jsonify(player_list)
 
 @app.route('/api/trending_players')
 def trending_players():

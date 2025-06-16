@@ -83,8 +83,14 @@ function App() {
       setShowApiKeyModal(true);
       return null;
     }
+    if (!endpoint || typeof endpoint !== 'string') {
+      console.error('Invalid API endpoint:', endpoint);
+      return null;
+    }
+    const url = `${API_BASE_URL}${endpoint}`;
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      console.log(`Making API request to: ${url} with body:`, body);
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -92,16 +98,31 @@ function App() {
         },
         body: JSON.stringify(body),
       });
-      const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || `An unknown server error occurred on endpoint: ${endpoint}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `An unknown server error occurred on endpoint: ${endpoint}`);
       }
+      const data = await response.json();
       return data;
     } catch (error) {
       console.error('API Request Error:', error);
       throw error; // Re-throw the error to be caught by the calling function
     }
   }, [userApiKey]);
+
+  // Verify API_BASE_URL port
+  useEffect(() => {
+    try {
+      const urlObj = new URL(API_BASE_URL);
+      if (urlObj.port !== '5001') {
+        console.warn(`API_BASE_URL port is set to ${urlObj.port}, expected 5001.`);
+      } else {
+        console.log(`API_BASE_URL port is correctly set to ${urlObj.port}.`);
+      }
+    } catch (e) {
+      console.error('Invalid API_BASE_URL:', API_BASE_URL);
+    }
+  }, []);
 
   /**
    * Generic function to render results for tools that return simple markdown.
@@ -280,6 +301,66 @@ function App() {
         },
     });
     return () => ac.unInit();
+  }, [allPlayers, activeTool]);
+
+  // Autocomplete for Keeper Evaluator
+  useEffect(() => {
+    if (activeTool !== 'keeper' || allPlayers.length === 0) return;
+    const ac = new autoComplete({
+        selector: '#keeper-player-name',
+        placeHolder: "Player Name...",
+        data: { src: allPlayers, cache: true },
+        resultItem: { highlight: true },
+        events: {
+            input: {
+                selection: (event) => {
+                    const selection = event.detail.selection.value;
+                    setKeeperPlayerName(selection);
+                },
+            },
+        },
+    });
+    return () => ac.unInit();
+  }, [allPlayers, activeTool]);
+
+  // Autocomplete for Trade Analyzer
+  useEffect(() => {
+    if (activeTool !== 'trade' || allPlayers.length === 0) return;
+
+    const myPlayerAC = new autoComplete({
+        selector: '#trade-my-player-input',
+        placeHolder: "Enter player name...",
+        data: { src: allPlayers, cache: true },
+        resultItem: { highlight: true },
+        events: {
+            input: {
+                selection: (event) => {
+                    const selection = event.detail.selection.value;
+                    setMyPlayerInput(selection);
+                },
+            },
+        },
+    });
+
+    const partnerPlayerAC = new autoComplete({
+        selector: '#trade-partner-player-input',
+        placeHolder: "Enter player name...",
+        data: { src: allPlayers, cache: true },
+        resultItem: { highlight: true },
+        events: {
+            input: {
+                selection: (event) => {
+                    const selection = event.detail.selection.value;
+                    setPartnerPlayerInput(selection);
+                },
+            },
+        },
+    });
+
+    return () => {
+        if (myPlayerAC) myPlayerAC.unInit();
+        if (partnerPlayerAC) partnerPlayerAC.unInit();
+    };
   }, [allPlayers, activeTool]);
 
   const findMarketInefficiencies = useCallback(async () => {
