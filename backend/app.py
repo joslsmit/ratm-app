@@ -13,8 +13,6 @@ from datetime import datetime # Import datetime class
 from apscheduler.schedulers.background import BackgroundScheduler
 from data_importer import import_data
 
-print("--- APP.PY VERSION 3.0 LOADED ---") # Unique identifier for debugging
-
 # Get the absolute path of the directory where this file is located
 basedir = os.path.abspath(os.path.dirname(__file__))
 
@@ -25,7 +23,7 @@ try:
     with open(log_file_path, 'a') as f:
         f.write(f"{datetime.now()} - --- Backend Server Started ---\n")
 except Exception as e:
-    print(f"Error writing initial log message: {e}")
+    pass # Suppress error if logging fails
 
 load_dotenv()
 app = Flask(__name__)
@@ -222,15 +220,6 @@ def make_gemini_request(prompt, user_api_key):
         return "The AI model did not return a valid response. The content may have been blocked due to safety settings."
     
     raw_response_text = response.text
-    # Directly write to log file for robust debugging
-    try:
-        with open(log_file_path, 'a') as f: # 'a' for append mode
-            f.write("\n" + "="*50 + "\n")
-            f.write("--- RAW AI RESPONSE (FOR DEBUGGING) ---\n")
-            f.write(raw_response_text + "\n")
-            f.write("="*50 + "\n\n")
-    except Exception as log_e:
-        print(f"Error writing to log file: {log_e}")
     return raw_response_text
 
 def process_ai_response(response_text):
@@ -510,14 +499,6 @@ def all_player_names_with_data():
     
     # Convert the dictionary of players into a list of players
     player_list = list(combined_player_data_cache.values())
-    
-    # --- Diagnostic Logging ---
-    print("--- First 5 items in combined_player_data_cache (as a list) ---")
-    for i, item in enumerate(player_list):
-        if i >= 5:
-            break
-        print(item)
-    print("--- End of inspection ---")
     
     return jsonify(player_list)
 
