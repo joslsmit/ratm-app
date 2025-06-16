@@ -9,18 +9,15 @@ export default class extends Controller {
 
   search() {
     const query = this.inputTarget.value;
-    console.log(`Autocomplete search triggered with query: "${query}"`);
     if (query.length > 2) {
       fetch(`${this.urlValue}?query=${encodeURIComponent(query)}`)
         .then(response => {
           if (!response.ok) {
-            console.error(`Autocomplete fetch error: ${response.status} ${response.statusText}`);
             throw new Error(`Network response was not ok: ${response.statusText}`);
           }
           return response.json();
         })
         .then(data => {
-          console.log("Autocomplete fetch data received:", data);
           this.resultsTarget.innerHTML = "";
           if (Array.isArray(data) && data.length > 0) {
             data.forEach(item => {
@@ -30,12 +27,9 @@ export default class extends Controller {
               li.addEventListener("click", this.selectPlayer.bind(this));
               this.resultsTarget.appendChild(li);
             });
-          } else {
-            console.log("Autocomplete fetch returned empty or invalid data.");
           }
         })
         .catch(error => {
-          console.error("Autocomplete fetch failed:", error);
           this.resultsTarget.innerHTML = "<li class='error'>Error loading results</li>";
         });
     } else {

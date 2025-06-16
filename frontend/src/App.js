@@ -84,12 +84,10 @@ function App() {
       return null;
     }
     if (!endpoint || typeof endpoint !== 'string') {
-      console.error('Invalid API endpoint:', endpoint);
       return null;
     }
     const url = `${API_BASE_URL}${endpoint}`;
     try {
-      console.log(`Making API request to: ${url} with body:`, body);
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -105,7 +103,6 @@ function App() {
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error('API Request Error:', error);
       throw error; // Re-throw the error to be caught by the calling function
     }
   }, [userApiKey]);
@@ -115,12 +112,12 @@ function App() {
     try {
       const urlObj = new URL(API_BASE_URL);
       if (urlObj.port !== '5001') {
-        console.warn(`API_BASE_URL port is set to ${urlObj.port}, expected 5001.`);
+        // console.warn(`API_BASE_URL port is set to ${urlObj.port}, expected 5001.`);
       } else {
-        console.log(`API_BASE_URL port is correctly set to ${urlObj.port}.`);
+        // console.log(`API_BASE_URL port is correctly set to ${urlObj.port}.`);
       }
     } catch (e) {
-      console.error('Invalid API_BASE_URL:', API_BASE_URL);
+      // console.error('Invalid API_BASE_URL:', API_BASE_URL);
     }
   }, []);
 
