@@ -38,7 +38,6 @@ def import_data():
     base_url = "https://raw.githubusercontent.com/dynastyprocess/data/master/files/"
     files_to_download = [
         "db_fpecr_latest.csv",
-        "db_playerids.csv",
         "values-players.csv",
         "values-picks.csv",
         "fp_latest_weekly.csv" # Added for more recent data
