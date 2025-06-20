@@ -224,6 +224,10 @@ def make_gemini_request(prompt, user_api_key):
 
 def process_ai_response(response_text):
     try:
+        # Log the raw response for debugging
+        with open('ai_response.log', 'a') as f:
+            f.write(f"{datetime.now()} - Raw AI Response:\n{response_text}\n\n")
+        
         # Attempt to find the JSON block more robustly
         json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
         if json_match:
@@ -268,7 +272,12 @@ def process_ai_response(response_text):
     except (json.JSONDecodeError, AttributeError) as e:
         print(f"Error processing AI response: {e}")
         traceback.print_exc()
-        # Return a user-friendly error message instead of the raw text
+        # Log the error for debugging
+        with open('ai_response.log', 'a') as f:
+            f.write(f"{datetime.now()} - Error processing AI response: {str(e)}\n\n")
+        # Attempt to extract some meaningful content if possible
+        if "confidence" in response_text.lower() and "analysis" in response_text.lower():
+            return "There was an error processing the AI's response, but some content was returned. Please check the logs for the raw response."
         return "There was an error processing the AI's response. The format was invalid. Please try again."
 
 PROMPT_PREAMBLE = "You are 'The Analyst,' a data-driven, no-nonsense fantasy football expert providing advice for the upcoming 2025 NFL season. All analysis is for a 12-team, PPR league with standard Yahoo scoring rules..."
@@ -333,8 +342,8 @@ def keeper_evaluation():
     try:
         user_key = request.headers.get('X-API-Key')
         keepers = request.json.get('keepers')
-        context_str = "\n".join([f"{get_player_context(k['name'])}\n  - Keeper Cost: A round {int(k['round']) - 1} pick\n" for k in keepers])
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Analyze these keepers. Compare Cost to ADP. Note bye week overlaps. Prioritize recommendations.\n\n**Data:**\n{context_str}\n\n{JSON_OUTPUT_INSTRUCTION}"
+        context_str = "\n".join([f"{get_player_context(k['name'])}\n  - Keeper Cost: A round {int(k['round']) - 1} pick\n" + (f"  - Additional Context: {k['context']}\n" if k.get('context') else "") for k in keepers])
+        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Analyze these keepers. Compare Cost to ADP. Note bye week overlaps. Prioritize recommendations.\n\n**Data:**\n{context_str}\n\n{JSON_OUTPUT_INSTRUCTION}\n\n**Important:** Ensure your response is a valid JSON object with exactly two keys: 'confidence' (string: 'High', 'Medium', or 'Low') and 'analysis' (string or object). Do not include any text outside the JSON structure."
         response_text = make_gemini_request(prompt, user_key)
         return jsonify({'result': process_ai_response(response_text)})
     except Exception as e:

@@ -47,6 +47,10 @@ function App() {
   const [partnerTradeAssets, setPartnerTradeAssets] = useState([]);
   const [keeperPlayerName, setKeeperPlayerName] = useState('');
   const [keeperRoundInput, setKeeperRoundInput] = useState('');
+  const [keeperContextInput, setKeeperContextInput] = useState('');
+  const [editingKeeperIndex, setEditingKeeperIndex] = useState(null);
+  const [editRoundInput, setEditRoundInput] = useState('');
+  const [editContextInput, setEditContextInput] = useState('');
   const [tradeScoringFormat, setTradeScoringFormat] = useState('PPR');
   const [myPlayerInput, setMyPlayerInput] = useState('');
   const [partnerPlayerInput, setPartnerPlayerInput] = useState('');
@@ -428,13 +432,42 @@ function App() {
   const addKeeper = () => {
     const roundValue = parseInt(keeperRoundInput, 10);
     if (keeperPlayerName && !isNaN(roundValue) && roundValue > 0) {
-      setKeeperList(prevList => [...prevList, { name: keeperPlayerName, round: roundValue }]);
+      setKeeperList(prevList => [...prevList, { name: keeperPlayerName, round: roundValue, context: keeperContextInput }]);
       setKeeperPlayerName('');
       setKeeperRoundInput('');
+      setKeeperContextInput('');
       document.getElementById('keeper-player-name')?.focus();
     } else {
       alert('Please enter a valid player name and a positive number for the draft round.');
     }
+  };
+
+  const startEditingKeeper = (index) => {
+    setEditingKeeperIndex(index);
+    setEditRoundInput(keeperList[index].round.toString());
+    setEditContextInput(keeperList[index].context || '');
+  };
+
+  const saveEditedKeeper = () => {
+    const roundValue = parseInt(editRoundInput, 10);
+    if (!isNaN(roundValue) && roundValue > 0) {
+      setKeeperList(prevList => {
+        const updatedList = [...prevList];
+        updatedList[editingKeeperIndex] = { ...updatedList[editingKeeperIndex], round: roundValue, context: editContextInput };
+        return updatedList;
+      });
+      setEditingKeeperIndex(null);
+      setEditRoundInput('');
+      setEditContextInput('');
+    } else {
+      alert('Please enter a valid positive number for the draft round.');
+    }
+  };
+
+  const cancelEditingKeeper = () => {
+    setEditingKeeperIndex(null);
+    setEditRoundInput('');
+    setEditContextInput('');
   };
 
   const addAsset = (side, assetType) => {
@@ -917,32 +950,82 @@ function App() {
             <section id="keeper">
               <div className="tool-header"><h2>Keeper Evaluator</h2><p>Analyze multiple keeper options based on cost vs. value.</p></div>
               <div className="card">
-                <div className="form-group-inline">
-                  <div className="autoComplete_wrapper"><input id="keeper-player-name" type="text" placeholder="Player Name..." value={keeperPlayerName} onChange={(e) => setKeeperPlayerName(e.target.value)} /></div>
-                  <input id="keeper-round" type="number" placeholder="Original Draft Round" value={keeperRoundInput} onChange={(e) => setKeeperRoundInput(e.target.value)} />
-                  <button onClick={addKeeper}>Add</button>
+                <div className="form-group-inline" style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
+                  <div className="autoComplete_wrapper" style={{ flex: '1', minWidth: '200px' }}>
+                    <input id="keeper-player-name" type="text" placeholder="Player Name..." value={keeperPlayerName} onChange={(e) => setKeeperPlayerName(e.target.value)} style={{ width: '100%', height: '38px', padding: '5px', boxSizing: 'border-box', border: '1px solid var(--border-color)', fontSize: '14px' }} />
+                  </div>
+                  <input id="keeper-round" type="number" placeholder="Round" value={keeperRoundInput} onChange={(e) => setKeeperRoundInput(e.target.value)} style={{ width: '50px', height: '38px', padding: '5px', boxSizing: 'border-box', border: '1px solid var(--border-color)', fontSize: '14px' }} />
+                  <div style={{ flex: '1', minWidth: '200px' }}>
+                    <input 
+                      id="keeper-context-input" 
+                      placeholder="Context (e.g., status, role)" 
+                      value={keeperContextInput} 
+                      onChange={(e) => setKeeperContextInput(e.target.value)}
+                      style={{ width: '100%', height: '38px', padding: '5px', boxSizing: 'border-box', border: '1px solid var(--border-color)', fontSize: '14px' }}
+                    />
+                  </div>
+                  <button onClick={addKeeper} style={{ padding: '5px 10px', height: '38px', marginLeft: '10px' }}>Add</button>
                 </div>
-                <ul className="item-list">
+                <div className="keeper-list" style={{ marginTop: '15px' }}>
                   {keeperList.map((keeper, index) => {
                     const playerData = staticPlayerData[keeper.name.toLowerCase()];
                     const adp = playerData?.adp;
                     const value = adp ? (keeper.round * 12) - adp : null; // A simple value calculation
-                    return (
-                      <li key={index} className="list-item">
-                        <div>
-                          <strong>{keeper.name}</strong> (Cost: Rd {keeper.round})
-                          <br />
-                          <small>ADP: {adp ? adp.toFixed(1) : 'N/A'} {value !== null && `(Value: ${value > 0 ? '+' : ''}${(value / 12).toFixed(1)})`}</small>
+                    if (editingKeeperIndex === index) {
+                      return (
+                        <div key={index} className="keeper-card" style={{ border: '1px solid var(--border-color)', borderRadius: '5px', padding: '10px', marginBottom: '10px', backgroundColor: 'var(--card-bg)' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            <strong style={{ display: 'block' }}>{keeper.name}</strong>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                              <input 
+                                type="number" 
+                                placeholder="Round" 
+                                value={editRoundInput} 
+                                onChange={(e) => setEditRoundInput(e.target.value)} 
+                                style={{ width: '60px', height: '30px', padding: '5px', boxSizing: 'border-box', border: '1px solid var(--border-color)', fontSize: '14px' }} 
+                              />
+                              <input 
+                                type="text" 
+                                placeholder="Context (e.g., status, role)" 
+                                value={editContextInput} 
+                                onChange={(e) => setEditContextInput(e.target.value)} 
+                                style={{ flex: '1', height: '30px', padding: '5px', boxSizing: 'border-box', border: '1px solid var(--border-color)', fontSize: '14px' }} 
+                              />
+                            </div>
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                              <button onClick={saveEditedKeeper} style={{ padding: '5px 10px', height: '30px' }}>Save</button>
+                              <button onClick={cancelEditingKeeper} style={{ padding: '5px 10px', height: '30px', backgroundColor: 'var(--danger-color)' }}>Cancel</button>
+                            </div>
+                          </div>
                         </div>
-                        <button className="remove-btn" onClick={() => setKeeperList(prev => prev.filter((_, i) => i !== index))}>
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                        </button>
-                      </li>
-                    );
+                      );
+                    } else {
+                      return (
+                        <div key={index} className="keeper-card" style={{ border: '1px solid var(--border-color)', borderRadius: '5px', padding: '10px', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--card-bg)' }}>
+                          <div>
+                            <strong style={{ display: 'block' }}>{keeper.name}</strong>
+                            <div style={{ fontSize: '0.9em', color: 'var(--text-muted)' }}>
+                              <span style={{ marginRight: '15px' }}>Cost: Round {keeper.round}</span>
+                              {keeper.context && <span>Context: {keeper.context}</span>}
+                            </div>
+                            <small>ADP: {adp ? adp.toFixed(1) : 'N/A'} {value !== null && `(Value: ${value > 0 ? '+' : ''}${(value / 12).toFixed(1)})`}</small>
+                          </div>
+                          <div style={{ display: 'flex', gap: '5px' }}>
+                            <button onClick={() => startEditingKeeper(index)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                            </button>
+                            <button className="remove-btn" onClick={() => setKeeperList(prev => prev.filter((_, i) => i !== index))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger-color)' }}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
                   })}
-                </ul>
+                  {keeperList.length === 0 && <p style={{ color: 'var(--text-muted)', textAlign: 'center', margin: '20px 0' }}>No keepers added yet. Use the form above to add players.</p>}
+                </div>
               </div>
-              <button onClick={evaluateKeepers} className="action-button">Analyze All Keepers</button>
+              <button onClick={evaluateKeepers} className="action-button" style={{ marginTop: '10px' }}>Analyze All Keepers</button>
               <div id="keeper-loader" className="loader" style={{ display: 'none' }}></div>
               <div id="keeper-result" className="result-box" dangerouslySetInnerHTML={{ __html: converter.makeHtml(keeperResult) }}></div>
             </section>
