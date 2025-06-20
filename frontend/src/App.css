@@ -1135,3 +1135,68 @@ section {
         grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     }
 }
+
+/* Tab Navigation for Waiver Wire Assistant */
+.tab-navigation {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 15px;
+}
+
+.tab-button {
+    background: none;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 1em;
+    transition: color 0.2s ease, border-bottom 0.2s ease;
+    border-bottom: 2px solid transparent;
+}
+
+.tab-button.active {
+    color: var(--primary-color);
+    border-bottom: 2px solid var(--primary-color);
+}
+
+.tab-button:hover:not(.active) {
+    color: var(--text-color);
+    border-bottom: 2px solid var(--secondary-color);
+}
+
+.tab-content {
+    min-height: 200px; /* Adjust based on content */
+}
+
+.tab-pane {
+    transition: opacity 0.3s ease;
+    opacity: 1;
+}
+
+.tab-pane.hidden {
+    display: none;
+    opacity: 0;
+}
+
+.waiver-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+@media (max-width: 500px) {
+    .waiver-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .tab-navigation {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .tab-button {
+        width: 100%;
+        text-align: center;
+        padding: 8px 0;
+    }
+}

@@ -38,6 +38,7 @@ const WaiverWireAssistant = ({ allPlayers, onAnalyze, analysisResult, isLoading 
   };
 
   const [playerToAdd, setPlayerToAdd] = useState('');
+  const [activeTab, setActiveTab] = useState('Starters');
 
   const sanitizeId = (label) => label.replace(/\//g, '-');
 
@@ -72,6 +73,9 @@ const WaiverWireAssistant = ({ allPlayers, onAnalyze, analysisResult, isLoading 
     }
   }, [allPlayers]);
 
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+  };
 
   return (
     <section id="waiver-swap">
@@ -83,16 +87,32 @@ const WaiverWireAssistant = ({ allPlayers, onAnalyze, analysisResult, isLoading 
         <div className="column-left">
           <div className="card">
             <h3>Your Roster</h3>
-            <div className="waiver-grid">
-                {Object.entries(rosterPositions).map(([category, positions]) => (
-                    <div key={category} className="roster-category">
-                        <h4>{category}</h4>
-                        {positions.map((pos) => {
-                            const sanitizedId = sanitizeId(pos);
-                            return <RosterInput key={pos} id={`roster-input-${sanitizedId}`} label={pos} allPlayers={allPlayers} />
-                        })}
-                    </div>
-                ))}
+            <div className="tab-navigation">
+              {Object.keys(rosterPositions).map(tab => (
+                <button
+                  key={tab}
+                  className={`tab-button ${activeTab === tab ? 'active' : ''}`}
+                  onClick={() => handleTabChange(tab)}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+            <div className="tab-content">
+              {Object.entries(rosterPositions).map(([category, positions]) => (
+                <div
+                  key={category}
+                  className={`tab-pane ${activeTab === category ? 'active' : 'hidden'}`}
+                >
+                  <h4>{category}</h4>
+                  <div className="waiver-grid">
+                    {positions.map((pos) => {
+                      const sanitizedId = sanitizeId(pos);
+                      return <RosterInput key={pos} id={`roster-input-${sanitizedId}`} label={pos} allPlayers={allPlayers} />;
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
