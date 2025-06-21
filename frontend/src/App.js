@@ -1354,11 +1354,11 @@ function App() {
                 <table id="trending-table">
                   <thead>
                     <tr>
-                      <th className="sortable" onClick={() => sortTrendingData('name')}>Player {sortDirection.name === 'asc' ? '▲' : '▼'}</th>
-                      <th className="sortable" onClick={() => sortTrendingData('team')}>Team {sortDirection.team === 'asc' ? '▲' : '▼'}</th>
-                      <th className="sortable" onClick={() => sortTrendingData('position')}>Position {sortDirection.position === 'asc' ? '▲' : '▼'}</th>
-                      <th className="sortable" onClick={() => sortTrendingData('ecr')}>ECR {sortDirection.ecr === 'asc' ? '▲' : '▼'}</th>
-                      <th className="sortable" onClick={() => sortTrendingData('adds')}>Adds (48hr) {sortDirection.adds === 'asc' ? '▲' : '▼'}</th>
+                      <th className="sortable" onClick={() => sortTrendingData('name')}>Player <span className="sort-icon">{sortDirection.name === 'asc' ? '▲' : '▼'}</span></th>
+                      <th className="sortable" onClick={() => sortTrendingData('team')}>Team <span className="sort-icon">{sortDirection.team === 'asc' ? '▲' : '▼'}</span></th>
+                      <th className="sortable" onClick={() => sortTrendingData('position')}>Position <span className="sort-icon">{sortDirection.position === 'asc' ? '▲' : '▼'}</span></th>
+                      <th className="sortable" onClick={() => sortTrendingData('ecr')}>ECR <span className="sort-icon">{sortDirection.ecr === 'asc' ? '▲' : '▼'}</span></th>
+                      <th className="sortable" onClick={() => sortTrendingData('adds')}>Adds (48hr) <span className="sort-icon">{sortDirection.adds === 'asc' ? '▲' : '▼'}</span></th>
                     </tr>
                   </thead>
                   <tbody>
