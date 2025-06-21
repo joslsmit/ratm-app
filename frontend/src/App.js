@@ -22,9 +22,9 @@ function App() {
   // State for active tool and data
   const [activeTool, setActiveTool] = useState('dossier');
   const [allPlayers, setAllPlayers] = useState([]);
-  const [staticPlayerData, setStaticPlayerData] = useState({});
+  const [staticPlayerData, setStaticPlayerData] = useState({}); // This will now hold combined data
   const [trendingData, setTrendingData] = useState([]);
-  const [sortDirection, setSortDirection] = useState({ name: 'asc', position: 'asc', adds: 'desc', team: 'asc', pos_rank: 'asc' });
+  const [sortDirection, setSortDirection] = useState({ name: 'asc', position: 'asc', adds: 'desc', team: 'asc', ecr: 'asc' });
   const [marketInefficiencies, setMarketInefficiencies] = useState({ sleepers: [], busts: [] });
   const [rookieRankings, setRookieRankings] = useState([]);
   const [draftBoard, setDraftBoard] = useState({});
@@ -56,6 +56,7 @@ function App() {
   const [partnerPlayerInput, setPartnerPlayerInput] = useState('');
   const [myPickInput, setMyPickInput] = useState('');
   const [partnerPickInput, setPartnerPickInput] = useState('');
+  const [ecrTypePreference, setEcrTypePreference] = useState('overall'); // New state for ECR type preference
 
   // Memoize the Showdown converter to avoid recreating it on every render
   const converter = useMemo(() => new showdown.Converter({ simplifiedAutoLink: true, tables: true, strikethrough: true }), []);
@@ -97,7 +98,7 @@ function App() {
           'Content-Type': 'application/json',
           'X-API-Key': userApiKey
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, ecr_type_preference: ecrTypePreference }), // Include ECR type preference
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -108,7 +109,7 @@ function App() {
     } catch (error) {
       throw error; // Re-throw the error to be caught by the calling function
     }
-  }, [userApiKey]);
+  }, [userApiKey, ecrTypePreference]); // Add ecrTypePreference as a dependency
 
   // Verify API_BASE_URL port
   useEffect(() => {
@@ -179,14 +180,14 @@ function App() {
     return board;
   }, []);
 
-  const updateRosterComposition = useCallback(() => {
+    const updateRosterComposition = useCallback(() => {
     const counts = { QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DST: 0 };
     const draftedPlayers = getDraftBoardState();
     Object.values(draftedPlayers).forEach(playerName => {
       const key = playerName.toLowerCase();
       const playerData = staticPlayerData[key];
-      if (playerData && playerData.pos_rank) {
-        const pos = playerData.pos_rank.replace(/\d/g, '');
+      if (playerData && playerData.position) { // Use 'position' from ECR data
+        const pos = playerData.position;
         if (pos in counts) {
           counts[pos]++;
         }
@@ -271,6 +272,7 @@ function App() {
 
   // Autocomplete for Global Search
   useEffect(() => {
+    console.log('Initializing global search autocomplete. allPlayers length:', allPlayers.length);
     if (allPlayers.length === 0) return;
     const ac = new autoComplete({
         selector: '#global-player-search',
@@ -287,11 +289,15 @@ function App() {
             },
         },
     });
-    return () => ac.unInit();
+    return () => {
+      console.log('Uninitializing global search autocomplete.');
+      ac.unInit();
+    };
   }, [allPlayers, handleGlobalSearch]);
 
   // Autocomplete for Dossier
   useEffect(() => {
+    console.log('Initializing dossier autocomplete. activeTool:', activeTool, 'allPlayers length:', allPlayers.length);
     if (activeTool !== 'dossier' || allPlayers.length === 0) return;
     const ac = new autoComplete({
         selector: '#dossier-player-name',
@@ -307,11 +313,15 @@ function App() {
             },
         },
     });
-    return () => ac.unInit();
+    return () => {
+      console.log('Uninitializing dossier autocomplete.');
+      ac.unInit();
+    };
   }, [allPlayers, activeTool]);
 
   // Autocomplete for Keeper Evaluator
   useEffect(() => {
+    console.log('Initializing keeper autocomplete. activeTool:', activeTool, 'allPlayers length:', allPlayers.length);
     if (activeTool !== 'keeper' || allPlayers.length === 0) return;
     const ac = new autoComplete({
         selector: '#keeper-player-name',
@@ -327,11 +337,15 @@ function App() {
             },
         },
     });
-    return () => ac.unInit();
+    return () => {
+      console.log('Uninitializing keeper autocomplete.');
+      ac.unInit();
+    };
   }, [allPlayers, activeTool]);
 
   // Autocomplete for Trade Analyzer
   useEffect(() => {
+    console.log('Initializing trade analyzer autocomplete. activeTool:', activeTool, 'allPlayers length:', allPlayers.length);
     if (activeTool !== 'trade' || allPlayers.length === 0) return;
 
     const myPlayerAC = new autoComplete({
@@ -365,6 +379,7 @@ function App() {
     });
 
     return () => {
+        console.log('Uninitializing trade analyzer autocomplete.');
         if (myPlayerAC) myPlayerAC.unInit();
         if (partnerPlayerAC) partnerPlayerAC.unInit();
     };
@@ -551,15 +566,18 @@ function App() {
     }
   }, [targetList]);
 
-  // Fetch all player names for autocomplete functionality
+  // Fetch all player names for autocomplete functionality and static player data
   useEffect(() => {
     fetch(`${API_BASE_URL}/all_player_names_with_data`)
       .then(response => response.json())
       .then(data => {
         if (data && Array.isArray(data)) {
           setAllPlayers(data.map(p => p.name));
+          // Store the full player data object, keyed by cleaned name
           const staticData = data.reduce((acc, p) => {
-            acc[p.name.toLowerCase()] = p;
+            if (p.name) { // Ensure player name exists
+              acc[p.name.toLowerCase()] = p;
+            }
             return acc;
           }, {});
           setStaticPlayerData(staticData);
@@ -782,6 +800,13 @@ function App() {
 
       <div className="main-content">
         <div className="content-wrapper">
+          <div className="ecr-preference-selector">
+            <label htmlFor="ecr-type-preference">ECR Type:</label>
+            <select id="ecr-type-preference" value={ecrTypePreference} onChange={(e) => setEcrTypePreference(e.target.value)}>
+              <option value="overall">Overall ECR</option>
+              <option value="positional">Positional ECR</option>
+            </select>
+          </div>
 
           {activeTool === 'dossier' && (
             <section id="dossier">
@@ -808,8 +833,16 @@ function App() {
                     <div className="dossier-header-stats">
                       <span><strong>Team:</strong> {dossierResult.player_data.team}</span>
                       <span><strong>Position:</strong> {dossierResult.player_data.position}</span>
-                      <span><strong>Pos. Rank:</strong> {dossierResult.player_data.pos_rank}</span>
-                      <span><strong>ADP:</strong> {dossierResult.player_data.adp ? dossierResult.player_data.adp.toFixed(1) : 'N/A'}</span>
+                      <span><strong>Overall ECR:</strong> {dossierResult.player_data.ecr_overall ? dossierResult.player_data.ecr_overall.toFixed(1) : 'N/A'}</span>
+                      <span><strong>Overall SD:</strong> {dossierResult.player_data.sd_overall ? dossierResult.player_data.sd_overall.toFixed(2) : 'N/A'}</span>
+                      <span><strong>Overall Best:</strong> {dossierResult.player_data.best_overall || 'N/A'}</span>
+                      <span><strong>Overall Worst:</strong> {dossierResult.player_data.worst_overall || 'N/A'}</span>
+                      <span><strong>Overall Rank Delta:</strong> {dossierResult.player_data.rank_delta_overall ? dossierResult.player_data.rank_delta_overall.toFixed(1) : 'N/A'}</span>
+                      <span><strong>Positional ECR:</strong> {dossierResult.player_data.ecr_positional ? dossierResult.player_data.ecr_positional.toFixed(1) : 'N/A'}</span>
+                      <span><strong>Positional SD:</strong> {dossierResult.player_data.sd_positional ? dossierResult.player_data.sd_positional.toFixed(2) : 'N/A'}</span>
+                      <span><strong>Positional Best:</strong> {dossierResult.player_data.best_positional || 'N/A'}</span>
+                      <span><strong>Positional Worst:</strong> {dossierResult.player_data.worst_positional || 'N/A'}</span>
+                      <span><strong>Positional Rank Delta:</strong> {dossierResult.player_data.rank_delta_positional ? dossierResult.player_data.rank_delta_positional.toFixed(1) : 'N/A'}</span>
                       <span><strong>Bye:</strong> {dossierResult.player_data.bye_week || 'N/A'}</span>
                     </div>
                   </div>
@@ -842,8 +875,11 @@ function App() {
                                 </div>
                             </div>
                             <div className="rookie-details">
-                                <span>Pos. Rank: {rookie.pos_rank || 'N/A'}</span>
-                                <span>ADP: {rookie.adp || 'N/A'}</span>
+                                <span>ECR: {rookie.ecr || 'N/A'}</span>
+                                <span>SD: {rookie.sd ? rookie.sd.toFixed(2) : 'N/A'}</span>
+                                <span>Best: {rookie.best || 'N/A'}</span>
+                                <span>Worst: {rookie.worst || 'N/A'}</span>
+                                <span>Rank Delta: {rookie.rank_delta ? rookie.rank_delta.toFixed(1) : 'N/A'}</span>
                             </div>
                             <p className="rookie-analysis">{rookie.analysis}</p>
                         </div>
@@ -873,7 +909,8 @@ function App() {
                           <th>Player</th>
                           <th>Pos.</th>
                           <th>Team</th>
-                          <th>ADP</th>
+                          <th>ECR</th>
+                          <th>SD</th>
                           <th>Bye</th>
                           <th></th>
                         </tr>
@@ -886,7 +923,8 @@ function App() {
                               <td><a href={`/?tool=dossier&player=${encodeURIComponent(playerName)}`} className="player-link">{playerName}</a></td>
                               <td>{playerData?.position || 'N/A'}</td>
                               <td>{playerData?.team || 'N/A'}</td>
-                              <td>{playerData?.adp ? playerData.adp.toFixed(1) : 'N/A'}</td>
+                              <td>{playerData?.ecr ? playerData.ecr.toFixed(1) : 'N/A'}</td>
+                              <td>{playerData?.sd ? playerData.sd.toFixed(2) : 'N/A'}</td>
                               <td>{playerData?.bye_week || 'N/A'}</td>
                               <td>
                                 <button className="remove-btn-small" onClick={() => handleRemoveFromTargets(playerName)}>
@@ -1008,7 +1046,7 @@ function App() {
                               <span style={{ marginRight: '15px' }}>Cost: Round {keeper.round}</span>
                               {keeper.context && <span>Context: {keeper.context}</span>}
                             </div>
-                            <small>ADP: {adp ? adp.toFixed(1) : 'N/A'} {value !== null && `(Value: ${value > 0 ? '+' : ''}${(value / 12).toFixed(1)})`}</small>
+                            <small>ECR: {adp ? adp.toFixed(1) : 'N/A'} {value !== null && `(Value: ${value > 0 ? '+' : ''}${(value / 12).toFixed(1)})`}</small>
                           </div>
                           <div style={{ display: 'flex', gap: '5px' }}>
                             <button onClick={() => startEditingKeeper(index)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
@@ -1170,7 +1208,7 @@ function App() {
                       <th className="sortable" onClick={() => sortTrendingData('name')}>Player {sortDirection.name === 'asc' ? '▲' : '▼'}</th>
                       <th className="sortable" onClick={() => sortTrendingData('team')}>Team {sortDirection.team === 'asc' ? '▲' : '▼'}</th>
                       <th className="sortable" onClick={() => sortTrendingData('position')}>Position {sortDirection.position === 'asc' ? '▲' : '▼'}</th>
-                      <th className="sortable" onClick={() => sortTrendingData('pos_rank')}>Pos. Rank {sortDirection.pos_rank === 'asc' ? '▲' : '▼'}</th>
+                      <th className="sortable" onClick={() => sortTrendingData('ecr')}>ECR {sortDirection.ecr === 'asc' ? '▲' : '▼'}</th>
                       <th className="sortable" onClick={() => sortTrendingData('adds')}>Adds (48hr) {sortDirection.adds === 'asc' ? '▲' : '▼'}</th>
                     </tr>
                   </thead>
@@ -1180,7 +1218,7 @@ function App() {
                         <td><a href={`/?tool=dossier&player=${encodeURIComponent(player.name)}`} className="player-link">{player.name}</a></td>
                         <td>{player.team || 'N/A'}</td>
                         <td>{player.position}</td>
-                        <td>{player.pos_rank || 'N/A'}</td>
+                        <td>{player.ecr ? player.ecr.toFixed(1) : 'N/A'}</td>
                         <td>{player.adds}</td>
                       </tr>
                     )) : (
@@ -1298,7 +1336,36 @@ function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handle
     };
 
     const playerData = playerName ? staticPlayerData[playerName.toLowerCase()] : null;
-    const position = playerData?.pos_rank?.replace(/\d/g, '');
+    const position = playerData?.position;
+
+    // Determine which ECR to display based on the global preference
+    const displayEcr = (ecrType) => {
+        if (!playerData) return 'N/A';
+        const ecrValue = playerData[`ecr_${ecrType}`];
+        return ecrValue ? ecrValue.toFixed(1) : 'N/A';
+    };
+
+    const displaySd = (ecrType) => {
+        if (!playerData) return 'N/A';
+        const sdValue = playerData[`sd_${ecrType}`];
+        return sdValue ? sdValue.toFixed(2) : 'N/A';
+    };
+
+    const displayBest = (ecrType) => {
+        if (!playerData) return 'N/A';
+        return playerData[`best_${ecrType}`] || 'N/A';
+    };
+
+    const displayWorst = (ecrType) => {
+        if (!playerData) return 'N/A';
+        return playerData[`worst_${ecrType}`] || 'N/A';
+    };
+
+    const displayRankDelta = (ecrType) => {
+        if (!playerData) return 'N/A';
+        const rankDeltaValue = playerData[`rank_delta_${ecrType}`];
+        return rankDeltaValue ? rankDeltaValue.toFixed(1) : 'N/A';
+    };
 
     return (
         <div className={`round-card pos-${position?.toLowerCase()}`}>
@@ -1317,7 +1384,16 @@ function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handle
             {playerName && <button onClick={handleClear} className="remove-btn-small">Clear</button>}
             {playerData && (
                 <div className="draft-card-details">
-                    <span>ADP: {playerData.adp ? playerData.adp.toFixed(1) : 'N/A'}</span>
+                    <span>Overall ECR: {displayEcr('overall')}</span>
+                    <span>Overall SD: {displaySd('overall')}</span>
+                    <span>Overall Best: {displayBest('overall')}</span>
+                    <span>Overall Worst: {displayWorst('overall')}</span>
+                    <span>Overall Rank Delta: {displayRankDelta('overall')}</span>
+                    <span>Positional ECR: {displayEcr('positional')}</span>
+                    <span>Positional SD: {displaySd('positional')}</span>
+                    <span>Positional Best: {displayBest('positional')}</span>
+                    <span>Positional Worst: {displayWorst('positional')}</span>
+                    <span>Positional Rank Delta: {displayRankDelta('positional')}</span>
                     <span>Bye: {playerData.bye_week || 'N/A'}</span>
                 </div>
             )}

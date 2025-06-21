@@ -36,24 +36,9 @@ model = genai.GenerativeModel('gemini-2.5-flash')
 
 
 # --- Data Caching ---
-player_data_cache, player_name_to_id, static_adp_data, player_values_cache, pick_values_cache, weekly_data_cache, combined_player_data_cache = None, None, {}, None, None, None, None
+player_data_cache, player_name_to_id, static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data, player_values_cache, pick_values_cache, combined_player_data_cache = None, None, {}, {}, {}, None, None, None
 
 # --- Data Loading & Helper Functions ---
-def load_weekly_data_from_csv(file_path):
-    try:
-        df = pd.read_csv(file_path)
-        # Corrected column names for weekly data
-        weekly_dict = {row['player_name'].lower().strip(): row.to_dict() for index, row in df.iterrows() if 'player_name' in df.columns}
-        print(f"✅ Successfully loaded {len(weekly_dict)} weekly data entries from {file_path}.")
-        return weekly_dict
-    except FileNotFoundError:
-        print(f"❌ FATAL ERROR: The weekly data CSV file was not found at '{file_path}'.")
-        return None
-    except Exception as e:
-        print(f"❌ FATAL ERROR loading weekly data CSV: {e}")
-        traceback.print_exc()
-        return None
-
 def load_values_from_csv(file_path):
     try:
         df = pd.read_csv(file_path)
@@ -85,39 +70,76 @@ def load_values_from_csv(file_path):
         traceback.print_exc()
         return None
 
-def load_adp_from_csv(file_path):
+def load_ecr_data_from_csv(file_path):
     try:
         df = pd.read_csv(file_path)
-        # Dynamically find the player name column, including 'player'
-        player_col = next((col for col in ['Player', 'player_name', 'full_name', 'player'] if col in df.columns), None)
+        print(f"Total rows in {file_path}: {len(df)}")
+        if 'ecr_type' not in df.columns:
+            print(f"❌ FATAL ERROR: 'ecr_type' column not found in {file_path}. Cannot categorize ECR data.")
+            return None, None, None # Return None for all caches if critical column is missing
+
+        print(f"Unique ecr_type values: {df['ecr_type'].unique()}")
+
+        # Convert all NaN values in the DataFrame to None at this stage
+        df = df.where(pd.notna(df), None)
+        print(f"df head after NaN to None conversion:\n{df.head()}")
+
+        player_col = next((col for col in ['player', 'player_name', 'full_name'] if col in df.columns), None)
         if not player_col:
-            print(f"❌ FATAL ERROR: Could not find a player name column in {file_path}")
-            return None
+            print(f"❌ FATAL ERROR: Could not find a player name column (e.g., 'player', 'player_name', 'full_name') in {file_path}")
+            return None, None, None
+        print(f"Identified player column: '{player_col}'")
 
-        # Ensure 'bye', 'yahoo_id', and 'team' are read, if they exist
-        columns_to_process = [player_col, 'pos', 'ecr', 'bye', 'yahoo_id', 'team', 'Rank']
-        existing_columns = [col for col in columns_to_process if col in df.columns]
-        df_processed = df[existing_columns].copy()
+        # Helper to create a dictionary from a filtered DataFrame
+        def create_ecr_dict(filtered_df):
+            ecr_dict = {}
+            for index, row in filtered_df.iterrows():
+                player_name = row[player_col]
+                if player_name is None or str(player_name).lower().strip() == 'nan' or str(player_name).strip() == '':
+                    continue # Skip rows with invalid player names
 
-        def clean_player_name(player_name):
-            # More aggressive cleaning: remove suffixes, non-alphanumeric chars (except spaces), and extra whitespace
-            name = re.sub(r'\s[A-Z]{2,4}$', '', str(player_name)) # Remove team suffix
-            name = re.sub(r'[^a-zA-Z0-9\s]', '', name) # Remove non-alphanumeric chars
-            return name.lower().strip()
-        df_processed['Player_Clean'] = df_processed[player_col].apply(clean_player_name)
-        
-        adp_dict = {
-            row['Player_Clean']: {
-                'adp': row.get('ecr'),
-                'pos_rank': row.get('Rank'),
-                'pos': row.get('pos'),
-                'bye': row.get('bye'),
-                'team': row.get('team')
-            }
-            for index, row in df_processed.iterrows() if row['Player_Clean'] and row['Player_Clean'] != 'nan'
-        }
-        print(f"✅ Successfully loaded {len(adp_dict)} players from {file_path}.")
-        return adp_dict
+                cleaned_name = re.sub(r'\s[A-Z]{2,4}$', '', str(player_name))
+                cleaned_name = re.sub(r'[^a-zA-Z0-9\s]', '', cleaned_name)
+                cleaned_name = cleaned_name.lower().strip()
+                
+                if not cleaned_name:
+                    continue # Skip if name becomes empty after cleaning
+
+                ecr_dict[cleaned_name] = {
+                    'ecr': row.get('ecr'),
+                    'sd': row.get('sd'),
+                    'best': row.get('best'),
+                    'worst': row.get('worst'),
+                    'rank_delta': row.get('rank_delta'),
+                    'pos': row.get('pos'),
+                    'bye': row.get('bye'),
+                    'team': row.get('team'),
+                    'ecr_type': row.get('ecr_type') # Include ecr_type for debugging/context
+                }
+            return ecr_dict
+
+        # Filter and create dictionaries for each type
+        overall_df = df[df['ecr_type'] == 'bo'].copy()
+        positional_df = df[df['ecr_type'] == 'bp'].copy()
+        rookie_df = df[df['ecr_type'] == 'drk'].copy() # For rookie rankings
+
+        overall_ecr_dict = create_ecr_dict(overall_df)
+        positional_ecr_dict = create_ecr_dict(positional_df)
+        rookie_ecr_dict = create_ecr_dict(rookie_df)
+
+        print(f"✅ Successfully loaded {len(overall_ecr_dict)} overall ECR entries (bo).")
+        print(f"✅ Successfully loaded {len(positional_ecr_dict)} positional ECR entries (bp).")
+        print(f"✅ Successfully loaded {len(rookie_ecr_dict)} rookie ECR entries (drk).")
+
+        return overall_ecr_dict, positional_ecr_dict, rookie_ecr_dict
+
+    except FileNotFoundError:
+        print(f"❌ FATAL ERROR: The CSV file was not found at '{file_path}'. Make sure it's in your GitHub repository.")
+        return None, None, None
+    except Exception as e:
+        print(f"❌ FATAL ERROR loading ECR data CSV: {e}")
+        traceback.print_exc()
+        return None, None, None
     except FileNotFoundError:
         print(f"❌ FATAL ERROR: The CSV file was not found at '{file_path}'. Make sure it's in your GitHub repository.")
         return None
@@ -152,63 +174,100 @@ def fuzzy_find_player_key(name_to_search, key_dictionary):
     return None
 
 def create_combined_player_data_cache():
-    global combined_player_data_cache, static_adp_data, weekly_data_cache
-    if not static_adp_data or not weekly_data_cache:
-        print("❌ Cannot create combined player data cache: static_adp_data or weekly_data_cache is not loaded.")
+    global combined_player_data_cache, static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data
+    if not static_ecr_overall_data and not static_ecr_positional_data and not static_ecr_rookie_data:
+        print("❌ Cannot create combined player data cache: No ECR data is loaded.")
         return
 
     temp_combined_data = {}
-    bye_week_found_count = 0
-    pos_rank_found_count = 0
+    
+    # Combine data from all ECR sources, prioritizing overall for base ECR if multiple exist
+    all_ecr_keys = set(static_ecr_overall_data.keys()) | set(static_ecr_positional_data.keys()) | set(static_ecr_rookie_data.keys())
 
-    for name, data in static_adp_data.items():
-        # Get bye week from static data
-        bye_week = data.get('bye')
-        if bye_week is not None and pd.notna(bye_week):
-            bye_week_found_count += 1
+    for name_key in all_ecr_keys:
+        overall_data = static_ecr_overall_data.get(name_key, {})
+        positional_data = static_ecr_positional_data.get(name_key, {})
+        rookie_data = static_ecr_rookie_data.get(name_key, {})
 
-        # Get positional rank from weekly data
-        weekly_info = weekly_data_cache.get(name.lower().strip(), {})
-        pos_rank = weekly_info.get('pos_rank', 'N/A')
-        if pos_rank != 'N/A':
-            pos_rank_found_count += 1
+        # Prioritize overall ECR for the main 'ecr' field, but include both
+        # Use overall_data for general player info if available, otherwise positional or rookie
+        primary_data_source = overall_data or positional_data or rookie_data
 
-        # Sanitize values to avoid NaN in JSON
-        adp_value = data.get('adp')
-        if adp_value is not None and (isinstance(adp_value, float) and (pd.isna(adp_value) or adp_value != adp_value)):
-            adp_value = None
+        # Ensure bye_week is an integer or None
+        bye_week_val = primary_data_source.get('bye')
+        if bye_week_val is not None:
+            try:
+                bye_week_val = int(bye_week_val)
+            except (ValueError, TypeError):
+                bye_week_val = None # Set to None if conversion fails
 
-        temp_combined_data[name.lower().strip()] = {
-            'name': name.title(),
-            'pos_rank': pos_rank,
-            'adp': adp_value,
-            'bye_week': int(bye_week) if bye_week is not None and pd.notna(bye_week) else 'N/A',
-            'team': data.get('team', 'N/A'),
-            'position': data.get('pos', 'N/A')
+        def clean_numeric_value(value):
+            if isinstance(value, float) and pd.isna(value):
+                return None
+            return value
+
+        temp_combined_data[name_key] = {
+            'name': primary_data_source.get('name', name_key.title()),
+            'team': primary_data_source.get('team', 'N/A'),
+            'position': primary_data_source.get('pos', 'N/A'),
+            'bye_week': bye_week_val,
+            'ecr_overall': clean_numeric_value(overall_data.get('ecr')),
+            'sd_overall': clean_numeric_value(overall_data.get('sd')),
+            'best_overall': clean_numeric_value(overall_data.get('best')),
+            'worst_overall': clean_numeric_value(overall_data.get('worst')),
+            'rank_delta_overall': clean_numeric_value(overall_data.get('rank_delta')),
+            'ecr_positional': clean_numeric_value(positional_data.get('ecr')),
+            'sd_positional': clean_numeric_value(positional_data.get('sd')),
+            'best_positional': clean_numeric_value(positional_data.get('best')),
+            'worst_positional': clean_numeric_value(positional_data.get('worst')),
+            'rank_delta_positional': clean_numeric_value(positional_data.get('rank_delta')),
+            'ecr_rookie': clean_numeric_value(rookie_data.get('ecr')),
+            'sd_rookie': clean_numeric_value(rookie_data.get('sd')),
+            'best_rookie': clean_numeric_value(rookie_data.get('best')),
+            'worst_rookie': clean_numeric_value(rookie_data.get('worst')),
+            'rank_delta_rookie': clean_numeric_value(rookie_data.get('rank_delta')),
         }
     
     combined_player_data_cache = temp_combined_data
     print(f"✅ Successfully created combined_player_data_cache with {len(combined_player_data_cache)} players.")
-    print(f"📊 Bye week data found for {bye_week_found_count} out of {len(static_adp_data)} players.")
-    print(f"📊 Positional rank data found for {pos_rank_found_count} out of {len(static_adp_data)} players in weekly data.")
 
-def get_player_context(player_name):
+def get_player_context(player_name, ecr_type_preference='overall'):
     sleeper_key = fuzzy_find_player_key(player_name, player_name_to_id)
-    static_key = fuzzy_find_player_key(player_name, static_adp_data)
+    
+    # Determine which static ECR data to use based on preference
+    if ecr_type_preference == 'overall':
+        static_ecr_source = static_ecr_overall_data
+    elif ecr_type_preference == 'positional':
+        static_ecr_source = static_ecr_positional_data
+    elif ecr_type_preference == 'rookie':
+        static_ecr_source = static_ecr_rookie_data
+    else: # Default to overall if preference is unknown or not provided
+        static_ecr_source = static_ecr_overall_data
+
+    static_key = fuzzy_find_player_key(player_name, static_ecr_source)
+    
     player_id = player_name_to_id.get(sleeper_key) if sleeper_key and player_name_to_id else None
     player_info_live = player_data_cache.get(player_id, {}) if player_id and player_data_cache else {}
-    player_info_static = static_adp_data.get(static_key, {}) if static_key and static_adp_data else {}
+    player_info_static = static_ecr_source.get(static_key, {}) if static_key and static_ecr_source else {}
+    
     context_lines = []
     full_name = player_info_live.get('full_name', player_name)
     context_lines.append(f"- Player: {full_name} ({player_info_static.get('pos', 'N/A')}, {player_info_live.get('team', 'N/A')})")
     context_lines.append(f"  - Status: {player_info_live.get('status', 'N/A')}")
     context_lines.append(f"  - Age: {player_info_live.get('age', 'N/A')}, Experience: {player_info_live.get('years_exp', 'N/A')} years")
+    
+    # Use the appropriate ECR and related stats based on the source
+    ecr_label = f"{ecr_type_preference.title()} ECR" if ecr_type_preference != 'rookie' else "Rookie ECR"
+    ecr_value = player_info_static.get('ecr')
+    ecr_display = f"{ecr_value:.1f}" if isinstance(ecr_value, (int, float)) else "N/A"
+    context_lines.append(f"  - {ecr_label}: {ecr_display}")
+    
+    if sd := player_info_static.get('sd'): context_lines.append(f"  - Std Dev: {sd:.2f}")
+    if best := player_info_static.get('best'): context_lines.append(f"  - Best Rank: {int(best)}")
+    if worst := player_info_static.get('worst'): context_lines.append(f"  - Worst Rank: {int(worst)}")
+    if rank_delta := player_info_static.get('rank_delta'): context_lines.append(f"  - Rank Delta (1W): {rank_delta:.1f}")
     if bye_week := player_info_static.get('bye'): context_lines.append(f"  - Bye Week: {int(bye_week)}")
-    pos_rank = player_info_static.get('pos_rank', 'N/A')
-    adp = player_info_static.get('adp')
-    adp_display = f"{adp:.1f}" if adp else "N/A"
-    context_lines.append(f"  - Consensus Positional Rank: {pos_rank}")
-    context_lines.append(f"  - Consensus Market ADP: {adp_display}")
+    
     return "\n".join(context_lines)
 
 def make_gemini_request(prompt, user_api_key):
@@ -289,25 +348,41 @@ def player_dossier():
     try:
         user_key = request.headers.get('X-API-Key')
         player_name = request.json.get('player_name')
+        ecr_type_pref = request.json.get('ecr_type_preference', 'overall') # Default to overall
 
         # --- Get Player Static Data ---
         sleeper_key = fuzzy_find_player_key(player_name, player_name_to_id)
-        static_key = fuzzy_find_player_key(player_name, static_adp_data)
-        player_id = player_name_to_id.get(sleeper_key) if sleeper_key and player_name_to_id else None
+        player_id = player_name_to_id.get(sleeper_key) if sleeper_key and player_name_to_id else {}
         player_info_live = player_data_cache.get(player_id, {}) if player_id and player_data_cache else {}
-        player_info_static = static_adp_data.get(static_key, {}) if static_key and static_adp_data else {}
         
+        # Get data from combined cache
+        combined_info = combined_player_data_cache.get(player_name.lower().strip(), {})
+
         player_data_response = {
             "name": player_info_live.get('full_name', player_name.title()),
-            "team": player_info_static.get('team', 'N/A'),
-            "position": player_info_static.get('pos', 'N/A'),
-            "pos_rank": combined_player_data_cache.get(static_key, {}).get('pos_rank', 'N/A'),
-            "adp": player_info_static.get('adp'),
-            "bye_week": int(player_info_static.get('bye')) if player_info_static.get('bye') and pd.notna(player_info_static.get('bye')) else 'N/A'
+            "team": combined_info.get('team', 'N/A'),
+            "position": combined_info.get('position', 'N/A'),
+            "bye_week": combined_info.get('bye_week'),
+            "ecr_overall": combined_info.get('ecr_overall'),
+            "sd_overall": combined_info.get('sd_overall'),
+            "best_overall": combined_info.get('best_overall'),
+            "worst_overall": combined_info.get('worst_overall'),
+            "rank_delta_overall": combined_info.get('rank_delta_overall'),
+            "ecr_positional": combined_info.get('ecr_positional'),
+            "sd_positional": combined_info.get('sd_positional'),
+            "best_positional": combined_info.get('best_positional'),
+            "worst_positional": combined_info.get('worst_positional'),
+            "rank_delta_positional": combined_info.get('rank_delta_positional'),
+            "ecr_rookie": combined_info.get('ecr_rookie'),
+            "sd_rookie": combined_info.get('sd_rookie'),
+            "best_rookie": combined_info.get('best_rookie'),
+            "worst_rookie": combined_info.get('worst_rookie'),
+            "rank_delta_rookie": combined_info.get('rank_delta_rookie'),
         }
 
         # --- Generate AI Analysis ---
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** First, create a detailed markdown report for the player with headers: ### Depth Chart Role, ### Value Analysis, ### Risk Factors, ### 2025 Outlook, and ### Final Verdict. Then, wrap this entire markdown report inside the 'analysis' key of your JSON output.\n\n**Player Data:**\n{get_player_context(player_name)}\n\n{JSON_OUTPUT_INSTRUCTION}"
+        # Pass the preferred ECR type to get_player_context for AI prompt generation
+        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** First, create a detailed markdown report for the player with headers: ### Depth Chart Role, ### Value Analysis, ### Risk Factors, ### 2025 Outlook, and ### Final Verdict. Then, wrap this entire markdown report inside the 'analysis' key of your JSON output.\n\n**Player Data:**\n{get_player_context(player_name, ecr_type_preference=ecr_type_pref)}\n\n{JSON_OUTPUT_INSTRUCTION}"
         response_text = make_gemini_request(prompt, user_key)
         
         # --- Combine and Return ---
@@ -324,17 +399,53 @@ def rookie_rankings():
     try:
         user_key = request.headers.get('X-API-Key')
         position_filter = request.json.get('position', 'all')
-        rookies = [
-            {'name': p.get('full_name'),'position': p.get('position'),'team': p.get('team'), **static_adp_data.get(p.get('full_name', '').lower().strip(), {})}
-            for p_id, p in player_data_cache.items() if p.get('years_exp') == 0 and (position_filter == 'all' or p.get('position') == position_filter) and p.get('full_name')
-        ]
-        sorted_rookies = sorted(rookies, key=lambda x: x.get('adp') or 999)
-        rookie_list_for_prompt = [f"- {r['name']} ({r['position']}, {r['team']}) - ADP: {r.get('adp') or 'N/A'}" for r in sorted_rookies[:50]]
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Create a ranked list of rookies.\n\n**Rookie Data:**\n{chr(10).join(rookie_list_for_prompt)}\n\n**Instructions:** Your response MUST be a single JSON object with one key: \"rookies\". The value must be a JSON array of objects. For each of the top 15 rookies, create an object with these keys: \"rank\", \"name\", \"position\", \"team\", \"adp\" (string or \"N/A\"), \"pos_rank\", and \"analysis\" (a 1-2 sentence summary of their outlook)."
+        
+        # Use static_ecr_rookie_data for rookie rankings
+        rookies_from_ecr = []
+        for name_key, data in static_ecr_rookie_data.items():
+            if position_filter == 'all' or data.get('pos') == position_filter:
+                rookies_from_ecr.append({
+                    'name': data.get('name', name_key.title()),
+                    'position': data.get('pos'),
+                    'team': data.get('team'),
+                    'ecr': data.get('ecr'),
+                    'sd': data.get('sd'),
+                    'best': data.get('best'),
+                    'worst': data.get('worst'),
+                    'rank_delta': data.get('rank_delta')
+                })
+        
+        # Sort rookies by ECR
+        sorted_rookies = sorted(rookies_from_ecr, key=lambda x: x.get('ecr') if x.get('ecr') is not None else 999)
+        
+        rookie_list_for_prompt = [f"- {r['name']} ({r['position']}, {r['team']}) - ECR: {r.get('ecr') or 'N/A'}" for r in sorted_rookies[:50]]
+        
+        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Create a ranked list of rookies.\n\n**Rookie Data:**\n{chr(10).join(rookie_list_for_prompt)}\n\n**Instructions:** Your response MUST be a single JSON object with one key: \"rookies\". The value must be a JSON array of objects. For each of the top 15 rookies, create an object with these keys: \"rank\", \"name\", \"position\", \"team\", \"ecr\" (string or \"N/A\"), \"sd\", \"best\", \"worst\", \"rank_delta\", and \"analysis\" (a 1-2 sentence summary of their outlook)."
         response_text = make_gemini_request(prompt, user_key)
-        cleaned_text = re.sub(r'^```json\s*|```\s*$', '', response_text.strip(), flags=re.MULTILINE)
-        return jsonify(json.loads(cleaned_text).get('rookies', []))
+        
+        # Use a more robust method to extract the JSON block
+        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+        if json_match:
+            cleaned_text = json_match.group(0)
+        else:
+            # Fallback to original cleaning if no curly braces found, though less reliable
+            cleaned_text = re.sub(r'^```json\s*|```\s*$', '', response_text.strip(), flags=re.MULTILINE)
+        
+        try:
+            return jsonify(json.loads(cleaned_text).get('rookies', []))
+        except json.JSONDecodeError as e:
+            error_message = f"Failed to parse AI response for rookies: {e}. Raw response might be malformed."
+            print(f"❌ JSON decoding error in rookie_rankings: {e}")
+            print(f"Raw response_text: {response_text}")
+            print(f"Cleaned_text attempting to parse: {cleaned_text}")
+            # Log the error for debugging
+            with open('ai_response.log', 'a') as f:
+                f.write(f"{datetime.now()} - JSON Decoding Error in rookie_rankings: {str(e)}\n")
+                f.write(f"Raw AI Response:\n{response_text}\n\n")
+                f.write(f"Cleaned Text Attempted to Parse:\n{cleaned_text}\n\n")
+            return jsonify({"error": error_message}), 500
     except Exception as e:
+        traceback.print_exc()
         return jsonify({"error": f"Failed to generate AI analysis for rookies: {e}"}), 500
 
 @app.route('/api/keeper_evaluation', methods=['POST'])
@@ -342,8 +453,9 @@ def keeper_evaluation():
     try:
         user_key = request.headers.get('X-API-Key')
         keepers = request.json.get('keepers')
-        context_str = "\n".join([f"{get_player_context(k['name'])}\n  - Keeper Cost: A round {int(k['round']) - 1} pick\n" + (f"  - Additional Context: {k['context']}\n" if k.get('context') else "") for k in keepers])
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Analyze these keepers. Compare Cost to ADP. Note bye week overlaps. Prioritize recommendations.\n\n**Data:**\n{context_str}\n\n{JSON_OUTPUT_INSTRUCTION}\n\n**Important:** Ensure your response is a valid JSON object with exactly two keys: 'confidence' (string: 'High', 'Medium', or 'Low') and 'analysis' (string or object). Do not include any text outside the JSON structure."
+        ecr_type_pref = request.json.get('ecr_type_preference', 'overall') # Default to overall
+        context_str = "\n".join([f"{get_player_context(k['name'], ecr_type_preference=ecr_type_pref)}\n  - Keeper Cost: A round {int(k['round']) - 1} pick\n" + (f"  - Additional Context: {k.get('context') or ''}\n") for k in keepers])
+        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Analyze these keepers. Compare Cost to ECR. Note bye week overlaps. Prioritize recommendations.\n\n**Data:**\n{context_str}\n\n{JSON_OUTPUT_INSTRUCTION}\n\n**Important:** Ensure your response is a valid JSON object with exactly two keys: 'confidence' (string: 'High', 'Medium', or 'Low') and 'analysis' (string or object). Do not include any text outside the JSON structure."
         response_text = make_gemini_request(prompt, user_key)
         return jsonify({'result': process_ai_response(response_text)})
     except Exception as e:
@@ -354,8 +466,9 @@ def trade_analyzer():
     try:
         user_key = request.headers.get('X-API-Key')
         scoring_format = request.json.get('scoring_format', 'PPR')
-        my_assets_context = "\n".join([get_player_context(name) if "pick" not in name.lower() else f"- {name}" for name in request.json.get('my_assets', [])])
-        partner_assets_context = "\n".join([get_player_context(name) if "pick" not in name.lower() else f"- {name}" for name in request.json.get('partner_assets', [])])
+        ecr_type_pref = request.json.get('ecr_type_preference', 'overall') # Default to overall
+        my_assets_context = "\n".join([get_player_context(name, ecr_type_preference=ecr_type_pref) if "pick" not in name.lower() else f"- {name}" for name in request.json.get('my_assets', [])])
+        partner_assets_context = "\n".join([get_player_context(name, ecr_type_preference=ecr_type_pref) if "pick" not in name.lower() else f"- {name}" for name in request.json.get('partner_assets', [])])
         prompt = f"{PROMPT_PREAMBLE.replace('PPR', scoring_format)}\n\n**Task:** Analyze this trade from the perspective of 'My Team'. Declare a winner or if it is fair. Justify your answer, consistently referring to the sides as 'My Team' and 'The Other Team'.\n\n**Assets My Team Receives:**\n{my_assets_context}\n\n**Assets The Other Team Receives:**\n{partner_assets_context}\n\n{JSON_OUTPUT_INSTRUCTION}"
         response_text = make_gemini_request(prompt, user_key)
         return jsonify({'result': process_ai_response(response_text)})
@@ -367,7 +480,24 @@ def generate_tiers():
     try:
         user_key = request.headers.get('X-API-Key')
         position = request.json.get('position')
-        player_list_str = "\n".join([f"- {name.title()} ({p_data['pos_rank']}, {player_data_cache.get(player_name_to_id.get(name), {}).get('team', 'N/A')}) - ADP: {p_data['adp']}" for name, p_data in sorted(static_adp_data.items(), key=lambda item: item[1]['adp']) if p_data.get('pos_rank', '').startswith(position)])
+        ecr_type_pref = request.json.get('ecr_type_preference', 'overall') # Default to overall
+
+        # Determine which static ECR data to use based on preference
+        if ecr_type_pref == 'overall':
+            ecr_source = static_ecr_overall_data
+        elif ecr_type_pref == 'positional':
+            ecr_source = static_ecr_positional_data
+        else:
+            ecr_source = static_ecr_overall_data # Fallback
+
+        # Filter ECR data for the specified position and sort by ECR
+        player_list_for_tiers = []
+        for name, p_data in sorted(ecr_source.items(), key=lambda item: item[1].get('ecr') if item[1].get('ecr') is not None else 999):
+            if p_data.get('pos') == position:
+                player_list_for_tiers.append(f"- {name.title()} ({p_data['pos']}, {player_data_cache.get(player_name_to_id.get(name), {}).get('team', 'N/A')}) - ECR: {p_data['ecr'] or 'N/A'}")
+        
+        player_list_str = "\n".join(player_list_for_tiers)
+        
         prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Group the following {position}s into Tiers. Your response MUST be a single JSON object with one key, 'tiers', whose value is a JSON array. Each object in the 'tiers' array should represent a tier and have the following keys: 'header' (string, e.g., 'Tier 1: Elite Quarterbacks'), 'summary' (string, a 1-sentence summary), and 'players' (JSON array of player names as strings).\n\n**Example Desired JSON Structure:**\n```json\n{{\n  \"tiers\": [\n    {{\n      \"header\": \"Tier 1: Elite Quarterbacks\",\n      \"summary\": \"These QBs are top-tier.\",\n      \"players\": [\"Player A\", \"Player B\"]\n    }},\n    {{\n      \"header\": \"Tier 2: High-Upside Quarterbacks\",\n      \"summary\": \"These QBs have potential.\",\n      \"players\": [\"Player C\", \"Player D\"]\n    }}\n  ]\n}}\n```\n\n**Player List for Tiers:**\n{player_list_str}"
         response_text = make_gemini_request(prompt, user_key)
         
@@ -400,12 +530,23 @@ def find_market_inefficiencies():
     try:
         user_key = request.headers.get('X-API-Key')
         position = request.json.get('position', 'all')
+        ecr_type_pref = request.json.get('ecr_type_preference', 'overall') # Default to overall
+        
+        # Determine which static ECR data to use based on preference
+        if ecr_type_pref == 'overall':
+            ecr_source = static_ecr_overall_data
+        elif ecr_type_pref == 'positional':
+            ecr_source = static_ecr_positional_data
+        else:
+            ecr_source = static_ecr_overall_data # Fallback
+
         candidates_str = ""
-        for name, adp_data in sorted(static_adp_data.items(), key=lambda item: item[1].get('adp') or 999):
-            if position != 'all' and not adp_data.get('pos_rank', '').startswith(position): continue
+        # Iterate through the chosen ECR data, sorted by ECR
+        for name, ecr_data in sorted(ecr_source.items(), key=lambda item: item[1].get('ecr') if item[1].get('ecr') is not None else 999):
+            if position != 'all' and not ecr_data.get('pos', '').startswith(position): continue
             if player_id := player_name_to_id.get(name):
                 sleeper_info = player_data_cache.get(player_id, {})
-                candidates_str += f"- {name.title()} ({adp_data.get('pos_rank', 'N/A')}, {sleeper_info.get('team', 'N/A')}): ADP={adp_data.get('adp')}, SleeperRank={sleeper_info.get('rank_ppr')}, Status={sleeper_info.get('status')}\n"
+                candidates_str += f"- {name.title()} ({ecr_data.get('pos', 'N/A')}, {sleeper_info.get('team', 'N/A')}): ECR={ecr_data.get('ecr') or 'N/A'}, SD={ecr_data.get('sd') or 'N/A'}, Best={ecr_data.get('best') or 'N/A'}, Worst={ecr_data.get('worst') or 'N/A'}, RankDelta={ecr_data.get('rank_delta') or 'N/A'}, Status={sleeper_info.get('status') or 'N/A'}\n"
                 if len(candidates_str.splitlines()) >= 150: break
         prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Find market inefficiencies. Your response MUST be a single JSON object with two keys: \"sleepers\" and \"busts\". Each key must contain a JSON array of 3-5 player objects. Each player object must have three keys: \"name\", \"justification\", and \"confidence\" (High, Medium, or Low).\n\n**Data:**\n{candidates_str}"
         response_text = make_gemini_request(prompt, user_key)
@@ -419,7 +560,8 @@ def suggest_position():
     try:
         user_key = request.headers.get('X-API-Key')
         data = request.json
-        draft_summary = "\n".join([f"{rnd}: Drafted {get_player_context(name)}" for rnd, name in data.get('draft_board', {}).items() if name]) if data.get('draft_board') else "No picks made yet."
+        ecr_type_pref = data.get('ecr_type_preference', 'overall') # Default to overall
+        draft_summary = "\n".join([f"{rnd}: Drafted {get_player_context(name, ecr_type_preference=ecr_type_pref)}" for rnd, name in data.get('draft_board', {}).items() if name]) if data.get('draft_board') else "No picks made yet."
         prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** It is Round {data.get('current_round')}. Based on my detailed roster below, what are the top 2 positions I should target? Justify.\n\n**My Draft So Far:**\n{draft_summary}"
         response_text = make_gemini_request(prompt, user_key)
         return jsonify({'result': response_text})
@@ -431,9 +573,10 @@ def pick_evaluator():
     try:
         user_key = request.headers.get('X-API-Key')
         data = request.json
-        draft_summary = "\n".join([f"{rnd}: Drafted {get_player_context(name)}" for rnd, name in data.get('draft_board', {}).items() if name]) if data.get('draft_board') else "This is my first pick."
-        player_context = get_player_context(data.get('player_to_pick'))
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Analyze if this is a good pick for me in Round {data.get('current_round')}. Compare ADP to the round and evaluate roster fit. Give a 'GOOD PICK', 'SOLID PICK,' or 'POOR PICK' verdict.\n\n**My Draft So Far:**\n{draft_summary}\n\n**Player Being Considered:**\n{player_context}\n\n{JSON_OUTPUT_INSTRUCTION}"
+        ecr_type_pref = data.get('ecr_type_preference', 'overall') # Default to overall
+        draft_summary = "\n".join([f"{rnd}: Drafted {get_player_context(name, ecr_type_preference=ecr_type_pref)}" for rnd, name in data.get('draft_board', {}).items() if name]) if data.get('draft_board') else "This is my first pick."
+        player_context = get_player_context(data.get('player_to_pick'), ecr_type_preference=ecr_type_pref)
+        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Analyze if this is a good pick for me in Round {data.get('current_round')}. Compare ECR to the round and evaluate roster fit. Give a 'GOOD PICK', 'SOLID PICK,' or 'POOR PICK' verdict.\n\n**My Draft So Far:**\n{draft_summary}\n\n**Player Being Considered:**\n{player_context}\n\n{JSON_OUTPUT_INSTRUCTION}"
         response_text = make_gemini_request(prompt, user_key)
         return jsonify({'result': process_ai_response(response_text)})
     except Exception as e:
@@ -507,7 +650,15 @@ def all_player_names_with_data():
         return jsonify({"error": "Combined player data cache not available."}), 500
     
     # Convert the dictionary of players into a list of players
-    player_list = list(combined_player_data_cache.values())
+    player_list = []
+    for player_data in combined_player_data_cache.values():
+        # Ensure all values are JSON-serializable (None for NaN)
+        cleaned_player_data = {k: (None if isinstance(v, float) and pd.isna(v) else v) for k, v in player_data.items()}
+        player_list.append(cleaned_player_data)
+    
+    # Debugging: Print a sample of the data being sent to the frontend
+    if player_list:
+        print(f"Sample of player_list sent to frontend (first entry):\n{player_list[0]}")
     
     return jsonify(player_list)
 
@@ -523,8 +674,19 @@ def trending_players():
                 player_details = player_data_cache.get(player_id)
                 if player_details and player_details.get('full_name'):
                     cleaned_name = player_details.get('full_name').lower().strip()
-                    static_info = static_adp_data.get(cleaned_name, {})
-                    detailed_list.append({'name': player_details.get('full_name'), 'team': player_details.get('team', 'N/A'), 'position': player_details.get('position', 'N/A'), 'adds': player.get('count', 0), 'pos_rank': static_info.get('pos_rank', 'N/A')})
+                    # Use overall ECR for trending players by default
+                    static_info = static_ecr_overall_data.get(cleaned_name, {}) 
+                    detailed_list.append({
+                        'name': player_details.get('full_name'),
+                        'team': player_details.get('team', 'N/A'),
+                        'position': player_details.get('position', 'N/A'),
+                        'adds': player.get('count', 0),
+                        'ecr': static_info.get('ecr'), 
+                        'sd': static_info.get('sd'),
+                        'best': static_info.get('best'),
+                        'worst': static_info.get('worst'),
+                        'rank_delta': static_info.get('rank_delta')
+                    })
         return jsonify(detailed_list)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -536,12 +698,13 @@ def waiver_swap_analysis():
         data = request.json
         roster = data.get('roster', {})
         player_to_add = data.get('player_to_add')
+        ecr_type_pref = data.get('ecr_type_preference', 'overall') # Default to overall
 
         if not roster or not player_to_add:
             return jsonify({"error": "Roster and player_to_add are required."}), 400
 
-        roster_context = "\n".join([f"({pos}) {get_player_context(name)}" for pos, name in roster.items() if name])
-        waiver_player_context = get_player_context(player_to_add)
+        roster_context = "\n".join([f"({pos}) {get_player_context(name, ecr_type_preference=ecr_type_pref)}" for pos, name in roster.items() if name])
+        waiver_player_context = get_player_context(player_to_add, ecr_type_preference=ecr_type_pref)
 
         prompt = f"""
 {PROMPT_PREAMBLE}
@@ -574,29 +737,38 @@ def waiver_wire_analysis():
     try:
         user_key = request.headers.get('X-API-Key')
         team_roster = request.json.get('team_roster', []) # List of player names on user's team
+        ecr_type_pref = request.json.get('ecr_type_preference', 'overall') # Default to overall
         
-        # Get available players (e.g., from Sleeper API or a combined data source)
-        # For now, let's consider all players not on the user's roster as available
+        # Determine which static ECR data to use for available players
+        if ecr_type_pref == 'overall':
+            ecr_source = static_ecr_overall_data
+        elif ecr_type_pref == 'positional':
+            ecr_source = static_ecr_positional_data
+        else:
+            ecr_source = static_ecr_overall_data # Fallback
+
         all_players_data = []
-        for name, data in static_adp_data.items():
+        for name, data in ecr_source.items(): 
             player_info = player_data_cache.get(player_name_to_id.get(name, ''), {})
             if player_info.get('full_name') and player_info.get('full_name').lower().strip() not in [p.lower().strip() for p in team_roster]:
                 all_players_data.append({
                     'name': player_info.get('full_name'),
-                    'pos_rank': data.get('pos_rank', 'N/A'),
-                    'adp': data.get('adp'),
-                    'bye_week': player_info.get('bye_week', 'N/A'),
-                    'team': player_info.get('team', 'N/A'),
-                    'position': player_info.get('position', 'N/A'),
-                    'weekly_rank': weekly_data_cache.get(player_info.get('full_name', '').lower().strip(), {}).get('overall_rank', 'N/A')
+                    'pos': data.get('pos', 'N/A'), 
+                    'ecr': data.get('ecr'), 
+                    'sd': data.get('sd'),
+                    'best': data.get('best'),
+                    'worst': data.get('worst'),
+                    'rank_delta': data.get('rank_delta'),
+                    'bye_week': data.get('bye'), 
+                    'team': data.get('team', 'N/A'), 
                 })
         
-        # Sort available players by weekly rank or ADP for the prompt
-        sorted_available_players = sorted(all_players_data, key=lambda x: x.get('weekly_rank') if isinstance(x.get('weekly_rank'), (int, float)) else (x.get('adp') if isinstance(x.get('adp'), (int, float)) else 999))[:50] # Top 50 available
+        # Sort available players by ECR
+        sorted_available_players = sorted(all_players_data, key=lambda x: x.get('ecr') if x.get('ecr') is not None else 999)[:50] # Top 50 available
 
-        roster_context = "\n".join([get_player_context(player_name) for player_name in team_roster])
+        roster_context = "\n".join([get_player_context(player_name, ecr_type_preference=ecr_type_pref) for player_name in team_roster])
         available_players_context = "\n".join([
-            f"- {p['name']} ({p['position']}, {p['team']}) - Weekly Rank: {p['weekly_rank']}, ADP: {p['adp']}"
+            f"- {p['name']} ({p['pos']}, {p['team']}) - ECR: {p['ecr'] or 'N/A'}, SD: {p['sd'] or 'N/A'}, Best: {p['best'] or 'N/A'}, Worst: {p['worst'] or 'N/A'}, RankDelta: {p['rank_delta'] or 'N/A'}"
             for p in sorted_available_players
         ])
 
@@ -636,26 +808,27 @@ if __name__ == '__main__':
         scheduler.add_job(func=import_data, trigger="interval", hours=24)
         scheduler.start()
 
-        # No longer need to load API key globally here
         get_all_players()
         csv_file_path = os.path.join(basedir, 'db_fpecr_latest.csv')
-        static_adp_data = load_adp_from_csv(csv_file_path)
+        
+        # Load different ECR types into their respective caches
+        static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data = load_ecr_data_from_csv(csv_file_path)
+        
         player_values_cache = load_values_from_csv(os.path.join(basedir, 'values-players.csv'))
         pick_values_cache = load_values_from_csv(os.path.join(basedir, 'values-picks.csv'))
-        weekly_data_cache = load_weekly_data_from_csv(os.path.join(basedir, 'fp_latest_weekly.csv'))
 
         # Create the combined player data cache at startup
         create_combined_player_data_cache()
 
         print(f"Player data cache size: {len(player_data_cache) if player_data_cache else 0}")
-        print(f"Static ADP data size: {len(static_adp_data) if static_adp_data else 0}")
-        print(f"Weekly data cache size: {len(weekly_data_cache) if weekly_data_cache else 0}")
+        print(f"Static Overall ECR data size: {len(static_ecr_overall_data) if static_ecr_overall_data else 0}")
+        print(f"Static Positional ECR data size: {len(static_ecr_positional_data) if static_ecr_positional_data else 0}")
+        print(f"Static Rookie ECR data size: {len(static_ecr_rookie_data) if static_ecr_rookie_data else 0}")
 
-        if static_adp_data and player_data_cache is not None and weekly_data_cache is not None:
+        if static_ecr_overall_data and player_data_cache is not None: # Check if at least overall ECR is loaded
             app.run(debug=True, host='0.0.0.0', port=5001) # Bind to 0.0.0.0 for Render deployment
         else:
             print("Application will not start because essential data failed to load.")
-            # Optionally, raise an exception or exit if data is critical
             # sys.exit(1) # Uncomment to force exit if data loading fails
     except Exception as e:
         print(f"❌ FATAL ERROR during application startup: {e}")
