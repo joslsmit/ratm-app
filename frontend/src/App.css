@@ -1029,6 +1029,8 @@ section {
     max-height: 200px !important;
     overflow-y: auto !important;
     z-index: 100 !important;
+    list-style-type: none !important; /* Remove bullet points */
+    padding: 0 !important; /* Remove default padding */
 }
 
 .autoComplete_wrapper > ul > li {
