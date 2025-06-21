@@ -213,10 +213,38 @@ def create_combined_player_data_cache():
             except (ValueError, TypeError):
                 bye_week_val = None # Set to None if conversion fails
 
-        def clean_numeric_value(value):
-            if isinstance(value, float) and pd.isna(value):
-                return None
-            return value
+def clean_numeric_value(value):
+    if isinstance(value, float) and pd.isna(value):
+        return None
+    return value
+
+def create_combined_player_data_cache():
+    global combined_player_data_cache, static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data
+    if not static_ecr_overall_data and not static_ecr_positional_data and not static_ecr_rookie_data:
+        print("❌ Cannot create combined player data cache: No ECR data is loaded.")
+        return
+
+    temp_combined_data = {}
+    
+    # Combine data from all ECR sources, prioritizing overall for base ECR if multiple exist
+    all_ecr_keys = set(static_ecr_overall_data.keys()) | set(static_ecr_positional_data.keys()) | set(static_ecr_rookie_data.keys())
+
+    for name_key in all_ecr_keys:
+        overall_data = static_ecr_overall_data.get(name_key, {})
+        positional_data = static_ecr_positional_data.get(name_key, {})
+        rookie_data = static_ecr_rookie_data.get(name_key, {})
+
+        # Prioritize overall ECR for the main 'ecr' field, but include both
+        # Use overall_data for general player info if available, otherwise positional or rookie
+        primary_data_source = overall_data or positional_data or rookie_data
+
+        # Ensure bye_week is an integer or None
+        bye_week_val = primary_data_source.get('bye')
+        if bye_week_val is not None:
+            try:
+                bye_week_val = int(bye_week_val)
+            except (ValueError, TypeError):
+                bye_week_val = None # Set to None if conversion fails
 
         # Get Sleeper data for years_exp
         sleeper_player_id = player_name_to_id.get(name_key)
@@ -756,14 +784,19 @@ def all_player_names_with_data():
 def trending_players():
     try:
         url = "https://api.sleeper.app/v1/players/nfl/trending/add?lookback_hours=48&limit=25"
+        print(f"DEBUG: Fetching trending players from: {url}")
         response = requests.get(url, timeout=10)
         response.raise_for_status()
+        
+        sleeper_trending_data = response.json()
+        print(f"DEBUG: Received {len(sleeper_trending_data)} trending players from Sleeper API.")
+        
         detailed_list = []
-        for player in response.json():
+        for player in sleeper_trending_data:
             if player_id := player.get('player_id'):
                 player_details = player_data_cache.get(player_id)
                 if player_details and player_details.get('full_name'):
-                    cleaned_name = player_details.get('full_name').lower().strip()
+                    cleaned_name = normalize_player_name(player_details.get('full_name')) # Use normalize_player_name
                     # Use overall ECR for trending players by default
                     static_info = static_ecr_overall_data.get(cleaned_name, {}) 
                     detailed_list.append({
@@ -771,14 +804,21 @@ def trending_players():
                         'team': player_details.get('team', 'N/A'),
                         'position': player_details.get('position', 'N/A'),
                         'adds': player.get('count', 0),
-                        'ecr': static_info.get('ecr'), 
-                        'sd': static_info.get('sd'),
-                        'best': static_info.get('best'),
-                        'worst': static_info.get('worst'),
-                        'rank_delta': static_info.get('rank_delta')
+                        'ecr': clean_numeric_value(static_info.get('ecr')), 
+                        'sd': clean_numeric_value(static_info.get('sd')),
+                        'best': clean_numeric_value(static_info.get('best')),
+                        'worst': clean_numeric_value(static_info.get('worst')),
+                        'rank_delta': clean_numeric_value(static_info.get('rank_delta'))
                     })
+        print(f"DEBUG: Returning {len(detailed_list)} detailed trending players.")
         return jsonify(detailed_list)
+    except requests.exceptions.RequestException as req_e:
+        print(f"ERROR: Request to Sleeper API failed: {req_e}")
+        traceback.print_exc()
+        return jsonify({"error": f"Failed to fetch trending data from Sleeper API: {req_e}"}), 500
     except Exception as e:
+        print(f"ERROR: An unexpected error occurred in trending_players: {e}")
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/waiver_swap_analysis', methods=['POST'])
