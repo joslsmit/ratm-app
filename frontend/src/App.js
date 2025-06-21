@@ -140,7 +140,7 @@ function App() {
       return 'N/A';
     }
     const round = Math.ceil(ecrValue / 12);
-    return `Round ${round}`;
+    return `Rnd ${round}`;
   }, []);
 
   /**
@@ -1032,7 +1032,10 @@ function App() {
                           <div className="player-details-grid">
                             <span>Pos: {player.position || 'N/A'}</span>
                             <span>Team: {player.team || 'N/A'}</span>
-                            <span>ECR: {typeof player.ecr === 'number' ? player.ecr.toFixed(1) : 'N/A'}</span>
+                            <span>
+                              ECR: {typeof player.ecr === 'number' ? player.ecr.toFixed(1) : 'N/A'}
+                              {typeof player.ecr === 'number' && ` (${getEstimatedDraftRound(player.ecr)})`}
+                            </span>
                             <span title={`Standard Deviation: ${typeof player.sd === 'number' ? player.sd.toFixed(2) : 'N/A'}`}>
                               SD: {getPositionalSdLabel(player.sd).icon} {getPositionalSdLabel(player.sd).label}
                             </span>

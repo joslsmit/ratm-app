@@ -584,11 +584,11 @@ def generate_tiers():
                     'name': combined_info.get('display_name', name.title()),
                     'position': p_data['pos'],
                     'team': combined_info.get('team', 'N/A'),
-                    'ecr': p_data.get('ecr'),
-                    'sd': p_data.get('sd'),
-                    'best': p_data.get('best'),
-                    'worst': p_data.get('worst'),
-                    'rank_delta': p_data.get('rank_delta')
+                    'ecr': clean_numeric_value(p_data.get('ecr')),
+                    'sd': clean_numeric_value(p_data.get('sd')),
+                    'best': clean_numeric_value(p_data.get('best')),
+                    'worst': clean_numeric_value(p_data.get('worst')),
+                    'rank_delta': clean_numeric_value(p_data.get('rank_delta'))
                 })
         
         # Convert the list of dictionaries to a JSON string for the prompt
