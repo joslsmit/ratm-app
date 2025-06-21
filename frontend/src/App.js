@@ -119,6 +119,19 @@ function App() {
   }, []);
 
   /**
+   * Calculates the estimated draft round for a given ECR in a 12-team league.
+   * @param {number} ecrValue - The Expert Consensus Ranking value.
+   * @returns {string} - The estimated draft round (e.g., "Round 1") or "N/A".
+   */
+  const getEstimatedDraftRound = useCallback((ecrValue) => {
+    if (typeof ecrValue !== 'number' || isNaN(ecrValue) || ecrValue <= 0) {
+      return 'N/A';
+    }
+    const round = Math.ceil(ecrValue / 12);
+    return `Round ${round}`;
+  }, []);
+
+  /**
    * Saves the user's API key to state and local storage.
    * @param {string} key - The Google Gemini API key.
    */
@@ -918,7 +931,7 @@ function App() {
                     <div className="ecr-grid">
                       <div className="ecr-column">
                         <h4>Overall ECR</h4>
-                        <span>ECR: {dossierResult.player_data.ecr_overall ? dossierResult.player_data.ecr_overall.toFixed(1) : 'N/A'}</span>
+                        <span>ECR: {dossierResult.player_data.ecr_overall ? `${dossierResult.player_data.ecr_overall.toFixed(1)} (${getEstimatedDraftRound(dossierResult.player_data.ecr_overall)})` : 'N/A'}</span>
                         <span title={`Standard Deviation: ${typeof dossierResult.player_data.sd_overall === 'number' ? dossierResult.player_data.sd_overall.toFixed(2) : 'N/A'}`}>
                           SD: {getOverallSdLabel(dossierResult.player_data.sd_overall).icon} {getOverallSdLabel(dossierResult.player_data.sd_overall).label}
                         </span>
