@@ -31,7 +31,7 @@ function App() {
 
   // State for results that are simple markdown/HTML
   const [dossierResult, setDossierResult] = useState(null);
-  const [tiersResult, setTiersResult] = useState('');
+  const [tiersResult, setTiersResult] = useState([]);
   const [keeperResult, setKeeperResult] = useState('');
   const [tradeResult, setTradeResult] = '';
   const [draftAnalysisResult, setDraftAnalysisResult] = '';
@@ -322,10 +322,28 @@ function App() {
     }, 100); // A small delay (e.g., 100ms)
   }, [generateDossier]);
 
-  const generateTiers = useCallback(() => {
+  const generateTiers = useCallback(async () => {
     const position = document.getElementById('tiers-pos')?.value;
-    renderGeneric('tiers', '/generate_tiers', { position }, setTiersResult);
-  }, [renderGeneric]);
+    if (!position) { alert('Please select a position.'); return; }
+
+    const loader = document.getElementById('tiers-loader');
+    if (loader) loader.style.display = 'block';
+    setTiersResult([]); // Clear previous results
+
+    try {
+      const data = await makeApiRequest('/generate_tiers', { position });
+      if (data && data.result && Array.isArray(data.result)) {
+        setTiersResult(data.result);
+      } else {
+        setTiersResult([]); // Set to empty array if no valid data
+      }
+    } catch (error) {
+      console.error("Error generating tiers:", error);
+      setTiersResult([]); // Set to empty array on error
+    } finally {
+      if (loader) loader.style.display = 'none';
+    }
+  }, [makeApiRequest]);
 
   // Autocomplete for Global Search
   useEffect(() => {
@@ -973,7 +991,37 @@ function App() {
               <div className="tool-header"><h2>Positional Tiers</h2><p>Generate tier-based rankings to understand value drop-offs.</p></div>
               <div className="card"><div className="form-group-inline"><select id="tiers-pos"><option value="QB">QB</option><option value="RB">RB</option><option value="WR">WR</option><option value="TE">TE</option></select><button onClick={generateTiers}>Generate Tiers</button></div></div>
               <div id="tiers-loader" className="loader" style={{ display: 'none' }}></div>
-              <div id="tiers-result" className="result-box" dangerouslySetInnerHTML={{ __html: converter.makeHtml(tiersResult) }}></div>
+              <div className="tiers-output">
+                {tiersResult.length > 0 ? tiersResult.map((tier, tierIndex) => (
+                  <div key={tierIndex} className="tier-card card">
+                    <h3>{tier.header}</h3>
+                    <p className="tier-summary">{tier.summary}</p>
+                    <div className="tier-players">
+                      {tier.players.map((player, playerIndex) => (
+                        <div key={playerIndex} className="tier-player-item">
+                          <div className="player-name-link">
+                            <a href={`/?tool=dossier&player=${encodeURIComponent(player.name)}`} target="_blank" rel="noopener noreferrer" className="player-link">{player.name}</a>
+                            <button className="add-target-btn-small" title="Add to Target List" onClick={() => handleAddToTargets(player.name)}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                            </button>
+                          </div>
+                          <div className="player-details-grid">
+                            <span>Pos: {player.position || 'N/A'}</span>
+                            <span>Team: {player.team || 'N/A'}</span>
+                            <span>ECR: {typeof player.ecr === 'number' ? player.ecr.toFixed(1) : 'N/A'}</span>
+                            <span title={`Standard Deviation: ${typeof player.sd === 'number' ? player.sd.toFixed(2) : 'N/A'}`}>
+                              SD: {getPositionalSdLabel(player.sd).icon} {getPositionalSdLabel(player.sd).label}
+                            </span>
+                            <span>Best: {player.best || 'N/A'}</span>
+                            <span>Worst: {player.worst || 'N/A'}</span>
+                            <span>Rank Delta: {typeof player.rank_delta === 'number' ? player.rank_delta.toFixed(1) : 'N/A'}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )) : <p className="result-box">No tiers to display. Generate tiers for a position.</p>}
+              </div>
             </section>
           )}
 
@@ -1041,6 +1089,16 @@ function App() {
                                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
                                     </button>
                                   </div>
+                                  <div className="player-details-grid">
+                                    <span>ECR: {typeof player.ecr === 'number' ? player.ecr.toFixed(1) : 'N/A'}</span>
+                                    <span title={`Standard Deviation: ${typeof player.sd === 'number' ? player.sd.toFixed(2) : 'N/A'}`}>
+                                      SD: {getOverallSdLabel(player.sd).icon} {getOverallSdLabel(player.sd).label}
+                                    </span>
+                                    <span>Best: {player.best || 'N/A'}</span>
+                                    <span>Worst: {player.worst || 'N/A'}</span>
+                                    <span>Rank Delta: {typeof player.rank_delta === 'number' ? player.rank_delta.toFixed(1) : 'N/A'}</span>
+                                    <span>Rookie: {player.is_rookie ? 'Yes' : 'No'}</span>
+                                  </div>
                                   <p>{player.justification}</p>
                               </div>
                           )) : <p>No sleepers found.</p>}
@@ -1055,6 +1113,16 @@ function App() {
                                     <button className="add-target-btn-small" title="Add to Target List" onClick={() => handleAddToTargets(player.name)}>
                                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
                                     </button>
+                                  </div>
+                                  <div className="player-details-grid">
+                                    <span>ECR: {typeof player.ecr === 'number' ? player.ecr.toFixed(1) : 'N/A'}</span>
+                                    <span title={`Standard Deviation: ${typeof player.sd === 'number' ? player.sd.toFixed(2) : 'N/A'}`}>
+                                      SD: {getOverallSdLabel(player.sd).icon} {getOverallSdLabel(player.sd).label}
+                                    </span>
+                                    <span>Best: {player.best || 'N/A'}</span>
+                                    <span>Worst: {player.worst || 'N/A'}</span>
+                                    <span>Rank Delta: {typeof player.rank_delta === 'number' ? player.rank_delta.toFixed(1) : 'N/A'}</span>
+                                    <span>Rookie: {player.is_rookie ? 'Yes' : 'No'}</span>
                                   </div>
                                   <p>{player.justification}</p>
                               </div>

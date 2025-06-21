@@ -249,6 +249,7 @@ def create_combined_player_data_cache():
             'best_rookie': clean_numeric_value(rookie_data.get('best')),
             'worst_rookie': clean_numeric_value(rookie_data.get('worst')),
             'rank_delta_rookie': clean_numeric_value(rookie_data.get('rank_delta')),
+            'is_rookie': name_key in static_ecr_rookie_data # New field: True if player is in rookie ECR data
         }
     
     combined_player_data_cache = temp_combined_data
@@ -283,6 +284,10 @@ def get_player_context(player_name, ecr_type_preference='overall'):
         context_lines.append(f"  - Experience: {int(years_exp)} years")
     else:
         context_lines.append(f"  - Experience: N/A years") # Indicate if data is missing
+
+    # Add is_rookie status
+    is_rookie_status = "Yes" if player_data.get('is_rookie') else "No"
+    context_lines.append(f"  - Is Rookie: {is_rookie_status}")
 
     # Use the appropriate ECR and related stats based on preference
     ecr_label = f"{ecr_type_preference.title()} ECR"
@@ -435,12 +440,13 @@ def rookie_rankings():
         # Filter combined_player_data_cache for rookies based on years_exp
         rookies_for_ranking = []
         for name_key, player_data in combined_player_data_cache.items():
-            # A player is considered a rookie if years_exp is 0 or 1 (for redshirt/draft year)
+            # A player is considered a rookie if years_exp is 0 (true rookie)
             # and they are present in the static_ecr_rookie_data (drk)
-            is_rookie_by_exp = player_data.get('years_exp') is not None and (player_data['years_exp'] == 0 or player_data['years_exp'] == 1)
+            is_rookie_by_exp = player_data.get('years_exp') is not None and (player_data['years_exp'] == 0)
             is_in_rookie_ecr = name_key in static_ecr_rookie_data # Check if they are in the DRK ECR
 
-            if is_rookie_by_exp and is_in_rookie_ecr:
+            # Only include players if they are explicitly in the rookie ECR data AND have 0 years experience
+            if is_in_rookie_ecr and is_rookie_by_exp:
                 if position_filter == 'all' or player_data.get('position') == position_filter:
                     rookies_for_ranking.append({
                         'name': player_data.get('display_name', player_data.get('name')), # Prefer display_name
@@ -532,31 +538,30 @@ def generate_tiers():
         player_list_for_tiers = []
         for name, p_data in sorted(ecr_source.items(), key=lambda item: item[1].get('ecr') if item[1].get('ecr') is not None else 999):
             if p_data.get('pos') == position:
-                player_list_for_tiers.append(f"- {name.title()} ({p_data['pos']}, {player_data_cache.get(player_name_to_id.get(name), {}).get('team', 'N/A')}) - ECR: {p_data['ecr'] or 'N/A'}")
+                # Get team from combined_player_data_cache for consistency
+                combined_info = combined_player_data_cache.get(normalize_player_name(name), {})
+                player_list_for_tiers.append({
+                    'name': combined_info.get('display_name', name.title()),
+                    'position': p_data['pos'],
+                    'team': combined_info.get('team', 'N/A'),
+                    'ecr': p_data.get('ecr'),
+                    'sd': p_data.get('sd'),
+                    'best': p_data.get('best'),
+                    'worst': p_data.get('worst'),
+                    'rank_delta': p_data.get('rank_delta')
+                })
         
-        player_list_str = "\n".join(player_list_for_tiers)
+        # Convert the list of dictionaries to a JSON string for the prompt
+        player_list_str = json.dumps(player_list_for_tiers, indent=2)
         
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Group the following {position}s into Tiers. Your response MUST be a single JSON object with one key, 'tiers', whose value is a JSON array. Each object in the 'tiers' array should represent a tier and have the following keys: 'header' (string, e.g., 'Tier 1: Elite Quarterbacks'), 'summary' (string, a 1-sentence summary), and 'players' (JSON array of player names as strings).\n\n**Example Desired JSON Structure:**\n```json\n{{\n  \"tiers\": [\n    {{\n      \"header\": \"Tier 1: Elite Quarterbacks\",\n      \"summary\": \"These QBs are top-tier.\",\n      \"players\": [\"Player A\", \"Player B\"]\n    }},\n    {{\n      \"header\": \"Tier 2: High-Upside Quarterbacks\",\n      \"summary\": \"These QBs have potential.\",\n      \"players\": [\"Player C\", \"Player D\"]\n    }}\n  ]\n}}\n```\n\n**Player List for Tiers:**\n{player_list_str}"
+        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Group the following {position}s into Tiers. Your response MUST be a single JSON object with one key, 'tiers', whose value is a JSON array. Each object in the 'tiers' array should represent a tier and have the following keys: 'header' (string, e.g., 'Tier 1: Elite Quarterbacks'), 'summary' (string, a 1-sentence summary), and 'players' (JSON array of player objects. Each player object MUST have 'name', 'position', 'team', 'ecr', 'sd', 'best', 'worst', 'rank_delta' keys).\n\n**Example Desired JSON Structure:**\n```json\n{{\n  \"tiers\": [\n    {{\n      \"header\": \"Tier 1: Elite Quarterbacks\",\n      \"summary\": \"These QBs are top-tier.\",\n      \"players\": [\n        {{\"name\": \"Player A\", \"position\": \"QB\", \"team\": \"BUF\", \"ecr\": 1.0, \"sd\": 1.5, \"best\": 1, \"worst\": 3, \"rank_delta\": 0.2}},\n        {{\"name\": \"Player B\", \"position\": \"QB\", \"team\": \"KC\", \"ecr\": 2.0, \"sd\": 1.2, \"best\": 1, \"worst\": 4, \"rank_delta\": -0.1}}\n      ]\n    }}\n  ]\n}}\n```\n\n**Player List for Tiers (JSON Array):**\n{player_list_str}"
         response_text = make_gemini_request(prompt, user_key)
         
         try:
             cleaned_text = re.sub(r'^```json\s*|```\s*$', '', response_text.strip(), flags=re.MULTILINE)
             data = json.loads(cleaned_text)
             tiers_data = data.get('tiers', [])
-            
-            markdown_output = []
-            for tier in tiers_data:
-                header = tier.get('header', 'Untitled Tier')
-                summary = tier.get('summary', 'No summary provided.')
-                players = tier.get('players', [])
-                
-                markdown_output.append(f"## {header}")
-                markdown_output.append(f"{summary}")
-                for player in players:
-                    markdown_output.append(f"* {player}")
-                markdown_output.append("") # Add a blank line between tiers
-            
-            return jsonify({'result': "\n".join(markdown_output).strip()})
+            return jsonify({'result': tiers_data})
         except (json.JSONDecodeError, AttributeError) as e:
             print(f"Error processing AI response for tiers: {e}")
             return jsonify({'error': f"Failed to parse AI response for tiers: {e}"}), 500
@@ -578,15 +583,52 @@ def find_market_inefficiencies():
         else:
             ecr_source = static_ecr_overall_data # Fallback
 
-        candidates_str = ""
+        candidates_list = [] # Change to a list of dictionaries to build the data
         # Iterate through the chosen ECR data, sorted by ECR
         for name, ecr_data in sorted(ecr_source.items(), key=lambda item: item[1].get('ecr') if item[1].get('ecr') is not None else 999):
             if position != 'all' and not ecr_data.get('pos', '').startswith(position): continue
-            if player_id := player_name_to_id.get(name):
-                sleeper_info = player_data_cache.get(player_id, {})
-                candidates_str += f"- {name.title()} ({ecr_data.get('pos', 'N/A')}, {sleeper_info.get('team', 'N/A')}): ECR={ecr_data.get('ecr') or 'N/A'}, SD={ecr_data.get('sd') or 'N/A'}, Best={ecr_data.get('best') or 'N/A'}, Worst={ecr_data.get('worst') or 'N/A'}, RankDelta={ecr_data.get('rank_delta') or 'N/A'}, Status={sleeper_info.get('status') or 'N/A'}\n"
-                if len(candidates_str.splitlines()) >= 150: break
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Find market inefficiencies. Your response MUST be a single JSON object with two keys: \"sleepers\" and \"busts\". Each key must contain a JSON array of 3-5 player objects. Each player object must have three keys: \"name\", \"justification\", and \"confidence\" (High, Medium, or Low).\n\n**Data:**\n{candidates_str}"
+            
+            # Initialize sleeper_info to an empty dictionary at the start of each iteration
+            sleeper_info = {}
+            
+            # Use combined_player_data_cache to get all relevant ECR data
+            combined_info = combined_player_data_cache.get(normalize_player_name(name), {})
+            
+            # Get sleeper_info if player_id exists
+            sleeper_id = player_name_to_id.get(normalize_player_name(name))
+            if sleeper_id:
+                sleeper_info = player_data_cache.get(sleeper_id, {})
+
+            # Construct a dictionary for each player
+            player_context_data = {
+                'name': combined_info.get('display_name', name.title()),
+                'position': combined_info.get('position', 'N/A'),
+                'team': combined_info.get('team', 'N/A'),
+                'ecr': combined_info.get(f'ecr_{ecr_type_pref}'),
+                'sd': combined_info.get(f'sd_{ecr_type_pref}'),
+                'best': combined_info.get(f'best_{ecr_type_pref}'),
+                'worst': combined_info.get(f'worst_{ecr_type_pref}'),
+                'rank_delta': combined_info.get(f'rank_delta_{ecr_type_pref}'),
+                'status': sleeper_info.get('status', 'N/A')
+            }
+            
+            # Convert numeric values to appropriate types or None
+            for key in ['ecr', 'sd', 'best', 'worst', 'rank_delta']:
+                if isinstance(player_context_data[key], (float, int)):
+                    pass # Keep as is
+                else:
+                    player_context_data[key] = None # Set to None if not numeric
+
+            candidates_list.append(player_context_data)
+            if len(candidates_list) >= 150: break
+        
+        # Convert the list of dictionaries to a formatted string for the prompt
+        candidates_str = "\n".join([
+            f"- {p['name']} ({p['position']}, {p['team']}): ECR={p['ecr'] or 'N/A'}, SD={p['sd'] or 'N/A'}, Best={p['best'] or 'N/A'}, Worst={p['worst'] or 'N/A'}, RankDelta={p['rank_delta'] or 'N/A'}, Is Rookie: {'Yes' if combined_player_data_cache.get(normalize_player_name(p['name']), {}).get('is_rookie') else 'No'}, Status={p['status'] or 'N/A'}"
+            for p in candidates_list
+        ])
+
+        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Find market inefficiencies. Your response MUST be a single JSON object with two keys: \"sleepers\" and \"busts\". Each key must contain a JSON array of 3-5 player objects. Each player object MUST have the following keys: \"name\" (string), \"justification\" (string), \"confidence\" (string: 'High', 'Medium', or 'Low'), \"ecr\" (float or null), \"sd\" (float or null), \"best\" (integer or null), \"worst\" (integer or null), \"rank_delta\" (float or null), and \"is_rookie\" (boolean). For any numeric field where data is not available, use `null`. For the \"is_rookie\" field, use `true` or `false`.\n\n**Data:**\n{candidates_str}"
         response_text = make_gemini_request(prompt, user_key)
         cleaned_text = re.sub(r'^```json\s*|```\s*$', '', response_text.strip(), flags=re.MULTILINE)
         return jsonify(json.loads(cleaned_text))

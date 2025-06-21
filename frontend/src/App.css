@@ -786,6 +786,10 @@ section {
 .confidence-badge.medium { background-color: var(--confidence-medium); }
 .confidence-badge.high { background-color: var(--confidence-high); }
 
+.analysis-card .player-details-grid {
+    margin-bottom: 10px;
+}
+
 .analysis-card p {
     font-size: 0.9em;
     color: var(--text-muted);
@@ -1225,6 +1229,80 @@ section {
 
     .draft-board {
         grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    }
+}
+
+/* Positional Tiers Specific */
+.tiers-output {
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.tier-card {
+    background-color: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+}
+
+.tier-card h3 {
+    color: var(--primary-color);
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.5em;
+    text-align: center;
+}
+
+.tier-summary {
+    font-style: italic;
+    color: var(--text-muted);
+    margin-bottom: 15px;
+    text-align: center;
+    font-size: 0.95em;
+}
+
+.tier-players {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.tier-player-item {
+    background-color: var(--input-background);
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    padding: 15px;
+}
+
+.player-name-link {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+    font-weight: bold;
+}
+
+.player-details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Two columns for details */
+    gap: 8px 15px;
+    font-size: 0.9em;
+    color: var(--text-muted);
+}
+
+.player-details-grid span strong {
+    color: var(--text-color);
+}
+
+@media (max-width: 768px) {
+    .tiers-output {
+        grid-template-columns: 1fr;
     }
 }
 
