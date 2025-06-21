@@ -364,6 +364,17 @@ def process_ai_response(response_text):
         raw_confidence = data.get('confidence', 'Medium')
         analysis_content = data.get('analysis', 'No analysis provided.')
 
+        # Attempt to parse analysis_content if it's a string that looks like JSON
+        if isinstance(analysis_content, str):
+            try:
+                # Try to load it as JSON. If successful, it's a dict.
+                parsed_analysis = json.loads(analysis_content)
+                if isinstance(parsed_analysis, dict):
+                    analysis_content = parsed_analysis
+            except json.JSONDecodeError:
+                # If it's not a valid JSON string, keep it as is (string)
+                pass
+
         if isinstance(raw_confidence, float):
             if raw_confidence >= 0.8:
                 confidence = "High"
@@ -380,10 +391,11 @@ def process_ai_response(response_text):
             formatted_analysis = []
             for key, value in analysis_content.items():
                 display_key = key.replace('_', ' ').title()
-                formatted_analysis.append(f"**{display_key}:** {value.strip()}") # Strip whitespace from value
-            analysis_text = "\n".join(formatted_analysis) # Use single newline
+                # Ensure value is a string before stripping
+                formatted_analysis.append(f"**{display_key}:** {str(value).strip()}")
+            analysis_text = "\n".join(formatted_analysis)
         else:
-            analysis_text = analysis_content.strip() # Strip whitespace from overall content
+            analysis_text = str(analysis_content).strip() # Ensure content is a string before stripping
 
         # Further clean up multiple newlines
         analysis_text = re.sub(r'\n\s*\n', '\n\n', analysis_text) # Replace multiple newlines with just two
@@ -526,8 +538,8 @@ def keeper_evaluation():
         user_key = request.headers.get('X-API-Key')
         keepers = request.json.get('keepers')
         ecr_type_pref = request.json.get('ecr_type_preference', 'overall') # Default to overall
-        context_str = "\n".join([f"{get_player_context(k['name'], ecr_type_preference=ecr_type_pref)}\n  - Keeper Cost: A round {int(k['round']) - 1} pick\n" + (f"  - Additional Context: {k.get('context') or ''}\n") for k in keepers])
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Analyze these keepers. Compare Cost to ECR. Note bye week overlaps. Prioritize recommendations.\n\n**Data:**\n{context_str}\n\n{JSON_OUTPUT_INSTRUCTION}\n\n**Important:** Ensure your response is a valid JSON object with exactly two keys: 'confidence' (string: 'High', 'Medium', or 'Low') and 'analysis' (string or object). Do not include any text outside the JSON structure."
+        context_str = "\n".join([f"{get_player_context(k['name'], ecr_type_preference=ecr_type_pref)}\n  - Keeper Cost: A round {int(k['round']) - 1} pick (equivalent to pick {(int(k['round']) - 1) * 12 + 1} in a 12-team league)\n" + (f"  - Additional Context: {k.get('context') or ''}\n") for k in keepers])
+        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Analyze these keepers. For each player, compare their Overall ECR (which is their overall rank, where a *lower number is better*) to their keeper cost (draft round/pick). A player is **good value** if their ECR number is significantly *lower* (meaning a better rank) than the pick number of their keeper cost. A player is **poor value** if their ECR number is *higher* (meaning a worse rank) than the pick number of their keeper cost. Note bye week overlaps. Prioritize recommendations. Your analysis MUST be a single, comprehensive markdown string, including sections for each player's evaluation and an overall keeper strategy. Do NOT return a nested JSON object for the 'analysis' field. Ensure all relevant details are included directly in this markdown string.\n\n**Data:**\n{context_str}\n\n{JSON_OUTPUT_INSTRUCTION}\n\n**Important:** Ensure your response is a valid JSON object with exactly two keys: 'confidence' (string: 'High', 'Medium', or 'Low') and 'analysis' (string). Do not include any text outside the JSON structure."
         response_text = make_gemini_request(prompt, user_key)
         return jsonify({'result': process_ai_response(response_text)})
     except Exception as e:
