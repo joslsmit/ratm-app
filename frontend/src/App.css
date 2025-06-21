@@ -209,6 +209,31 @@ body {
     color: var(--text-color);
 }
 
+/* ECR Preference Selector in Sidebar */
+.ecr-preference-selector {
+    padding: 0 15px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-muted);
+    font-size: 0.9em;
+}
+
+.ecr-preference-selector label {
+    flex-shrink: 0;
+}
+
+.ecr-preference-selector select {
+    flex-grow: 1;
+    padding: 8px;
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+    background-color: var(--input-background);
+    color: var(--text-color);
+    font-size: 0.9em;
+    cursor: pointer;
+}
+
 .sidebar-nav {
     flex-grow: 1;
     overflow-y: auto; /* Enable scrolling for navigation items */
@@ -473,21 +498,29 @@ section {
     margin-bottom: 15px;
 }
 
-.dossier-header-card {
+/* Player Dossier Specific */
+.dossier-output {
+    margin-top: 20px;
+}
+
+#dossier .form-group-inline {
+    justify-content: center;
+}
+
+#dossier .tool-header {
+    margin-bottom: 15px;
+}
+
+#dossier .card {
+    margin-bottom: 15px;
+}
+
+.player-overview-card {
     padding: 15px;
-    margin-bottom: 15px;
+    margin-bottom: 20px; /* Increased margin for better separation */
 }
 
-.dossier-header-card {
-    background-color: var(--dossier-header-background);
-    border: var(--dossier-header-border);
-    padding: 10px 15px;
-    margin-bottom: 15px;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-}
-
-.dossier-header-card h3 {
+.player-overview-card h3 {
     color: var(--primary-color);
     margin-top: 0;
     margin-bottom: 10px;
@@ -501,7 +534,7 @@ section {
     margin-bottom: 10px;
 }
 
-.dossier-header-stats {
+.player-basic-info {
     display: flex;
     flex-wrap: wrap;
     gap: 15px;
@@ -509,8 +542,67 @@ section {
     color: var(--text-muted);
 }
 
-.dossier-header-stats strong {
+.player-basic-info strong {
     color: var(--text-color);
+}
+
+.ecr-data-card {
+    padding: 15px;
+    margin-bottom: 20px; /* Increased margin for better separation */
+}
+
+.ecr-data-card h3 {
+    color: var(--secondary-color);
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 1.5em;
+    text-align: center;
+}
+
+.ecr-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Two columns for Overall and Positional */
+    gap: 20px;
+}
+
+.ecr-column {
+    background-color: var(--input-background);
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ecr-column h4 {
+    color: var(--primary-color);
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.2em;
+    text-align: center;
+}
+
+.ecr-column span {
+    font-size: 0.95em;
+    color: var(--text-color);
+}
+
+.ecr-column strong {
+    color: var(--text-color);
+}
+
+.ai-analysis-card {
+    padding: 15px;
+    margin-bottom: 20px; /* Increased margin for better separation */
+}
+
+.ai-analysis-card h3 {
+    color: var(--secondary-color);
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 1.5em;
+    text-align: center;
 }
 
 .dossier-output .result-box {

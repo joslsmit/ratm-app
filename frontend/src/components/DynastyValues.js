@@ -1,26 +1,27 @@
 import React, { useState, useEffect, useMemo } from 'react';
 
 const DynastyValues = () => {
-    const [playerValues, setPlayerValues] = useState([]);
+    const [playerData, setPlayerData] = useState([]);
     const [pickValues, setPickValues] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [sortConfig, setSortConfig] = useState({ key: 'value_1qb', direction: 'desc' });
+    const [sortConfig, setSortConfig] = useState({ key: 'ecr', direction: 'asc' }); // Default sort by ECR ascending
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const playerValuesRes = await fetch('http://localhost:5001/api/dynasty_player_values');
+                // Fetch combined player data which now includes ECR
+                const allPlayersRes = await fetch('http://localhost:5001/api/all_player_names_with_data');
                 const pickValuesRes = await fetch('http://localhost:5001/api/dynasty_pick_values');
 
-                if (!playerValuesRes.ok || !pickValuesRes.ok) {
+                if (!allPlayersRes.ok || !pickValuesRes.ok) {
                     throw new Error('Failed to fetch data');
                 }
 
-                const playerValuesData = await playerValuesRes.json();
+                const allPlayersData = await allPlayersRes.json();
                 const pickValuesData = await pickValuesRes.json();
 
-                setPlayerValues(playerValuesData);
+                setPlayerData(allPlayersData);
                 setPickValues(pickValuesData);
             } catch (err) {
                 setError(err.message);
@@ -32,41 +33,37 @@ const DynastyValues = () => {
         fetchData();
     }, []);
 
-    const playerValuesWithPercentiles = useMemo(() => {
-        if (playerValues.length === 0) return [];
-
-        const valuesByPosition = playerValues.reduce((acc, player) => {
-            const pos = player.pos;
-            if (!acc[pos]) {
-                acc[pos] = [];
-            }
-            acc[pos].push(player.value_1qb);
-            return acc;
-        }, {});
-
-        return playerValues.map(player => {
-            const pos = player.pos;
-            const values = valuesByPosition[pos];
-            const percentile = (values.filter(v => v <= player.value_1qb).length / values.length) * 100;
-            return { ...player, percentile: percentile.toFixed(0) };
-        });
-    }, [playerValues]);
-
-    const sortedPlayerValues = useMemo(() => {
-        let sortableItems = [...playerValuesWithPercentiles];
+    const sortedPlayerData = useMemo(() => {
+        let sortableItems = [...playerData];
         if (sortConfig !== null) {
             sortableItems.sort((a, b) => {
-                if (a[sortConfig.key] < b[sortConfig.key]) {
-                    return sortConfig.direction === 'asc' ? -1 : 1;
-                }
-                if (a[sortConfig.key] > b[sortConfig.key]) {
-                    return sortConfig.direction === 'asc' ? 1 : -1;
+                const aValue = typeof a[sortConfig.key] === 'string' ? a[sortConfig.key].toLowerCase() : a[sortConfig.key];
+                const bValue = typeof b[sortConfig.key] === 'string' ? b[sortConfig.key].toLowerCase() : b[sortConfig.key];
+
+                // Handle potential 'N/A' or null values for numeric sorts
+                const isNumeric = ['ecr', 'sd', 'best', 'worst', 'rank_delta'].includes(sortConfig.key);
+                if (isNumeric) {
+                    const numA = aValue === 'n/a' || aValue === null ? Infinity : Number(aValue);
+                    const numB = bValue === 'n/a' || bValue === null ? Infinity : Number(bValue);
+                    if (numA < numB) {
+                        return sortConfig.direction === 'asc' ? -1 : 1;
+                    }
+                    if (numA > numB) {
+                        return sortConfig.direction === 'asc' ? 1 : -1;
+                    }
+                } else {
+                    if (aValue < bValue) {
+                        return sortConfig.direction === 'asc' ? -1 : 1;
+                    }
+                    if (aValue > bValue) {
+                        return sortConfig.direction === 'asc' ? 1 : -1;
+                    }
                 }
                 return 0;
             });
         }
         return sortableItems;
-    }, [playerValuesWithPercentiles, sortConfig]);
+    }, [playerData, sortConfig]);
 
     const requestSort = (key) => {
         let direction = 'asc';
@@ -86,23 +83,33 @@ const DynastyValues = () => {
 
     return (
         <div>
-            <h2>Dynasty Player Values</h2>
+            <h2>Dynasty Player ECR Data</h2>
             <table>
                 <thead>
                     <tr>
-                        <th onClick={() => requestSort('player')}>Player</th>
-                        <th onClick={() => requestSort('pos')}>Position</th>
-                        <th onClick={() => requestSort('value_1qb')} title="Value in single-quarterback leagues">Value</th>
-                        <th onClick={() => requestSort('percentile')}>Positional Rank</th>
+                        <th onClick={() => requestSort('name')}>Player</th>
+                        <th onClick={() => requestSort('position')}>Position</th>
+                        <th onClick={() => requestSort('team')}>Team</th>
+                        <th onClick={() => requestSort('ecr')}>ECR</th>
+                        <th onClick={() => requestSort('sd')}>SD</th>
+                        <th onClick={() => requestSort('best')}>Best</th>
+                        <th onClick={() => requestSort('worst')}>Worst</th>
+                        <th onClick={() => requestSort('rank_delta')}>Rank Delta</th>
+                        <th onClick={() => requestSort('bye_week')}>Bye</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {sortedPlayerValues.map((player, index) => (
+                    {sortedPlayerData.map((player, index) => (
                         <tr key={index}>
-                            <td>{player.player_name || player.player || player.full_name}</td>
-                            <td>{player.pos}</td>
-                            <td>{player.value_1qb}</td>
-                            <td>{player.percentile}%</td>
+                            <td>{player.name}</td>
+                            <td>{player.position}</td>
+                            <td>{player.team}</td>
+                            <td>{player.ecr ? player.ecr.toFixed(1) : 'N/A'}</td>
+                            <td>{player.sd ? player.sd.toFixed(2) : 'N/A'}</td>
+                            <td>{player.best || 'N/A'}</td>
+                            <td>{player.worst || 'N/A'}</td>
+                            <td>{player.rank_delta ? player.rank_delta.toFixed(1) : 'N/A'}</td>
+                            <td>{player.bye_week || 'N/A'}</td>
                         </tr>
                     ))}
                 </tbody>
