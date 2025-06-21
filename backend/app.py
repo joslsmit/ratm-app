@@ -32,7 +32,7 @@ CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}})
 
 # --- Configuration (API key will be passed per request) ---
 # Using the latest available preview model as requested
-model = genai.GenerativeModel('gemini-2.5-flash')
+model = genai.GenerativeModel('gemini-2.5-flash-lite-preview-06-17')
 
 
 # --- Data Caching ---
