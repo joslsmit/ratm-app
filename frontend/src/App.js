@@ -3,6 +3,12 @@ import showdown from 'showdown';
 import autoComplete from '@tarekraafat/autocomplete.js';
 import './App.css';
 import WaiverWireAssistant from './components/WaiverWireAssistant';
+import PlayerDossier from './components/PlayerDossier';
+import RookieRankings from './components/RookieRankings';
+import PositionalTiers from './components/PositionalTiers';
+import MarketInefficiencyFinder from './components/MarketInefficiencyFinder';
+import TrendingPlayers from './components/TrendingPlayers';
+import KeeperEvaluator from './components/KeeperEvaluator';
 
 // The backend API URL. This can be changed to your production URL when you deploy.
 const API_BASE_URL = 'http://localhost:5001/api';
@@ -419,7 +425,8 @@ function App() {
     };
   }, [allPlayers, activeTool]);
 
-  // Autocomplete for Keeper Evaluator
+  // Autocomplete for Keeper Evaluator - Commented out to avoid conflict with react-autosuggest in KeeperEvaluator.js
+  /*
   useEffect(() => {
     console.log('Initializing keeper autocomplete. activeTool:', activeTool, 'allPlayers length:', allPlayers.length);
     if (activeTool !== 'keeper' || allPlayers.length === 0) return;
@@ -442,6 +449,7 @@ function App() {
       ac.unInit();
     };
   }, [allPlayers, activeTool]);
+  */
 
   // Autocomplete for Trade Analyzer
   useEffect(() => {
@@ -909,147 +917,34 @@ function App() {
       <div className="main-content">
         <div className="content-wrapper">
           {activeTool === 'dossier' && (
-            <section id="dossier">
-              <div className="tool-header">
-                <h2>Player Dossier</h2>
-                <p>Get a complete 360-degree scouting report on any player.</p>
-              </div>
-              <div className="card">
-                <div className="form-group-inline">
-                  <div className="autoComplete_wrapper"><input id="dossier-player-name" type="text" placeholder="Enter player name..." /></div>
-                  <button onClick={() => generateDossier()}>Generate</button>
-                </div>
-              </div>
-              <div id="dossier-loader" className="loader" style={{ display: 'none' }}></div>
-              {dossierResult && !dossierResult.error && (
-                <div className="dossier-output">
-                  <div className="card player-overview-card">
-                    <div className="dossier-title-container">
-                      <h3>{dossierResult.player_data.name}</h3>
-                      <button className="add-target-btn" title="Add to Target List" onClick={() => handleAddToTargets(dossierResult.player_data.name)}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-plus-circle"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
-                      </button>
-                    </div>
-                    <div className="player-basic-info">
-                      <span><strong>Team:</strong> {dossierResult.player_data.team}</span>
-                      <span><strong>Position:</strong> {dossierResult.player_data.position}</span>
-                      <span><strong>Bye:</strong> {dossierResult.player_data.bye_week || 'N/A'}</span>
-                    </div>
-                  </div>
-
-                  <div className="card ecr-data-card">
-                    <h3>ECR & Rankings</h3>
-                    <div className="ecr-grid">
-                      <div className="ecr-column">
-                        <h4>Overall ECR</h4>
-                        <span>ECR: {dossierResult.player_data.ecr_overall ? `${dossierResult.player_data.ecr_overall.toFixed(1)} (${getEstimatedDraftRound(dossierResult.player_data.ecr_overall)})` : 'N/A'}</span>
-                        <span title={`Standard Deviation: ${typeof dossierResult.player_data.sd_overall === 'number' ? dossierResult.player_data.sd_overall.toFixed(2) : 'N/A'}`}>
-                          SD: {getOverallSdLabel(dossierResult.player_data.sd_overall).icon} {getOverallSdLabel(dossierResult.player_data.sd_overall).label}
-                        </span>
-                        <span>Best: {dossierResult.player_data.best_overall || 'N/A'}</span>
-                        <span>Worst: {dossierResult.player_data.worst_overall || 'N/A'}</span>
-                        <span>Rank Delta: {dossierResult.player_data.rank_delta_overall ? dossierResult.player_data.rank_delta_overall.toFixed(1) : 'N/A'}</span>
-                      </div>
-                      <div className="ecr-column">
-                        <h4>Positional ECR</h4>
-                        <span>ECR: {dossierResult.player_data.ecr_positional ? dossierResult.player_data.ecr_positional.toFixed(1) : 'N/A'}</span>
-                        <span title={`Standard Deviation: ${typeof dossierResult.player_data.sd_positional === 'number' ? dossierResult.player_data.sd_positional.toFixed(2) : 'N/A'}`}>
-                          SD: {getPositionalSdLabel(dossierResult.player_data.sd_positional).icon} {getPositionalSdLabel(dossierResult.player_data.sd_positional).label}
-                        </span>
-                        <span>Best: {dossierResult.player_data.best_positional || 'N/A'}</span>
-                        <span>Worst: {dossierResult.player_data.worst_positional || 'N/A'}</span>
-                        <span>Rank Delta: {dossierResult.player_data.rank_delta_positional ? dossierResult.player_data.rank_delta_positional.toFixed(1) : 'N/A'}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="card ai-analysis-card">
-                    <h3>AI Analysis</h3>
-                    <div id="dossier-result" className="result-box" dangerouslySetInnerHTML={{ __html: converter.makeHtml(dossierResult.analysis) }}></div>
-                  </div>
-                </div>
-              )}
-              {dossierResult && dossierResult.error && (
-                <div className="result-box">
-                  <p style={{ color: 'var(--danger-color)' }}>An error occurred: {dossierResult.error}</p>
-                </div>
-              )}
-            </section>
+            <PlayerDossier
+              dossierResult={dossierResult}
+              generateDossier={generateDossier}
+              handleAddToTargets={handleAddToTargets}
+              getEstimatedDraftRound={getEstimatedDraftRound}
+              getOverallSdLabel={getOverallSdLabel}
+              getPositionalSdLabel={getPositionalSdLabel}
+              converter={converter}
+            />
           )}
 
           {activeTool === 'rookie' && (
-            <section id="rookie">
-                <div className="tool-header"><h2>2025 Rookie Rankings</h2><p>Get AI-powered rankings and analysis for the incoming rookie class.</p></div>
-                <div className="card"><div className="form-group-inline"><select id="rookie-pos"><option value="all">All</option><option value="QB">QB</option><option value="RB">RB</option><option value="WR">WR</option><option value="TE">TE</option></select><button onClick={generateRookieRankings}>Generate</button></div></div>
-                <div id="rookie-loader" className="loader" style={{ display: 'none' }}></div>
-                <div className="result-box-cards">
-                    {rookieRankings.length > 0 ? rookieRankings.map((rookie, index) => (
-                        <div key={index} className="rookie-card">
-                            <div className="rookie-header">
-                                <h3><a href={`/?tool=dossier&player=${encodeURIComponent(rookie.name)}`} target="_blank" rel="noopener noreferrer" className="player-link">{rookie.name}</a> ({rookie.position}, {rookie.team || 'N/A'})</h3>
-                                <div className="rookie-actions">
-                                  <button className="add-target-btn-small" title="Add to Target List" onClick={() => handleAddToTargets(rookie.name)}>
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
-                                  </button>
-                                  <span className="rank">#{rookie.rank}</span>
-                                </div>
-                            </div>
-                            <div className="rookie-details">
-                                <span title="Expert Consensus Ranking for rookies">Rookie ECR: {typeof rookie.ecr === 'number' ? rookie.ecr.toFixed(1) : 'N/A'}</span>
-                                <span title={`Standard Deviation: ${typeof rookie.sd === 'number' ? rookie.sd.toFixed(2) : 'N/A'}`}>
-                                  SD: {getRookieSdLabel(rookie.sd).icon} {getRookieSdLabel(rookie.sd).label}
-                                </span>
-                                <span>Best: {rookie.best || 'N/A'}</span>
-                                <span>Worst: {rookie.worst || 'N/A'}</span>
-                                <span>Rank Delta: {typeof rookie.rank_delta === 'number' ? rookie.rank_delta.toFixed(1) : 'N/A'}</span>
-                            </div>
-                            <p className="rookie-analysis">{rookie.analysis}</p>
-                        </div>
-                    )) : <p>No rookie rankings to display. Generate a new list.</p>}
-                </div>
-            </section>
+            <RookieRankings
+              rookieRankings={rookieRankings}
+              generateRookieRankings={generateRookieRankings}
+              handleAddToTargets={handleAddToTargets}
+              getRookieSdLabel={getRookieSdLabel}
+            />
           )}
 
           {activeTool === 'tiers' && (
-            <section id="tiers">
-              <div className="tool-header"><h2>Positional Tiers</h2><p>Generate tier-based rankings to understand value drop-offs.</p></div>
-              <div className="card"><div className="form-group-inline"><select id="tiers-pos"><option value="QB">QB</option><option value="RB">RB</option><option value="WR">WR</option><option value="TE">TE</option></select><button onClick={generateTiers}>Generate Tiers</button></div></div>
-              <div id="tiers-loader" className="loader" style={{ display: 'none' }}></div>
-              <div className="tiers-output">
-                {tiersResult.length > 0 ? tiersResult.map((tier, tierIndex) => (
-                  <div key={tierIndex} className="tier-card card">
-                    <h3>{tier.header}</h3>
-                    <p className="tier-summary">{tier.summary}</p>
-                    <div className="tier-players">
-                      {tier.players.map((player, playerIndex) => (
-                        <div key={playerIndex} className="tier-player-item">
-                          <div className="player-name-link">
-                            <a href={`/?tool=dossier&player=${encodeURIComponent(player.name)}`} target="_blank" rel="noopener noreferrer" className="player-link">{player.name}</a>
-                            <button className="add-target-btn-small" title="Add to Target List" onClick={() => handleAddToTargets(player.name)}>
-                              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
-                            </button>
-                          </div>
-                          <div className="player-details-grid">
-                            <span>Pos: {player.position || 'N/A'}</span>
-                            <span>Team: {player.team || 'N/A'}</span>
-                            <span>
-                              ECR: {typeof player.ecr === 'number' ? player.ecr.toFixed(1) : 'N/A'}
-                              {typeof player.ecr === 'number' && ` (${getEstimatedDraftRound(player.ecr)})`}
-                            </span>
-                            <span title={`Standard Deviation: ${typeof player.sd === 'number' ? player.sd.toFixed(2) : 'N/A'}`}>
-                              SD: {getPositionalSdLabel(player.sd).icon} {getPositionalSdLabel(player.sd).label}
-                            </span>
-                            <span>Best: {player.best || 'N/A'}</span>
-                            <span>Worst: {player.worst || 'N/A'}</span>
-                            <span>Rank Delta: {typeof player.rank_delta === 'number' ? player.rank_delta.toFixed(1) : 'N/A'}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )) : <p className="result-box">No tiers to display. Generate tiers for a position.</p>}
-              </div>
-            </section>
+            <PositionalTiers
+              tiersResult={tiersResult}
+              generateTiers={generateTiers}
+              handleAddToTargets={handleAddToTargets}
+              getEstimatedDraftRound={getEstimatedDraftRound}
+              getPositionalSdLabel={getPositionalSdLabel}
+            />
           )}
 
           {activeTool === 'targets' && (
@@ -1100,153 +995,27 @@ function App() {
           )}
 
           {activeTool === 'market' && (
-              <section id="market">
-                  <div className="tool-header"><h2>Market Inefficiency Finder</h2><p>Discover potential sleepers and busts by comparing data sources.</p></div>
-                  <div className="card"><div className="form-group-inline"><select id="market-pos"><option value="all">All</option><option value="QB">QB</option><option value="RB">RB</option><option value="WR">WR</option><option value="TE">TE</option></select><button onClick={findMarketInefficiencies}>Find</button></div></div>
-                  <div id="market-loader" className="loader" style={{ display: 'none' }}></div>
-                  <div className="market-results">
-                      <div className="market-column">
-                          <h3>Sleepers (Undervalued)</h3>
-                          {marketInefficiencies.sleepers.length > 0 ? marketInefficiencies.sleepers.map((player, index) => (
-                              <div key={`sleeper-${index}`} className="analysis-card sleeper">
-                                  <div className="analysis-card-header">
-                                    <h4><a href={`/?tool=dossier&player=${encodeURIComponent(player.name)}`} className="player-link">{player.name}</a></h4>
-                                    <span className={`confidence-badge ${player.confidence}`}>{player.confidence}</span>
-                                    <button className="add-target-btn-small" title="Add to Target List" onClick={() => handleAddToTargets(player.name)}>
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
-                                    </button>
-                                  </div>
-                                  <div className="player-details-grid">
-                                    <span>ECR: {typeof player.ecr === 'number' ? player.ecr.toFixed(1) : 'N/A'}</span>
-                                    <span title={`Standard Deviation: ${typeof player.sd === 'number' ? player.sd.toFixed(2) : 'N/A'}`}>
-                                      SD: {getOverallSdLabel(player.sd).icon} {getOverallSdLabel(player.sd).label}
-                                    </span>
-                                    <span>Best: {player.best || 'N/A'}</span>
-                                    <span>Worst: {player.worst || 'N/A'}</span>
-                                    <span>Rank Delta: {typeof player.rank_delta === 'number' ? player.rank_delta.toFixed(1) : 'N/A'}</span>
-                                    <span>Rookie: {player.is_rookie ? 'Yes' : 'No'}</span>
-                                  </div>
-                                  <p>{player.justification}</p>
-                              </div>
-                          )) : <p>No sleepers found.</p>}
-                      </div>
-                      <div className="market-column">
-                          <h3>Busts (Overvalued)</h3>
-                          {marketInefficiencies.busts.length > 0 ? marketInefficiencies.busts.map((player, index) => (
-                              <div key={`bust-${index}`} className="analysis-card bust">
-                                  <div className="analysis-card-header">
-                                    <h4><a href={`/?tool=dossier&player=${encodeURIComponent(player.name)}`} className="player-link">{player.name}</a></h4>
-                                    <span className={`confidence-badge ${player.confidence}`}>{player.confidence}</span>
-                                    <button className="add-target-btn-small" title="Add to Target List" onClick={() => handleAddToTargets(player.name)}>
-                                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
-                                    </button>
-                                  </div>
-                                  <div className="player-details-grid">
-                                    <span>ECR: {typeof player.ecr === 'number' ? player.ecr.toFixed(1) : 'N/A'}</span>
-                                    <span title={`Standard Deviation: ${typeof player.sd === 'number' ? player.sd.toFixed(2) : 'N/A'}`}>
-                                      SD: {getOverallSdLabel(player.sd).icon} {getOverallSdLabel(player.sd).label}
-                                    </span>
-                                    <span>Best: {player.best || 'N/A'}</span>
-                                    <span>Worst: {player.worst || 'N/A'}</span>
-                                    <span>Rank Delta: {typeof player.rank_delta === 'number' ? player.rank_delta.toFixed(1) : 'N/A'}</span>
-                                    <span>Rookie: {player.is_rookie ? 'Yes' : 'No'}</span>
-                                  </div>
-                                  <p>{player.justification}</p>
-                              </div>
-                          )) : <p>No busts found.</p>}
-                      </div>
-                  </div>
-              </section>
+            <MarketInefficiencyFinder
+              marketInefficiencies={marketInefficiencies}
+              findMarketInefficiencies={findMarketInefficiencies}
+              handleAddToTargets={handleAddToTargets}
+              getOverallSdLabel={getOverallSdLabel}
+            />
           )}
 
           {activeTool === 'keeper' && (
-            <section id="keeper">
-              <div className="tool-header"><h2>Keeper Evaluator</h2><p>Analyze multiple keeper options based on cost vs. value.</p></div>
-              <div className="card">
-                <div className="form-group-inline" style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
-                  <div className="autoComplete_wrapper" style={{ flex: '1', minWidth: '200px' }}>
-                    <input id="keeper-player-name" type="text" placeholder="Player Name..." value={keeperPlayerName} onChange={(e) => setKeeperPlayerName(e.target.value)} style={{ width: '100%', height: '38px', padding: '5px', boxSizing: 'border-box', border: '1px solid var(--border-color)', fontSize: '14px' }} />
-                  </div>
-                  <input id="keeper-round" type="number" placeholder="Round" value={keeperRoundInput} onChange={(e) => setKeeperRoundInput(e.target.value)} style={{ width: '50px', height: '38px', padding: '5px', boxSizing: 'border-box', border: '1px solid var(--border-color)', fontSize: '14px' }} />
-                  <div style={{ flex: '1', minWidth: '200px' }}>
-                    <input 
-                      id="keeper-context-input" 
-                      placeholder="Context (e.g., status, role)" 
-                      value={keeperContextInput} 
-                      onChange={(e) => setKeeperContextInput(e.target.value)}
-                      style={{ width: '100%', height: '38px', padding: '5px', boxSizing: 'border-box', border: '1px solid var(--border-color)', fontSize: '14px' }}
-                    />
-                  </div>
-                  <button onClick={addKeeper} style={{ padding: '5px 10px', height: '38px', marginLeft: '10px' }}>Add</button>
-                </div>
-                <div className="keeper-list" style={{ marginTop: '15px' }}>
-                  {keeperList.map((keeper, index) => {
-                    const normalizedKeeperName = normalizePlayerName(keeper.name);
-                    const playerData = staticPlayerData[normalizedKeeperName];
-                    const ecrOverall = playerData?.ecr_overall;
-                    const estimatedRound = getEstimatedDraftRound(ecrOverall);
-
-                    if (editingKeeperIndex === index) {
-                      return (
-                        <div key={index} className="keeper-card" style={{ border: '1px solid var(--border-color)', borderRadius: '5px', padding: '10px', marginBottom: '10px', backgroundColor: 'var(--card-bg)' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                            <strong style={{ display: 'block' }}>{keeper.name}</strong>
-                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                              <input 
-                                type="number" 
-                                placeholder="Round" 
-                                value={editRoundInput} 
-                                onChange={(e) => setEditRoundInput(e.target.value)} 
-                                style={{ width: '60px', height: '30px', padding: '5px', boxSizing: 'border-box', border: '1px solid var(--border-color)', fontSize: '14px' }} 
-                              />
-                              <input 
-                                type="text" 
-                                placeholder="Context (e.g., status, role)" 
-                                value={editContextInput} 
-                                onChange={(e) => setEditContextInput(e.target.value)} 
-                                style={{ flex: '1', height: '30px', padding: '5px', boxSizing: 'border-box', border: '1px solid var(--border-color)', fontSize: '14px' }} 
-                              />
-                            </div>
-                            <div style={{ display: 'flex', gap: '10px' }}>
-                              <button onClick={saveEditedKeeper} style={{ padding: '5px 10px', height: '30px' }}>Save</button>
-                              <button onClick={cancelEditingKeeper} style={{ padding: '5px 10px', height: '30px', backgroundColor: 'var(--danger-color)' }}>Cancel</button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    } else {
-                      return (
-                        <div key={index} className="keeper-card" style={{ border: '1px solid var(--border-color)', borderRadius: '5px', padding: '10px', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--card-bg)' }}>
-                          <div>
-                            <strong style={{ display: 'block' }}>{keeper.name}</strong>
-                            <div style={{ fontSize: '0.9em', color: 'var(--text-muted)' }}>
-                              <span style={{ marginRight: '15px' }}>Cost: Round {keeper.round}</span>
-                              {keeper.context && <span>Context: {keeper.context}</span>}
-                            </div>
-                            <small>
-                              ECR: {ecrOverall ? ecrOverall.toFixed(1) : 'N/A'} 
-                              {ecrOverall && ` (${estimatedRound})`}
-                            </small>
-                          </div>
-                          <div style={{ display: 'flex', gap: '5px' }}>
-                            <button onClick={() => startEditingKeeper(index)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                            </button>
-                            <button className="remove-btn" onClick={() => setKeeperList(prev => prev.filter((_, i) => i !== index))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger-color)' }}>
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    }
-                  })}
-                  {keeperList.length === 0 && <p style={{ color: 'var(--text-muted)', textAlign: 'center', margin: '20px 0' }}>No keepers added yet. Use the form above to add players.</p>}
-                </div>
-              </div>
-              <button onClick={evaluateKeepers} className="action-button" style={{ marginTop: '10px' }}>Analyze All Keepers</button>
-              <div id="keeper-loader" className="loader" style={{ display: 'none' }}></div>
-              <div id="keeper-result" className="result-box" dangerouslySetInnerHTML={{ __html: converter.makeHtml(keeperResult) }}></div>
-            </section>
+            <KeeperEvaluator
+              keeperList={keeperList}
+              setKeeperList={setKeeperList}
+              staticPlayerData={staticPlayerData}
+              normalizePlayerName={normalizePlayerName}
+              getEstimatedDraftRound={getEstimatedDraftRound}
+              evaluateKeepers={evaluateKeepers}
+              keeperResult={keeperResult}
+              converter={converter}
+              isLoading={false}
+              allPlayers={allPlayers}
+            />
           )}
           
           {activeTool === 'trade' && (
@@ -1380,36 +1149,10 @@ function App() {
           )}
 
           {activeTool === 'trending' && (
-            <section id="trending">
-              <div className="tool-header"><h2>Trending Players</h2><p>See who's being added most on Sleeper in the last 48 hours.</p></div>
-              <div className="card">
-                <table id="trending-table">
-                  <thead>
-                    <tr>
-                      <th className="sortable" onClick={() => sortTrendingData('name')}>Player <span className="sort-icon">{sortDirection.name === 'asc' ? '▲' : '▼'}</span></th>
-                      <th className="sortable" onClick={() => sortTrendingData('team')}>Team <span className="sort-icon">{sortDirection.team === 'asc' ? '▲' : '▼'}</span></th>
-                      <th className="sortable" onClick={() => sortTrendingData('position')}>Position <span className="sort-icon">{sortDirection.position === 'asc' ? '▲' : '▼'}</span></th>
-                      <th className="sortable" onClick={() => sortTrendingData('ecr')}>ECR <span className="sort-icon">{sortDirection.ecr === 'asc' ? '▲' : '▼'}</span></th>
-                      <th className="sortable" onClick={() => sortTrendingData('adds')}>Adds (48hr) <span className="sort-icon">{sortDirection.adds === 'asc' ? '▲' : '▼'}</span></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {trendingData.length > 0 ? trendingData.map((player, index) => (
-                      <tr key={index}>
-                        <td><a href={`/?tool=dossier&player=${encodeURIComponent(player.name)}`} className="player-link">{player.name}</a></td>
-                        <td>{player.team || 'N/A'}</td>
-                        <td>{player.position}</td>
-                        <td>{player.ecr ? player.ecr.toFixed(1) : 'N/A'}</td>
-                        <td>{player.adds}</td>
-                      </tr>
-                    )) : (
-                      <tr><td colSpan="5">No trending data to display.</td></tr>
-                    )}
-                  </tbody>
-                </table>
-                <div id="trending-loader" className="loader" style={{ display: 'none' }}></div>
-              </div>
-            </section>
+            <TrendingPlayers
+              trendingData={trendingData}
+              sortTrendingData={sortTrendingData}
+            />
           )}
 
           {activeTool === 'waiver' && (
