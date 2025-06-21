@@ -33,10 +33,10 @@ function App() {
   const [dossierResult, setDossierResult] = useState(null);
   const [tiersResult, setTiersResult] = useState('');
   const [keeperResult, setKeeperResult] = useState('');
-  const [tradeResult, setTradeResult] = useState('');
-  const [draftAnalysisResult, setDraftAnalysisResult] = useState('');
-  const [rosterCompositionResult, setRosterCompositionResult] = useState('');
-  const [waiverSwapResult, setWaiverSwapResult] = useState('');
+  const [tradeResult, setTradeResult] = '';
+  const [draftAnalysisResult, setDraftAnalysisResult] = '';
+  const [rosterCompositionResult, setRosterCompositionResult] = '';
+  const [waiverSwapResult, setWaiverSwapResult] = '';
   const [isWaiverSwapLoading, setIsWaiverSwapLoading] = useState(false);
   const [lastUpdateDate, setLastUpdateDate] = useState('Loading...');
 
@@ -60,6 +60,63 @@ function App() {
 
   // Memoize the Showdown converter to avoid recreating it on every render
   const converter = useMemo(() => new showdown.Converter({ simplifiedAutoLink: true, tables: true, strikethrough: true }), []);
+
+  /**
+   * Determines the consensus label and icon for Rookie SD values.
+   * @param {number} sdValue - The Standard Deviation value.
+   * @returns {object} - An object containing the label and icon.
+   */
+  const getRookieSdLabel = useCallback((sdValue) => {
+    if (typeof sdValue !== 'number' || isNaN(sdValue)) {
+      return { label: 'N/A', icon: '' };
+    }
+
+    if (sdValue < 2.0) {
+      return { label: 'High Consensus', icon: '✅' };
+    } else if (sdValue >= 2.0 && sdValue < 6.0) {
+      return { label: 'Moderate Consensus', icon: '🤔' };
+    } else {
+      return { label: 'Low Consensus', icon: '⚠️' };
+    }
+  }, []);
+
+  /**
+   * Determines the consensus label and icon for Overall ECR SD values.
+   * @param {number} sdValue - The Standard Deviation value.
+   * @returns {object} - An object containing the label and icon.
+   */
+  const getOverallSdLabel = useCallback((sdValue) => {
+    if (typeof sdValue !== 'number' || isNaN(sdValue)) {
+      return { label: 'N/A', icon: '' };
+    }
+
+    if (sdValue < 5.0) {
+      return { label: 'High Consensus', icon: '✅' };
+    } else if (sdValue >= 5.0 && sdValue < 20.0) {
+      return { label: 'Moderate Consensus', icon: '🤔' };
+    } else {
+      return { label: 'Low Consensus', icon: '⚠️' };
+    }
+  }, []);
+
+  /**
+   * Determines the consensus label and icon for Positional ECR SD values.
+   * @param {number} sdValue - The Standard Deviation value.
+   * @returns {object} - An object containing the label and icon.
+   */
+  const getPositionalSdLabel = useCallback((sdValue) => {
+    if (typeof sdValue !== 'number' || isNaN(sdValue)) {
+      return { label: 'N/A', icon: '' };
+    }
+
+    if (sdValue < 2.0) {
+      return { label: 'High Consensus', icon: '✅' };
+    } else if (sdValue >= 2.0 && sdValue < 8.0) {
+      return { label: 'Moderate Consensus', icon: '🤔' };
+    } else {
+      return { label: 'Low Consensus', icon: '⚠️' };
+    }
+  }, []);
 
   /**
    * Saves the user's API key to state and local storage.
@@ -572,10 +629,12 @@ function App() {
       .then(response => response.json())
       .then(data => {
         if (data && Array.isArray(data)) {
-          setAllPlayers(data.map(p => p.name));
-          // Store the full player data object, keyed by cleaned name
+          // Use display_name for the autocomplete list, fall back to name if display_name is not present
+          // Use autocomplete_name for the autocomplete list
+          setAllPlayers(data.map(p => p.autocomplete_name));
+          // Store the full player data object, keyed by the normalized 'name' from the backend
           const staticData = data.reduce((acc, p) => {
-            if (p.name) { // Ensure player name exists
+            if (p.name) { // Ensure player name exists (this is the normalized name key)
               acc[p.name.toLowerCase()] = p;
             }
             return acc;
@@ -753,6 +812,13 @@ function App() {
             <input id="global-player-search" type="text" placeholder="Quick Find Player..." />
           </div>
         </div>
+        <div className="ecr-preference-selector">
+            <label htmlFor="ecr-type-preference">ECR Type:</label>
+            <select id="ecr-type-preference" value={ecrTypePreference} onChange={(e) => setEcrTypePreference(e.target.value)}>
+              <option value="overall">Overall ECR</option>
+              <option value="positional">Positional ECR</option>
+            </select>
+          </div>
         <nav className="sidebar-nav">
           <ul>
             <li><a href="#targets" className={activeTool === 'targets' ? 'active' : ''}>Target List <span className="badge">{targetList.length}</span></a></li>
@@ -800,14 +866,6 @@ function App() {
 
       <div className="main-content">
         <div className="content-wrapper">
-          <div className="ecr-preference-selector">
-            <label htmlFor="ecr-type-preference">ECR Type:</label>
-            <select id="ecr-type-preference" value={ecrTypePreference} onChange={(e) => setEcrTypePreference(e.target.value)}>
-              <option value="overall">Overall ECR</option>
-              <option value="positional">Positional ECR</option>
-            </select>
-          </div>
-
           {activeTool === 'dossier' && (
             <section id="dossier">
               <div className="tool-header">
@@ -823,30 +881,50 @@ function App() {
               <div id="dossier-loader" className="loader" style={{ display: 'none' }}></div>
               {dossierResult && !dossierResult.error && (
                 <div className="dossier-output">
-                  <div className="dossier-header-card card">
+                  <div className="card player-overview-card">
                     <div className="dossier-title-container">
                       <h3>{dossierResult.player_data.name}</h3>
                       <button className="add-target-btn" title="Add to Target List" onClick={() => handleAddToTargets(dossierResult.player_data.name)}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-plus-circle"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
                       </button>
                     </div>
-                    <div className="dossier-header-stats">
+                    <div className="player-basic-info">
                       <span><strong>Team:</strong> {dossierResult.player_data.team}</span>
                       <span><strong>Position:</strong> {dossierResult.player_data.position}</span>
-                      <span><strong>Overall ECR:</strong> {dossierResult.player_data.ecr_overall ? dossierResult.player_data.ecr_overall.toFixed(1) : 'N/A'}</span>
-                      <span><strong>Overall SD:</strong> {dossierResult.player_data.sd_overall ? dossierResult.player_data.sd_overall.toFixed(2) : 'N/A'}</span>
-                      <span><strong>Overall Best:</strong> {dossierResult.player_data.best_overall || 'N/A'}</span>
-                      <span><strong>Overall Worst:</strong> {dossierResult.player_data.worst_overall || 'N/A'}</span>
-                      <span><strong>Overall Rank Delta:</strong> {dossierResult.player_data.rank_delta_overall ? dossierResult.player_data.rank_delta_overall.toFixed(1) : 'N/A'}</span>
-                      <span><strong>Positional ECR:</strong> {dossierResult.player_data.ecr_positional ? dossierResult.player_data.ecr_positional.toFixed(1) : 'N/A'}</span>
-                      <span><strong>Positional SD:</strong> {dossierResult.player_data.sd_positional ? dossierResult.player_data.sd_positional.toFixed(2) : 'N/A'}</span>
-                      <span><strong>Positional Best:</strong> {dossierResult.player_data.best_positional || 'N/A'}</span>
-                      <span><strong>Positional Worst:</strong> {dossierResult.player_data.worst_positional || 'N/A'}</span>
-                      <span><strong>Positional Rank Delta:</strong> {dossierResult.player_data.rank_delta_positional ? dossierResult.player_data.rank_delta_positional.toFixed(1) : 'N/A'}</span>
                       <span><strong>Bye:</strong> {dossierResult.player_data.bye_week || 'N/A'}</span>
                     </div>
                   </div>
-                  <div id="dossier-result" className="result-box" dangerouslySetInnerHTML={{ __html: converter.makeHtml(dossierResult.analysis) }}></div>
+
+                  <div className="card ecr-data-card">
+                    <h3>ECR & Rankings</h3>
+                    <div className="ecr-grid">
+                      <div className="ecr-column">
+                        <h4>Overall ECR</h4>
+                        <span>ECR: {dossierResult.player_data.ecr_overall ? dossierResult.player_data.ecr_overall.toFixed(1) : 'N/A'}</span>
+                        <span title={`Standard Deviation: ${typeof dossierResult.player_data.sd_overall === 'number' ? dossierResult.player_data.sd_overall.toFixed(2) : 'N/A'}`}>
+                          SD: {getOverallSdLabel(dossierResult.player_data.sd_overall).icon} {getOverallSdLabel(dossierResult.player_data.sd_overall).label}
+                        </span>
+                        <span>Best: {dossierResult.player_data.best_overall || 'N/A'}</span>
+                        <span>Worst: {dossierResult.player_data.worst_overall || 'N/A'}</span>
+                        <span>Rank Delta: {dossierResult.player_data.rank_delta_overall ? dossierResult.player_data.rank_delta_overall.toFixed(1) : 'N/A'}</span>
+                      </div>
+                      <div className="ecr-column">
+                        <h4>Positional ECR</h4>
+                        <span>ECR: {dossierResult.player_data.ecr_positional ? dossierResult.player_data.ecr_positional.toFixed(1) : 'N/A'}</span>
+                        <span title={`Standard Deviation: ${typeof dossierResult.player_data.sd_positional === 'number' ? dossierResult.player_data.sd_positional.toFixed(2) : 'N/A'}`}>
+                          SD: {getPositionalSdLabel(dossierResult.player_data.sd_positional).icon} {getPositionalSdLabel(dossierResult.player_data.sd_positional).label}
+                        </span>
+                        <span>Best: {dossierResult.player_data.best_positional || 'N/A'}</span>
+                        <span>Worst: {dossierResult.player_data.worst_positional || 'N/A'}</span>
+                        <span>Rank Delta: {dossierResult.player_data.rank_delta_positional ? dossierResult.player_data.rank_delta_positional.toFixed(1) : 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="card ai-analysis-card">
+                    <h3>AI Analysis</h3>
+                    <div id="dossier-result" className="result-box" dangerouslySetInnerHTML={{ __html: converter.makeHtml(dossierResult.analysis) }}></div>
+                  </div>
                 </div>
               )}
               {dossierResult && dossierResult.error && (
@@ -875,11 +953,13 @@ function App() {
                                 </div>
                             </div>
                             <div className="rookie-details">
-                                <span>ECR: {rookie.ecr || 'N/A'}</span>
-                                <span>SD: {rookie.sd ? rookie.sd.toFixed(2) : 'N/A'}</span>
+                                <span title="Expert Consensus Ranking for rookies">Rookie ECR: {typeof rookie.ecr === 'number' ? rookie.ecr.toFixed(1) : 'N/A'}</span>
+                                <span title={`Standard Deviation: ${typeof rookie.sd === 'number' ? rookie.sd.toFixed(2) : 'N/A'}`}>
+                                  SD: {getRookieSdLabel(rookie.sd).icon} {getRookieSdLabel(rookie.sd).label}
+                                </span>
                                 <span>Best: {rookie.best || 'N/A'}</span>
                                 <span>Worst: {rookie.worst || 'N/A'}</span>
-                                <span>Rank Delta: {rookie.rank_delta ? rookie.rank_delta.toFixed(1) : 'N/A'}</span>
+                                <span>Rank Delta: {typeof rookie.rank_delta === 'number' ? rookie.rank_delta.toFixed(1) : 'N/A'}</span>
                             </div>
                             <p className="rookie-analysis">{rookie.analysis}</p>
                         </div>
@@ -1185,6 +1265,7 @@ function App() {
                                 allPlayers={allPlayers}
                                 handleGlobalSearch={handleGlobalSearch}
                                 initialPlayerName={draftBoard[round]}
+                                ecrTypePreference={ecrTypePreference}
                             />
                         ))}
                     </div>
@@ -1275,7 +1356,7 @@ function App() {
   );
 }
 
-function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handleGlobalSearch, initialPlayerName }) {
+function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handleGlobalSearch, initialPlayerName, ecrTypePreference }) {
     const [isEditing, setIsEditing] = useState(false);
     const [playerName, setPlayerName] = useState(initialPlayerName || '');
     const autoCompleteRef = React.useRef(null);
@@ -1384,16 +1465,11 @@ function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handle
             {playerName && <button onClick={handleClear} className="remove-btn-small">Clear</button>}
             {playerData && (
                 <div className="draft-card-details">
-                    <span>Overall ECR: {displayEcr('overall')}</span>
-                    <span>Overall SD: {displaySd('overall')}</span>
-                    <span>Overall Best: {displayBest('overall')}</span>
-                    <span>Overall Worst: {displayWorst('overall')}</span>
-                    <span>Overall Rank Delta: {displayRankDelta('overall')}</span>
-                    <span>Positional ECR: {displayEcr('positional')}</span>
-                    <span>Positional SD: {displaySd('positional')}</span>
-                    <span>Positional Best: {displayBest('positional')}</span>
-                    <span>Positional Worst: {displayWorst('positional')}</span>
-                    <span>Positional Rank Delta: {displayRankDelta('positional')}</span>
+                    <span>ECR ({ecrTypePreference === 'overall' ? 'Overall' : 'Positional'}): {displayEcr(ecrTypePreference)}</span>
+                    <span>SD ({ecrTypePreference === 'overall' ? 'Overall' : 'Positional'}): {displaySd(ecrTypePreference)}</span>
+                    <span>Best ({ecrTypePreference === 'overall' ? 'Overall' : 'Positional'}): {displayBest(ecrTypePreference)}</span>
+                    <span>Worst ({ecrTypePreference === 'overall' ? 'Overall' : 'Positional'}): {displayWorst(ecrTypePreference)}</span>
+                    <span>Rank Delta ({ecrTypePreference === 'overall' ? 'Overall' : 'Positional'}): {displayRankDelta(ecrTypePreference)}</span>
                     <span>Bye: {playerData.bye_week || 'N/A'}</span>
                 </div>
             )}

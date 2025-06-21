@@ -98,14 +98,13 @@ def load_ecr_data_from_csv(file_path):
                 if player_name is None or str(player_name).lower().strip() == 'nan' or str(player_name).strip() == '':
                     continue # Skip rows with invalid player names
 
-                cleaned_name = re.sub(r'\s[A-Z]{2,4}$', '', str(player_name))
-                cleaned_name = re.sub(r'[^a-zA-Z0-9\s]', '', cleaned_name)
-                cleaned_name = cleaned_name.lower().strip()
+                cleaned_name = normalize_player_name(str(player_name))
                 
                 if not cleaned_name:
                     continue # Skip if name becomes empty after cleaning
 
                 ecr_dict[cleaned_name] = {
+                    'original_name': str(player_name), # Store the original name from CSV
                     'ecr': row.get('ecr'),
                     'sd': row.get('sd'),
                     'best': row.get('best'),
@@ -158,19 +157,32 @@ def get_all_players():
         player_data_cache = response.json()
 
 
-        player_name_to_id = { p['full_name'].lower().strip(): p_id for p_id, p in player_data_cache.items() if p.get('full_name') }
+        # Normalize Sleeper player names for consistent keys
+        player_name_to_id = { normalize_player_name(p['full_name']): p_id for p_id, p in player_data_cache.items() if p.get('full_name') }
         print(f"✅ Successfully loaded {len(player_data_cache)} players from Sleeper API.")
     except Exception as e:
         print(f"❌ FATAL ERROR fetching players from Sleeper API: {e}")
         traceback.print_exc()
         player_data_cache, player_name_to_id = {}, {}
 
+def normalize_player_name(name):
+    """Normalizes player names for consistent matching."""
+    if not name:
+        return None
+    # Remove common suffixes like Jr., Sr., III, IV, V
+    name = re.sub(r'\s(Jr|Sr|[IVX]+)\.?$', '', name, flags=re.IGNORECASE).strip()
+    # Remove non-alphanumeric characters except spaces
+    name = re.sub(r'[^a-zA-Z0-9\s]', '', name).strip()
+    return name.lower()
+
 def fuzzy_find_player_key(name_to_search, key_dictionary):
     if not key_dictionary: return None
-    lower_name = name_to_search.lower().strip()
-    if lower_name in key_dictionary: return lower_name
+    normalized_search_name = normalize_player_name(name_to_search)
+    if normalized_search_name in key_dictionary: return normalized_search_name
+    
+    # Fallback to partial match if exact normalized name not found
     for key in key_dictionary:
-        if lower_name in key: return key
+        if normalized_search_name and normalized_search_name in key: return key
     return None
 
 def create_combined_player_data_cache():
@@ -206,11 +218,22 @@ def create_combined_player_data_cache():
                 return None
             return value
 
+        # Get Sleeper data for years_exp
+        sleeper_player_id = player_name_to_id.get(name_key)
+        sleeper_info = player_data_cache.get(sleeper_player_id, {}) if sleeper_player_id else {}
+        
+        # Determine the display name: prioritize original_name from ECR, then Sleeper's full_name, then normalized name
+        display_name = primary_data_source.get('original_name') or \
+                       sleeper_info.get('full_name') or \
+                       primary_data_source.get('name', name_key.title())
+
         temp_combined_data[name_key] = {
-            'name': primary_data_source.get('name', name_key.title()),
-            'team': primary_data_source.get('team', 'N/A'),
-            'position': primary_data_source.get('pos', 'N/A'),
+            'name': primary_data_source.get('name', name_key.title()), # Keep this for internal consistency if needed
+            'display_name': display_name, # New field for user-facing display
+            'team': primary_data_source.get('team', sleeper_info.get('team', 'N/A')),
+            'position': primary_data_source.get('pos', sleeper_info.get('position', 'N/A')),
             'bye_week': bye_week_val,
+            'years_exp': clean_numeric_value(sleeper_info.get('years_exp')),
             'ecr_overall': clean_numeric_value(overall_data.get('ecr')),
             'sd_overall': clean_numeric_value(overall_data.get('sd')),
             'best_overall': clean_numeric_value(overall_data.get('best')),
@@ -247,33 +270,42 @@ def get_player_context(player_name, ecr_type_preference='overall'):
     static_key = fuzzy_find_player_key(player_name, static_ecr_source)
     
     player_id = player_name_to_id.get(sleeper_key) if sleeper_key and player_name_to_id else None
-    player_info_live = player_data_cache.get(player_id, {}) if player_id and player_data_cache else {}
-    player_info_static = static_ecr_source.get(static_key, {}) if static_key and static_ecr_source else {}
+    # Use combined_player_data_cache for all player context
+    player_data = combined_player_data_cache.get(normalize_player_name(player_name), {})
     
     context_lines = []
-    full_name = player_info_live.get('full_name', player_name)
-    context_lines.append(f"- Player: {full_name} ({player_info_static.get('pos', 'N/A')}, {player_info_live.get('team', 'N/A')})")
-    context_lines.append(f"  - Status: {player_info_live.get('status', 'N/A')}")
-    context_lines.append(f"  - Age: {player_info_live.get('age', 'N/A')}, Experience: {player_info_live.get('years_exp', 'N/A')} years")
+    full_name = player_data.get('name', player_name)
+    context_lines.append(f"- Player: {full_name} ({player_data.get('position', 'N/A')}, {player_data.get('team', 'N/A')})")
     
-    # Use the appropriate ECR and related stats based on the source
-    ecr_label = f"{ecr_type_preference.title()} ECR" if ecr_type_preference != 'rookie' else "Rookie ECR"
-    ecr_value = player_info_static.get('ecr')
+    # Get years_exp from combined_player_data_cache
+    years_exp = player_data.get('years_exp')
+    if years_exp is not None:
+        context_lines.append(f"  - Experience: {int(years_exp)} years")
+    else:
+        context_lines.append(f"  - Experience: N/A years") # Indicate if data is missing
+
+    # Use the appropriate ECR and related stats based on preference
+    ecr_label = f"{ecr_type_preference.title()} ECR"
+    ecr_value = player_data.get(f'ecr_{ecr_type_preference}')
     ecr_display = f"{ecr_value:.1f}" if isinstance(ecr_value, (int, float)) else "N/A"
     context_lines.append(f"  - {ecr_label}: {ecr_display}")
     
-    if sd := player_info_static.get('sd'): context_lines.append(f"  - Std Dev: {sd:.2f}")
-    if best := player_info_static.get('best'): context_lines.append(f"  - Best Rank: {int(best)}")
-    if worst := player_info_static.get('worst'): context_lines.append(f"  - Worst Rank: {int(worst)}")
-    if rank_delta := player_info_static.get('rank_delta'): context_lines.append(f"  - Rank Delta (1W): {rank_delta:.1f}")
-    if bye_week := player_info_static.get('bye'): context_lines.append(f"  - Bye Week: {int(bye_week)}")
+    if sd := player_data.get(f'sd_{ecr_type_preference}'): context_lines.append(f"  - Std Dev: {sd:.2f}")
+    if best := player_data.get(f'best_{ecr_type_preference}'): context_lines.append(f"  - Best Rank: {int(best)}")
+    if worst := player_data.get(f'worst_{ecr_type_preference}'): context_lines.append(f"  - Worst Rank: {int(worst)}")
+    if rank_delta := player_data.get(f'rank_delta_{ecr_type_preference}'): context_lines.append(f"  - Rank Delta (1W): {rank_delta:.1f}")
+    if bye_week := player_data.get('bye_week'): context_lines.append(f"  - Bye Week: {int(bye_week)}")
     
     return "\n".join(context_lines)
 
 def make_gemini_request(prompt, user_api_key):
     if not user_api_key: raise Exception("API key is missing from the request.")
     genai.configure(api_key=user_api_key)
-    response = model.generate_content(prompt)
+    try:
+        response = model.generate_content(prompt)
+    except Exception as e:
+        print(f"DEBUG: Error during generate_content: {e}")
+        raise e
     if not response.candidates:
         print("AI model did not return a valid response (no candidates).")
         return "The AI model did not return a valid response. The content may have been blocked due to safety settings."
@@ -355,11 +387,11 @@ def player_dossier():
         player_id = player_name_to_id.get(sleeper_key) if sleeper_key and player_name_to_id else {}
         player_info_live = player_data_cache.get(player_id, {}) if player_id and player_data_cache else {}
         
-        # Get data from combined cache
-        combined_info = combined_player_data_cache.get(player_name.lower().strip(), {})
+        # Get data from combined cache using the normalized player name
+        combined_info = combined_player_data_cache.get(normalize_player_name(player_name), {})
 
         player_data_response = {
-            "name": player_info_live.get('full_name', player_name.title()),
+            "name": combined_info.get('display_name', player_name.title()), # Use display_name for the dossier header
             "team": combined_info.get('team', 'N/A'),
             "position": combined_info.get('position', 'N/A'),
             "bye_week": combined_info.get('bye_week'),
@@ -400,27 +432,33 @@ def rookie_rankings():
         user_key = request.headers.get('X-API-Key')
         position_filter = request.json.get('position', 'all')
         
-        # Use static_ecr_rookie_data for rookie rankings
-        rookies_from_ecr = []
-        for name_key, data in static_ecr_rookie_data.items():
-            if position_filter == 'all' or data.get('pos') == position_filter:
-                rookies_from_ecr.append({
-                    'name': data.get('name', name_key.title()),
-                    'position': data.get('pos'),
-                    'team': data.get('team'),
-                    'ecr': data.get('ecr'),
-                    'sd': data.get('sd'),
-                    'best': data.get('best'),
-                    'worst': data.get('worst'),
-                    'rank_delta': data.get('rank_delta')
-                })
+        # Filter combined_player_data_cache for rookies based on years_exp
+        rookies_for_ranking = []
+        for name_key, player_data in combined_player_data_cache.items():
+            # A player is considered a rookie if years_exp is 0 or 1 (for redshirt/draft year)
+            # and they are present in the static_ecr_rookie_data (drk)
+            is_rookie_by_exp = player_data.get('years_exp') is not None and (player_data['years_exp'] == 0 or player_data['years_exp'] == 1)
+            is_in_rookie_ecr = name_key in static_ecr_rookie_data # Check if they are in the DRK ECR
+
+            if is_rookie_by_exp and is_in_rookie_ecr:
+                if position_filter == 'all' or player_data.get('position') == position_filter:
+                    rookies_for_ranking.append({
+                        'name': player_data.get('display_name', player_data.get('name')), # Prefer display_name
+                        'position': player_data.get('position'),
+                        'team': player_data.get('team'),
+                        'ecr': player_data.get('ecr_rookie'),
+                        'sd': player_data.get('sd_rookie'),
+                        'best': player_data.get('best_rookie'),
+                        'worst': player_data.get('worst_rookie'),
+                        'rank_delta': player_data.get('rank_delta_rookie')
+                    })
         
-        # Sort rookies by ECR
-        sorted_rookies = sorted(rookies_from_ecr, key=lambda x: x.get('ecr') if x.get('ecr') is not None else 999)
+        # Sort rookies by their rookie ECR
+        sorted_rookies = sorted(rookies_for_ranking, key=lambda x: x.get('ecr') if x.get('ecr') is not None else 999)
         
-        rookie_list_for_prompt = [f"- {r['name']} ({r['position']}, {r['team']}) - ECR: {r.get('ecr') or 'N/A'}" for r in sorted_rookies[:50]]
+        rookie_list_for_prompt = [f"- {r['name']} ({r['position']}, {r['team']}) - ECR: {r.get('ecr')}, SD: {r.get('sd')}, Best: {r.get('best')}, Worst: {r.get('worst')}, RankDelta: {r.get('rank_delta')}" for r in sorted_rookies[:50]]
         
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Create a ranked list of rookies.\n\n**Rookie Data:**\n{chr(10).join(rookie_list_for_prompt)}\n\n**Instructions:** Your response MUST be a single JSON object with one key: \"rookies\". The value must be a JSON array of objects. For each of the top 15 rookies, create an object with these keys: \"rank\", \"name\", \"position\", \"team\", \"ecr\" (string or \"N/A\"), \"sd\", \"best\", \"worst\", \"rank_delta\", and \"analysis\" (a 1-2 sentence summary of their outlook)."
+        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** From the provided Rookie Data, create a ranked list of the top 15 rookies. Ensure that the 'position' field in your output matches the position of the player in the provided data. If a position filter was applied, only include players matching that filter.\n\n**Rookie Data:**\n{chr(10).join(rookie_list_for_prompt)}\n\n**Instructions:** Your response MUST be a single, valid JSON object. This object must have one top-level key: \"rookies\". The value of \"rookies\" MUST be a JSON array. Each element in this array MUST be a JSON object representing a rookie. Each rookie object MUST have the following keys, in this exact order, with correctly formatted JSON values: \"rank\" (integer), \"name\" (string), \"position\" (string), \"team\" (string), \"ecr\" (float or null), \"sd\" (float or null), \"best\" (integer or null), \"worst\" (integer or null), \"rank_delta\" (float or null), and \"analysis\" (string, 1-2 sentences). For any numeric field where data is not available, use `null` instead of \"N/A\" or any other string. Ensure all strings are properly quoted and all necessary commas are included between key-value pairs and between objects in the array. Do not include any text or formatting outside of this single JSON object."
         response_text = make_gemini_request(prompt, user_key)
         
         # Use a more robust method to extract the JSON block
@@ -654,7 +692,17 @@ def all_player_names_with_data():
     for player_data in combined_player_data_cache.values():
         # Ensure all values are JSON-serializable (None for NaN)
         cleaned_player_data = {k: (None if isinstance(v, float) and pd.isna(v) else v) for k, v in player_data.items()}
-        player_list.append(cleaned_player_data)
+        # For autocomplete, we will provide a specific 'autocomplete_name' field
+        player_list.append({
+            'name': cleaned_player_data.get('name'), # This is the normalized name, used for staticData keying
+            'display_name': cleaned_player_data.get('display_name'), # The full name for display
+            'autocomplete_name': cleaned_player_data.get('display_name', cleaned_player_data.get('name')), # The name to be used by autocomplete.js
+            'position': cleaned_player_data.get('position'),
+            'team': cleaned_player_data.get('team'),
+            'ecr_overall': cleaned_player_data.get('ecr_overall'),
+            'ecr_positional': cleaned_player_data.get('ecr_positional'),
+            'years_exp': cleaned_player_data.get('years_exp')
+        })
     
     # Debugging: Print a sample of the data being sent to the frontend
     if player_list:
@@ -779,6 +827,31 @@ def waiver_wire_analysis():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/debug_rookie_ecr_data', methods=['GET'])
+def debug_rookie_ecr_data():
+    if not static_ecr_rookie_data:
+        return jsonify({"error": "Rookie ECR data not loaded."}), 500
+    
+    # Return all rookie ECR data
+    all_rookie_data = []
+    for player_name, data in static_ecr_rookie_data.items():
+        all_rookie_data.append(data)
+    return jsonify(all_rookie_data)
+
+@app.route('/api/debug_all_player_sd_data', methods=['GET'])
+def debug_all_player_sd_data():
+    if not combined_player_data_cache:
+        return jsonify({"error": "Combined player data cache not loaded."}), 500
+    
+    all_sd_data = []
+    for player_key, player_data in combined_player_data_cache.items():
+        all_sd_data.append({
+            'name': player_data.get('display_name', player_data.get('name')),
+            'sd_overall': player_data.get('sd_overall'),
+            'sd_positional': player_data.get('sd_positional')
+        })
+    return jsonify(all_sd_data)
+
 @app.route('/api/debug_player_cache/<player_name>', methods=['GET'])
 def debug_player_cache(player_name):
     global player_data_cache, player_name_to_id
@@ -786,19 +859,28 @@ def debug_player_cache(player_name):
         get_all_players() # Attempt to load if not already loaded
 
     if player_data_cache:
-        # Try to find by exact match first
-        player_id = player_name_to_id.get(player_name.lower().strip())
+        normalized_search_name = normalize_player_name(player_name)
+        
+        # Try to find by normalized name first
+        player_id = player_name_to_id.get(normalized_search_name)
         if player_id:
             return jsonify(player_data_cache.get(player_id))
         
-        # If not found by exact match, try fuzzy match
+        # If not found by normalized name, try fuzzy match on original full_name
         for p_id, p_data in player_data_cache.items():
-            if p_data.get('full_name', '').lower().strip() == player_name.lower().strip():
-                return jsonify(p_data)
-            if player_name.lower().strip() in p_data.get('full_name', '').lower().strip():
-                return jsonify(p_data) # Return first fuzzy match
+            if p_data.get('full_name'):
+                if normalized_search_name in normalize_player_name(p_data['full_name']):
+                    return jsonify(p_data) # Return first fuzzy match based on normalized names
         
-        return jsonify({"message": "Player not found in cache"}), 404
+        # If still not found, return a sample of player_name_to_id for debugging
+        sample_keys = list(player_name_to_id.keys())[:20] # Get first 20 keys
+        return jsonify({
+            "message": f"Player '{player_name}' (normalized: '{normalized_search_name}') not found in cache.",
+            "debug_info": {
+                "sample_player_name_to_id_keys": sample_keys,
+                "total_player_name_to_id_keys": len(player_name_to_id)
+            }
+        }), 404
     return jsonify({"message": "Player data cache not loaded"}), 500
 
 if __name__ == '__main__':
