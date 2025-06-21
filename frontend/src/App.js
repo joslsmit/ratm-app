@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import showdown from 'showdown';
 import autoComplete from '@tarekraafat/autocomplete.js';
 import './App.css';
-import DynastyValues from './components/DynastyValues';
 import WaiverWireAssistant from './components/WaiverWireAssistant';
 
 // The backend API URL. This can be changed to your production URL when you deploy.
@@ -116,6 +115,19 @@ function App() {
     } else {
       return { label: 'Low Consensus', icon: '⚠️' };
     }
+  }, []);
+
+  /**
+   * Normalizes player names for consistent matching on the frontend.
+   * Mirrors the backend's normalize_player_name function.
+   * @param {string} name - The player name to normalize.
+   * @returns {string} - The normalized player name.
+   */
+  const normalizePlayerName = useCallback((name) => {
+    if (!name) return '';
+    let normalized = name.replace(/\s(Jr|Sr|[IVX]+)\.?$/i, '').trim();
+    normalized = normalized.replace(/[^a-zA-Z0-9\s]/g, '').trim();
+    return normalized.toLowerCase();
   }, []);
 
   /**
@@ -879,7 +891,6 @@ function App() {
                 <li><a href="#trade" className={activeTool === 'trade' ? 'active' : ''}>Trade Analyzer</a></li>
                 <li><a href="#draft" className={activeTool === 'draft' ? 'active' : ''}>Draft Assistant</a></li>
                 <li><a href="#waiver" className={activeTool === 'waiver' ? 'active' : ''}>Waiver Wire Assistant</a></li>
-                <li><a href="#dynasty" className={activeTool === 'dynasty' ? 'active' : ''}>Dynasty Values</a></li>
               </ul>
             )}
           </div>
@@ -1167,9 +1178,11 @@ function App() {
                 </div>
                 <div className="keeper-list" style={{ marginTop: '15px' }}>
                   {keeperList.map((keeper, index) => {
-                    const playerData = staticPlayerData[keeper.name.toLowerCase()];
-                    const adp = playerData?.adp;
-                    const value = adp ? (keeper.round * 12) - adp : null; // A simple value calculation
+                    const normalizedKeeperName = normalizePlayerName(keeper.name);
+                    const playerData = staticPlayerData[normalizedKeeperName];
+                    const ecrOverall = playerData?.ecr_overall;
+                    const estimatedRound = getEstimatedDraftRound(ecrOverall);
+
                     if (editingKeeperIndex === index) {
                       return (
                         <div key={index} className="keeper-card" style={{ border: '1px solid var(--border-color)', borderRadius: '5px', padding: '10px', marginBottom: '10px', backgroundColor: 'var(--card-bg)' }}>
@@ -1207,7 +1220,10 @@ function App() {
                               <span style={{ marginRight: '15px' }}>Cost: Round {keeper.round}</span>
                               {keeper.context && <span>Context: {keeper.context}</span>}
                             </div>
-                            <small>ECR: {adp ? adp.toFixed(1) : 'N/A'} {value !== null && `(Value: ${value > 0 ? '+' : ''}${(value / 12).toFixed(1)})`}</small>
+                            <small>
+                              ECR: {ecrOverall ? ecrOverall.toFixed(1) : 'N/A'} 
+                              {ecrOverall && ` (${estimatedRound})`}
+                            </small>
                           </div>
                           <div style={{ display: 'flex', gap: '5px' }}>
                             <button onClick={() => startEditingKeeper(index)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
@@ -1422,14 +1438,6 @@ function App() {
             </section>
           )}
 
-          {activeTool === 'dynasty' && (
-            <section id="dynasty">
-              <div className="tool-header"><h2>Dynasty Values</h2><p>View dynasty trade values for players and picks.</p></div>
-              <div className="card">
-                <DynastyValues />
-              </div>
-            </section>
-          )}
 
         </div>
       </div>
