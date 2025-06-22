@@ -49,6 +49,14 @@ function DraftAssistant({
     return counts;
   }, [staticPlayerData, getDraftBoardState]);
 
+  const loadDraftBoard = useCallback(() => {
+    const savedBoard = localStorage.getItem('draftBoard');
+    if (savedBoard) {
+        return JSON.parse(savedBoard);
+    }
+    return {};
+  }, []);
+
   const saveDraftBoard = useCallback(() => {
     const newBoard = {};
     let changesDetected = false;
@@ -75,14 +83,6 @@ function DraftAssistant({
     setDraftBoard(newBoard); // This is crucial for React to re-render with the updated board
     updateRosterComposition();
   }, [updateRosterComposition, loadDraftBoard]);
-
-  const loadDraftBoard = useCallback(() => {
-    const savedBoard = localStorage.getItem('draftBoard');
-    if (savedBoard) {
-        return JSON.parse(savedBoard);
-    }
-    return {};
-  }, []);
 
   const renderGeneric = useCallback(async (toolName, endpoint, body, setResult) => {
     const loader = document.getElementById(`${toolName}-loader`);
