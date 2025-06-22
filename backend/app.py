@@ -356,11 +356,16 @@ def process_ai_response(response_text):
         json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
         if json_match:
             cleaned_text = json_match.group(0)
+            try:
+                data = json.loads(cleaned_text)
+            except json.JSONDecodeError as e:
+                print(f"JSON decode error: {e}")
+                # Return raw response as fallback
+                return response_text.strip()
         else:
-            # Fallback to original cleaning if no curly braces found
-            cleaned_text = re.sub(r'^```json\s*|```\s*$', '', response_text.strip(), flags=re.MULTILINE)
-        
-        data = json.loads(cleaned_text)
+            # If no JSON block found, treat entire response as plain text
+            return response_text.strip()
+
         raw_confidence = data.get('confidence', 'Medium')
         analysis_content = data.get('analysis', 'No analysis provided.')
 
@@ -405,7 +410,7 @@ def process_ai_response(response_text):
         emoji_map = {'High': '✅', 'Medium': '🤔', 'Low': '⚠️'}
         confidence_badge = f"**Confidence: {emoji_map.get(confidence, '🤔')} {confidence}**"
         return f"{confidence_badge}\n\n---\n\n{analysis_text}"
-    except (json.JSONDecodeError, AttributeError) as e:
+    except Exception as e:
         print(f"Error processing AI response: {e}")
         traceback.print_exc()
         # Log the error for debugging
@@ -706,9 +711,11 @@ def pick_evaluator():
 def roster_composition_analysis():
     try:
         user_key = request.headers.get('X-API-Key')
-        composition = request.json.get('composition')
+        data = request.json
+        composition = data.get('composition', {})
+        drafted_count = data.get('drafted_count', 0)
         comp_str = ", ".join([f"{count} {pos}" for pos, count in composition.items()])
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Provide a brief, 2-3 sentence analysis of my roster balance based on these position counts.\n\n**Composition:**\n{comp_str}"
+        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Provide a brief, 2-3 sentence analysis of my roster balance based on these position counts. Consider that only {drafted_count} players have been drafted so far, and adjust your advice based on the current stage of the draft.\n\n**Composition (after {drafted_count} picks):**\n{comp_str}"
         response_text = make_gemini_request(prompt, user_key)
         return jsonify({'result': process_ai_response(response_text)})
     except Exception as e:

@@ -11,7 +11,8 @@ function DraftAssistant({
   activeTool,
   ecrTypePreference,
   getOverallSdLabel,
-  getPositionalSdLabel
+  getPositionalSdLabel,
+  normalizePlayerName
 }) {
   const [draftAnalysisResult, setDraftAnalysisResult] = useState('');
   const [rosterCompositionResult, setRosterCompositionResult] = useState('');
@@ -33,7 +34,18 @@ function DraftAssistant({
     const draftedPlayers = getDraftBoardState();
     Object.values(draftedPlayers).forEach(playerName => {
       const key = playerName.toLowerCase();
-      const playerData = staticPlayerData[key];
+      if (!staticPlayerData[key]) {
+        console.warn(`Player data not found for key: ${key}`);
+      }
+      let playerData = staticPlayerData[key];
+      if (!playerData) {
+        // Try to find player data by fuzzy matching keys
+        const fuzzyKey = Object.keys(staticPlayerData).find(k => k.includes(key) || key.includes(k));
+        if (fuzzyKey) {
+          playerData = staticPlayerData[fuzzyKey];
+          console.warn(`Fuzzy matched player key: ${key} -> ${fuzzyKey}`);
+        }
+      }
       if (playerData && playerData.position) {
         const pos = playerData.position;
         if (pos in counts) {
@@ -121,8 +133,10 @@ function DraftAssistant({
   }, [renderGeneric, getDraftBoardState]);
 
   const analyzeComposition = useCallback(() => {
-    renderGeneric('draft-comp', '/roster_composition_analysis', { composition: updateRosterComposition() }, setRosterCompositionResult);
-  }, [renderGeneric, updateRosterComposition]);
+    const composition = updateRosterComposition();
+    const draftedCount = Object.values(getDraftBoardState()).filter(name => name).length;
+    renderGeneric('draft-comp', '/roster_composition_analysis', { composition, drafted_count: draftedCount }, setRosterCompositionResult);
+  }, [renderGeneric, updateRosterComposition, getDraftBoardState]);
 
   // Create and load the draft board on initial mount
   useEffect(() => {
@@ -181,6 +195,7 @@ function DraftAssistant({
               ecrTypePreference={ecrTypePreference}
               getOverallSdLabel={getOverallSdLabel}
               getPositionalSdLabel={getPositionalSdLabel}
+              normalizePlayerName={normalizePlayerName}
             />
           ))}
         </div>
