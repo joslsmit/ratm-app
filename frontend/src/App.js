@@ -11,6 +11,9 @@ import TrendingPlayers from './components/TrendingPlayers';
 import KeeperEvaluator from './components/KeeperEvaluator';
 import TradeAnalyzer from './components/TradeAnalyzer'; // Import TradeAnalyzer
 import DraftAssistant from './components/DraftAssistant'; // Import DraftAssistant
+import TargetList from './components/TargetList'; // Import TargetList
+import Settings from './components/Settings'; // Import Settings
+import Sidebar from './components/Sidebar'; // Import Sidebar
 
 // The backend API URL. This can be changed to your production URL when you deploy.
 const API_BASE_URL = 'http://localhost:5001/api';
@@ -245,9 +248,9 @@ function App() {
     });
   }, []);
 
-  const handleRemoveFromTargets = (playerName) => {
+  const handleRemoveFromTargets = useCallback((playerName) => {
     setTargetList(prevList => prevList.filter(p => p.toLowerCase() !== playerName.toLowerCase()));
-  };
+  }, []);
 
   const generateDossier = useCallback((playerName) => {
     const nameToFetch = playerName || document.getElementById('dossier-player-name')?.value;
@@ -687,67 +690,13 @@ function App() {
         </div>
       )}
 
-      <div className="sidebar">
-        <div className="sidebar-header">
-          <a href="/" title="Start Over" className="sidebar-logo-link">
-            <img src="/images/redd-logo.png" alt="Redd Against the Machine Logo" className="app-logo" />
-          </a>
-        </div>
-        <div className="global-search-container">
-          <div className="autoComplete_wrapper">
-            <input id="global-player-search" type="text" placeholder="Quick Find Player..." />
-          </div>
-        </div>
-        <div className="ecr-preference-selector">
-            <label htmlFor="ecr-type-preference">ECR Type:</label>
-            <select id="ecr-type-preference" value={ecrTypePreference} onChange={(e) => setEcrTypePreference(e.target.value)}>
-              <option value="overall">Overall ECR</option>
-              <option value="positional">Positional ECR</option>
-            </select>
-          </div>
-        <nav className="sidebar-nav">
-          <ul>
-            <li><a href="#targets" className={activeTool === 'targets' ? 'active' : ''}>Target List <span className="badge">{targetList.length}</span></a></li>
-          </ul>
-          <div className="nav-section">
-            <h3 onClick={() => toggleNavSection('playerAnalysis')}>
-              Player Analysis <span className={navSections.playerAnalysis ? 'arrow down' : 'arrow right'}></span>
-            </h3>
-            {navSections.playerAnalysis && (
-              <ul>
-                <li><a href="#dossier" className={activeTool === 'dossier' ? 'active' : ''}>Player Dossier</a></li>
-                <li><a href="#rookie" className={activeTool === 'rookie' ? 'active' : ''}>Rookie Rankings</a></li>
-                <li><a href="#tiers" className={activeTool === 'tiers' ? 'active' : ''}>Positional Tiers</a></li>
-                <li><a href="#market" className={activeTool === 'market' ? 'active' : ''}>Sleepers & Busts</a></li>
-                <li><a href="#trending" className={activeTool === 'trending' ? 'active' : ''}>Trending Players</a></li>
-              </ul>
-            )}
-          </div>
-
-          <div className="nav-section">
-            <h3 onClick={() => toggleNavSection('teamManagement')}>
-              Team Management <span className={navSections.teamManagement ? 'arrow down' : 'arrow right'}></span>
-            </h3>
-            {navSections.teamManagement && (
-              <ul>
-                <li><a href="#keeper" className={activeTool === 'keeper' ? 'active' : ''}>Keeper Evaluator</a></li>
-                <li><a href="#trade" className={activeTool === 'trade' ? 'active' : ''}>Trade Analyzer</a></li>
-                <li><a href="#draft" className={activeTool === 'draft' ? 'active' : ''}>Draft Assistant</a></li>
-                <li><a href="#waiver" className={activeTool === 'waiver' ? 'active' : ''}>Waiver Wire Assistant</a></li>
-              </ul>
-            )}
-          </div>
-        </nav>
-        <div className="sidebar-footer">
-          <nav className="utility-nav">
-             <a href="#settings" className={activeTool === 'settings' ? 'active' : ''}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-settings"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                Settings
-             </a>
-          </nav>
-          <p>© 2025 RATM</p>
-        </div>
-      </div>
+      <Sidebar
+        activeTool={activeTool}
+        targetList={targetList}
+        navSections={navSections}
+        toggleNavSection={toggleNavSection}
+        setActiveTool={setEcrTypePreference}
+      />
 
       <div className="main-content">
         <div className="content-wrapper">
@@ -783,50 +732,14 @@ function App() {
           )}
 
           {activeTool === 'targets' && (
-            <section id="targets">
-              <div className="tool-header"><h2>My Target List</h2><p>A list of players you are targeting in your draft.</p></div>
-              <div className="card">
-                <div className="target-list-container">
-                  {targetList.length > 0 ? (
-                    <table className="target-table">
-                      <thead>
-                        <tr>
-                          <th>Player</th>
-                          <th>Pos.</th>
-                          <th>Team</th>
-                          <th>ECR</th>
-                          <th>SD</th>
-                          <th>Bye</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {targetList.map(playerName => {
-                          const playerData = staticPlayerData[playerName.toLowerCase()];
-                          return (
-                            <tr key={playerName}>
-                              <td><a href={`/?tool=dossier&player=${encodeURIComponent(playerName)}`} className="player-link">{playerName}</a></td>
-                              <td>{playerData?.position || 'N/A'}</td>
-                              <td>{playerData?.team || 'N/A'}</td>
-                              <td>{playerData?.ecr ? playerData.ecr.toFixed(1) : 'N/A'}</td>
-                              <td>{playerData?.sd ? playerData.sd.toFixed(2) : 'N/A'}</td>
-                              <td>{playerData?.bye_week || 'N/A'}</td>
-                              <td>
-                                <button className="remove-btn-small" onClick={() => handleRemoveFromTargets(playerName)}>
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <p>Your target list is empty. Add players from the Dossier, Rankings, or Tiers tools.</p>
-                  )}
-                </div>
-              </div>
-            </section>
+            <TargetList
+              targetList={targetList}
+              setTargetList={setTargetList}
+              staticPlayerData={staticPlayerData}
+              handleRemoveFromTargets={handleRemoveFromTargets}
+              getOverallSdLabel={getOverallSdLabel}
+              getPositionalSdLabel={getPositionalSdLabel}
+            />
           )}
 
           {activeTool === 'market' && (
@@ -893,23 +806,11 @@ function App() {
           )}
 
           {activeTool === 'settings' && (
-            <section id="settings">
-              <div className="tool-header"><h2>Settings</h2><p>Manage application data and preferences.</p></div>
-              <div className="card">
-                <h3>Theme</h3>
-                <p>Switch between light and dark mode.</p>
-                <button onClick={toggleTheme}>Toggle Theme</button>
-              </div>
-              <div className="card">
-                <h3>Clear Saved Data</h3>
-                <p>This action will permanently delete your saved Google API key, draft board, and target list from this browser.</p>
-                <button onClick={resetApplication} className="btn-danger">Clear All Data & Reset</button>
-              </div>
-              <div className="card">
-                <h3>Data Last Updated</h3>
-                <p>Dynasty process files were last updated on: <strong>{lastUpdateDate}</strong></p>
-              </div>
-            </section>
+            <Settings
+              lastUpdateDate={lastUpdateDate}
+              toggleTheme={toggleTheme}
+              resetApplication={resetApplication}
+            />
           )}
 
 

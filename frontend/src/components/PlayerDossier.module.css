@@ -100,11 +100,20 @@ button:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .addTargetBtn:hover {
   background-color: rgba(0, 123, 255, 0.2);
+}
+
+.addTargetBtn.added {
+  background-color: rgba(40, 167, 69, 0.2); /* Green tint for success */
+  color: var(--confidence-high); /* Green color for icon */
+}
+
+.addTargetBtn.added:hover {
+  background-color: rgba(40, 167, 69, 0.3);
 }
 
 .playerBasicInfo {
