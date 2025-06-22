@@ -50,20 +50,31 @@ function DraftAssistant({
   }, [staticPlayerData, getDraftBoardState]);
 
   const saveDraftBoard = useCallback(() => {
-    const board = {};
-    let hasChanges = false;
+    const newBoard = {};
+    let changesDetected = false;
+
+    // Get the current board from localStorage to compare for changes
+    const currentSavedBoard = loadDraftBoard();
+
     for (let i = 1; i <= 15; i++) {
-      const playerName = document.getElementById(`round-${i}-player-hidden`)?.value;
-      if (playerName) {
-        board[i] = playerName;
-        hasChanges = true;
+      const playerName = document.getElementById(`round-${i}-player-hidden`)?.value || ''; // Ensure it's always a string
+      newBoard[i] = playerName;
+
+      // Check if the current value is different from the previously saved value
+      if (playerName !== (currentSavedBoard[i] || '')) {
+        changesDetected = true;
       }
     }
-    if (hasChanges) {
-      localStorage.setItem('draftBoard', JSON.stringify(board));
+
+    // Only write to localStorage if there were actual changes
+    if (changesDetected) {
+      localStorage.setItem('draftBoard', JSON.stringify(newBoard));
     }
+    
+    // Always update the component's state to reflect the latest board
+    setDraftBoard(newBoard); // This is crucial for React to re-render with the updated board
     updateRosterComposition();
-  }, [updateRosterComposition]);
+  }, [updateRosterComposition, loadDraftBoard]);
 
   const loadDraftBoard = useCallback(() => {
     const savedBoard = localStorage.getItem('draftBoard');
