@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import autoComplete from '@tarekraafat/autocomplete.js';
 
-function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handleGlobalSearch, initialPlayerName, ecrTypePreference }) {
+function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handleGlobalSearch, initialPlayerName, ecrTypePreference, getOverallSdLabel, getPositionalSdLabel }) {
     const [isEditing, setIsEditing] = useState(false);
     const [playerName, setPlayerName] = useState(initialPlayerName || '');
     const autoCompleteRef = useRef(null);
@@ -65,16 +65,22 @@ function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handle
     const position = playerData?.position;
 
     // Determine which ECR to display based on the global preference
+
+    const getSdConsensus = (ecrType) => {
+        if (!playerData) return { label: 'N/A', icon: '' };
+        const sdValue = playerData[`sd_${ecrType}`];
+        if (ecrType === 'overall') {
+            return getOverallSdLabel(sdValue);
+        } else if (ecrType === 'positional') {
+            return getPositionalSdLabel(sdValue);
+        }
+        return { label: 'N/A', icon: '' };
+    };
+
     const displayEcr = (ecrType) => {
         if (!playerData) return 'N/A';
         const ecrValue = playerData[`ecr_${ecrType}`];
         return ecrValue ? ecrValue.toFixed(1) : 'N/A';
-    };
-
-    const displaySd = (ecrType) => {
-        if (!playerData) return 'N/A';
-        const sdValue = playerData[`sd_${ecrType}`];
-        return sdValue ? sdValue.toFixed(2) : 'N/A';
     };
 
     const displayBest = (ecrType) => {
@@ -87,11 +93,7 @@ function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handle
         return playerData[`worst_${ecrType}`] || 'N/A';
     };
 
-    const displayRankDelta = (ecrType) => {
-        if (!playerData) return 'N/A';
-        const rankDeltaValue = playerData[`rank_delta_${ecrType}`];
-        return rankDeltaValue ? rankDeltaValue.toFixed(1) : 'N/A';
-    };
+    const sdConsensus = getSdConsensus(ecrTypePreference);
 
     return (
         <div className={`round-card pos-${position?.toLowerCase()}`}>
@@ -110,12 +112,26 @@ function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handle
             {playerName && <button onClick={handleClear} className="remove-btn-small">Clear</button>}
             {playerData && (
                 <div className="draft-card-details">
-                    <span>ECR ({ecrTypePreference === 'overall' ? 'Overall' : 'Positional'}): {displayEcr(ecrTypePreference)}</span>
-                    <span>SD ({ecrTypePreference === 'overall' ? 'Overall' : 'Positional'}): {displaySd(ecrTypePreference)}</span>
-                    <span>Best ({ecrTypePreference === 'overall' ? 'Overall' : 'Positional'}): {displayBest(ecrTypePreference)}</span>
-                    <span>Worst ({ecrTypePreference === 'overall' ? 'Overall' : 'Positional'}): {displayWorst(ecrTypePreference)}</span>
-                    <span>Rank Delta ({ecrTypePreference === 'overall' ? 'Overall' : 'Positional'}): {displayRankDelta(ecrTypePreference)}</span>
-                    <span>Bye: {playerData.bye_week || 'N/A'}</span>
+                    <div className="detail-row">
+                        <span>ECR ({ecrTypePreference === 'overall' ? 'Overall' : 'Positional'}):</span>
+                        <span>{displayEcr(ecrTypePreference)}</span>
+                    </div>
+                    <div className="detail-row">
+                        <span>Consensus:</span>
+                        <span>{sdConsensus.icon} {sdConsensus.label}</span>
+                    </div>
+                    <div className="detail-row">
+                        <span>Best:</span>
+                        <span>{displayBest(ecrTypePreference)}</span>
+                    </div>
+                    <div className="detail-row">
+                        <span>Worst:</span>
+                        <span>{displayWorst(ecrTypePreference)}</span>
+                    </div>
+                    <div className="detail-row">
+                        <span>Bye:</span>
+                        <span>{playerData.bye_week || 'N/A'}</span>
+                    </div>
                 </div>
             )}
         </div>
