@@ -9,6 +9,7 @@ import PositionalTiers from './components/PositionalTiers';
 import MarketInefficiencyFinder from './components/MarketInefficiencyFinder';
 import TrendingPlayers from './components/TrendingPlayers';
 import KeeperEvaluator from './components/KeeperEvaluator';
+import TradeAnalyzer from './components/TradeAnalyzer'; // Import TradeAnalyzer
 
 // The backend API URL. This can be changed to your production URL when you deploy.
 const API_BASE_URL = 'http://localhost:5001/api';
@@ -38,7 +39,6 @@ function App() {
   const [dossierResult, setDossierResult] = useState(null);
   const [tiersResult, setTiersResult] = useState([]);
   const [keeperResult, setKeeperResult] = useState('');
-  const [tradeResult, setTradeResult] = '';
   const [draftAnalysisResult, setDraftAnalysisResult] = '';
   const [rosterCompositionResult, setRosterCompositionResult] = '';
   const [waiverSwapResult, setWaiverSwapResult] = '';
@@ -48,19 +48,12 @@ function App() {
   // States for list-based tools
   const [targetList, setTargetList] = useState([]);
   const [keeperList, setKeeperList] = useState([]);
-  const [myTradeAssets, setMyTradeAssets] = useState([]);
-  const [partnerTradeAssets, setPartnerTradeAssets] = useState([]);
   const [keeperPlayerName, setKeeperPlayerName] = useState('');
   const [keeperRoundInput, setKeeperRoundInput] = useState('');
   const [keeperContextInput, setKeeperContextInput] = useState('');
   const [editingKeeperIndex, setEditingKeeperIndex] = useState(null);
   const [editRoundInput, setEditRoundInput] = useState('');
   const [editContextInput, setEditContextInput] = useState('');
-  const [tradeScoringFormat, setTradeScoringFormat] = useState('PPR');
-  const [myPlayerInput, setMyPlayerInput] = useState('');
-  const [partnerPlayerInput, setPartnerPlayerInput] = useState('');
-  const [myPickInput, setMyPickInput] = useState('');
-  const [partnerPickInput, setPartnerPickInput] = useState('');
   const [ecrTypePreference, setEcrTypePreference] = useState('overall'); // New state for ECR type preference
 
   // Memoize the Showdown converter to avoid recreating it on every render
@@ -451,48 +444,6 @@ function App() {
   }, [allPlayers, activeTool]);
   */
 
-  // Autocomplete for Trade Analyzer
-  useEffect(() => {
-    console.log('Initializing trade analyzer autocomplete. activeTool:', activeTool, 'allPlayers length:', allPlayers.length);
-    if (activeTool !== 'trade' || allPlayers.length === 0) return;
-
-    const myPlayerAC = new autoComplete({
-        selector: '#trade-my-player-input',
-        placeHolder: "Enter player name...",
-        data: { src: allPlayers, cache: true },
-        resultItem: { highlight: true },
-        events: {
-            input: {
-                selection: (event) => {
-                    const selection = event.detail.selection.value;
-                    setMyPlayerInput(selection);
-                },
-            },
-        },
-    });
-
-    const partnerPlayerAC = new autoComplete({
-        selector: '#trade-partner-player-input',
-        placeHolder: "Enter player name...",
-        data: { src: allPlayers, cache: true },
-        resultItem: { highlight: true },
-        events: {
-            input: {
-                selection: (event) => {
-                    const selection = event.detail.selection.value;
-                    setPartnerPlayerInput(selection);
-                },
-            },
-        },
-    });
-
-    return () => {
-        console.log('Uninitializing trade analyzer autocomplete.');
-        if (myPlayerAC) myPlayerAC.unInit();
-        if (partnerPlayerAC) partnerPlayerAC.unInit();
-    };
-  }, [allPlayers, activeTool]);
-
   const findMarketInefficiencies = useCallback(async () => {
     const loader = document.getElementById('market-loader');
     if (loader) loader.style.display = 'block';
@@ -529,11 +480,6 @@ function App() {
     if (keeperList.length === 0) { alert('Please add at least one keeper.'); return; }
     renderGeneric('keeper', '/keeper_evaluation', { keepers: keeperList }, setKeeperResult);
   }, [renderGeneric, keeperList]);
-
-  const evaluateTrade = useCallback(() => {
-    if (myTradeAssets.length === 0 || partnerTradeAssets.length === 0) { alert('Please add assets to both sides of the trade.'); return; }
-    renderGeneric('trade', '/trade_analyzer', { my_assets: myTradeAssets, partner_assets: partnerTradeAssets, scoring_format: tradeScoringFormat }, setTradeResult);
-  }, [renderGeneric, myTradeAssets, partnerTradeAssets, tradeScoringFormat]);
 
   const suggestPosition = useCallback(() => {
     const currentRound = document.getElementById('draft-current-round')?.value;
@@ -593,32 +539,6 @@ function App() {
     setEditContextInput('');
   };
 
-  const addAsset = (side, assetType) => {
-    const playerInput = side === 'my' ? myPlayerInput : partnerPlayerInput;
-    const pickInput = side === 'my' ? myPickInput : partnerPickInput;
-    const setAssets = side === 'my' ? setMyTradeAssets : setPartnerTradeAssets;
-    const setPlayerInput = side === 'my' ? setMyPlayerInput : setPartnerPlayerInput;
-    const setPickInput = side === 'my' ? setMyPickInput : setPartnerPickInput;
-
-    let assetToAdd = '';
-    if (assetType === 'player' && playerInput) {
-      assetToAdd = playerInput;
-    } else if (assetType === 'pick' && pickInput) {
-      assetToAdd = pickInput;
-    }
-
-    if (assetToAdd) {
-      setAssets(prevAssets => [...prevAssets, assetToAdd]);
-      if (assetType === 'player') {
-        setPlayerInput('');
-        document.getElementById(`trade-${side}-player-input`)?.focus();
-      } else {
-        setPickInput('');
-        document.getElementById(`trade-${side}-pick-input`)?.focus();
-      }
-    }
-  };
-  
   const fetchTrending = useCallback(async () => {
     const loader = document.getElementById('trending-loader');
     if(loader) loader.style.display = 'block';
@@ -1019,73 +939,11 @@ function App() {
           )}
           
           {activeTool === 'trade' && (
-            <section id="trade">
-              <div className="tool-header">
-                <h2>Trade Analyzer</h2>
-                <p>Get an unbiased analysis of any trade proposal.</p>
-              </div>
-              <div className="trade-box">
-                <div className="card trade-settings-card">
-                  <div className="form-group-inline">
-                    <label htmlFor="scoring-format">Scoring Format:</label>
-                    <select id="scoring-format" value={tradeScoringFormat} onChange={(e) => setTradeScoringFormat(e.target.value)}>
-                      <option value="PPR">PPR</option>
-                      <option value="Half-PPR">Half-PPR</option>
-                      <option value="Standard">Standard</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="trade-side card">
-                  <h3>Your Team Receives:</h3>
-                  <div className="form-group-inline">
-                    <div className="autoComplete_wrapper">
-                      <input id="trade-my-player-input" type="text" placeholder="Enter player name..." value={myPlayerInput} onChange={(e) => setMyPlayerInput(e.target.value)} />
-                    </div>
-                    <button onClick={() => addAsset('my', 'player')}>Add Player</button>
-                  </div>
-                  <div className="form-group-inline">
-                    <input id="trade-my-pick-input" type="text" placeholder="e.g., 2025 1st or Pick 1.05" value={myPickInput} onChange={(e) => setMyPickInput(e.target.value)} />
-                    <button onClick={() => addAsset('my', 'pick')}>Add Pick</button>
-                  </div>
-                  <ul className="item-list">
-                    {myTradeAssets.map((asset, index) => (
-                      <li key={index} className="list-item">
-                        <span>{asset}</span>
-                        <button className="remove-btn" onClick={() => setMyTradeAssets(prev => prev.filter((_, i) => i !== index))}>
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="trade-side card">
-                  <h3>Your Team Gives Away:</h3>
-                  <div className="form-group-inline">
-                    <div className="autoComplete_wrapper">
-                      <input id="trade-partner-player-input" type="text" placeholder="Enter player name..." value={partnerPlayerInput} onChange={(e) => setPartnerPlayerInput(e.target.value)} />
-                    </div>
-                    <button onClick={() => addAsset('partner', 'player')}>Add Player</button>
-                  </div>
-                  <div className="form-group-inline">
-                    <input id="trade-partner-pick-input" type="text" placeholder="e.g., 2025 1st or Pick 1.05" value={partnerPickInput} onChange={(e) => setPartnerPickInput(e.target.value)} />
-                    <button onClick={() => addAsset('partner', 'pick')}>Add Pick</button>
-                  </div>
-                  <ul className="item-list">
-                    {partnerTradeAssets.map((asset, index) => (
-                      <li key={index} className="list-item">
-                        <span>{asset}</span>
-                        <button className="remove-btn" onClick={() => setPartnerTradeAssets(prev => prev.filter((_, i) => i !== index))}>
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-              <button onClick={evaluateTrade} className="action-button">Analyze Trade</button>
-              <div id="trade-loader" className="loader" style={{ display: 'none' }}></div>
-              <div id="trade-result" className="result-box" dangerouslySetInnerHTML={{ __html: converter.makeHtml(tradeResult) }}></div>
-            </section>
+            <TradeAnalyzer
+              makeApiRequest={makeApiRequest}
+              allPlayers={allPlayers}
+              converter={converter}
+            />
           )}
 
           {activeTool === 'draft' && (
