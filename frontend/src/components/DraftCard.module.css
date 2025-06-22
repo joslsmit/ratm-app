@@ -85,15 +85,25 @@
     margin-top: 10px;
     padding-top: 10px;
     border-top: 1px dashed var(--border-color);
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
+    display: grid; /* Use CSS Grid for better alignment */
+    grid-template-columns: auto 1fr; /* Two columns: label and value */
+    gap: 5px 10px; /* Row gap, column gap */
     font-size: 0.9em;
     color: var(--text-muted);
+    text-align: left; /* Align text to the left within the grid */
 }
 
-.draft-card-details span {
-    display: block;
+.draft-card-details .detail-row {
+    display: contents; /* Makes children participate in the grid layout */
+}
+
+.draft-card-details .detail-row span:first-child {
+    font-weight: 500; /* Make labels slightly bolder */
+    color: var(--text-color); /* Ensure labels are clearly visible */
+}
+
+.draft-card-details .detail-row span:last-child {
+    text-align: right; /* Align values to the right */
 }
 
 /* Position-specific colors (example - adjust as needed) */

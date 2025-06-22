@@ -9,7 +9,9 @@ function DraftAssistant({
   handleGlobalSearch,
   converter,
   activeTool,
-  ecrTypePreference
+  ecrTypePreference,
+  getOverallSdLabel,
+  getPositionalSdLabel
 }) {
   const [draftAnalysisResult, setDraftAnalysisResult] = useState('');
   const [rosterCompositionResult, setRosterCompositionResult] = useState('');
@@ -177,6 +179,8 @@ function DraftAssistant({
               handleGlobalSearch={handleGlobalSearch}
               initialPlayerName={draftBoard[round]}
               ecrTypePreference={ecrTypePreference}
+              getOverallSdLabel={getOverallSdLabel}
+              getPositionalSdLabel={getPositionalSdLabel}
             />
           ))}
         </div>

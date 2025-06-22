@@ -870,6 +870,8 @@ function App() {
               converter={converter}
               activeTool={activeTool}
               ecrTypePreference={ecrTypePreference}
+              getOverallSdLabel={getOverallSdLabel}
+              getPositionalSdLabel={getPositionalSdLabel}
             />
           )}
 
