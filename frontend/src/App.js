@@ -872,6 +872,7 @@ function App() {
               ecrTypePreference={ecrTypePreference}
               getOverallSdLabel={getOverallSdLabel}
               getPositionalSdLabel={getPositionalSdLabel}
+              normalizePlayerName={normalizePlayerName}
             />
           )}
 

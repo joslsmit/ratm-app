@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import autoComplete from '@tarekraafat/autocomplete.js';
 
-function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handleGlobalSearch, initialPlayerName, ecrTypePreference, getOverallSdLabel, getPositionalSdLabel }) {
+function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handleGlobalSearch, initialPlayerName, ecrTypePreference, getOverallSdLabel, getPositionalSdLabel, normalizePlayerName }) {
     const [isEditing, setIsEditing] = useState(false);
     const [playerName, setPlayerName] = useState(initialPlayerName || '');
     const autoCompleteRef = useRef(null);
@@ -61,7 +61,7 @@ function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handle
         saveDraftBoard();
     };
 
-    const playerData = playerName ? staticPlayerData[playerName.toLowerCase()] : null;
+    const playerData = playerName ? staticPlayerData[normalizePlayerName(playerName)] : null;
     const position = playerData?.position;
 
     // Determine which ECR to display based on the global preference
@@ -98,7 +98,10 @@ function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handle
     return (
         <div className={`round-card pos-${position?.toLowerCase()}`}>
             <input type="hidden" id={`round-${round}-player-hidden`} value={playerName} />
-            <label>Round {round}</label>
+            <div className="draft-card-header">
+                <label>Round {round}</label>
+                {playerName && <button onClick={handleClear} className="remove-btn-small">Clear</button>}
+            </div>
             {isEditing ? (
                 <div className="autoComplete_wrapper">
                     <input id={`round-${round}-player`} type="text" placeholder="Player..." />
@@ -109,7 +112,6 @@ function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handle
                     {playerName || 'Click to add player'}
                 </div>
             )}
-            {playerName && <button onClick={handleClear} className="remove-btn-small">Clear</button>}
             {playerData && (
                 <div className="draft-card-details">
                     <div className="detail-row">

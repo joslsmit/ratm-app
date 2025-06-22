@@ -93,20 +93,21 @@
 }
 
 .draft-card-details .detail-row {
-    display: flex; /* Make each row a flex container */
-    justify-content: space-between; /* Push label to left, value to right */
-    align-items: center; /* Vertically align items */
+    display: grid; /* Use CSS Grid for precise column control */
+    grid-template-columns: minmax(0, max-content) 1fr; /* Label takes content width, value takes remaining */
+    gap: 10px; /* Gap between columns */
+    align-items: baseline; /* Align text baselines */
 }
 
 .draft-card-details .detail-row span:first-child {
     font-weight: 500; /* Make labels slightly bolder */
     color: var(--text-color); /* Ensure labels are clearly visible */
-    flex-shrink: 0; /* Prevent label from shrinking */
+    /* Remove white-space and padding to allow wrapping if needed */
 }
 
 .draft-card-details .detail-row span:last-child {
     text-align: right; /* Align values to the right */
-    flex-grow: 1; /* Allow value to take remaining space */
+    min-width: 0; /* Allow content to shrink if needed */
     word-break: break-word; /* Break long words if necessary */
 }
 
