@@ -781,9 +781,24 @@ def all_player_names_with_data():
             'autocomplete_name': cleaned_player_data.get('display_name', cleaned_player_data.get('name')), # The name to be used by autocomplete.js
             'position': cleaned_player_data.get('position'),
             'team': cleaned_player_data.get('team'),
+            'bye_week': cleaned_player_data.get('bye_week'), # Added missing field
             'ecr_overall': cleaned_player_data.get('ecr_overall'),
+            'sd_overall': cleaned_player_data.get('sd_overall'), # Added missing field
+            'best_overall': cleaned_player_data.get('best_overall'), # Added missing field
+            'worst_overall': cleaned_player_data.get('worst_overall'), # Added missing field
+            'rank_delta_overall': cleaned_player_data.get('rank_delta_overall'), # Added missing field
             'ecr_positional': cleaned_player_data.get('ecr_positional'),
-            'years_exp': cleaned_player_data.get('years_exp')
+            'sd_positional': cleaned_player_data.get('sd_positional'), # Added missing field
+            'best_positional': cleaned_player_data.get('best_positional'), # Added missing field
+            'worst_positional': cleaned_player_data.get('worst_positional'), # Added missing field
+            'rank_delta_positional': cleaned_player_data.get('rank_delta_positional'), # Added missing field
+            'ecr_rookie': cleaned_player_data.get('ecr_rookie'), # Added missing field
+            'sd_rookie': cleaned_player_data.get('sd_rookie'), # Added missing field
+            'best_rookie': cleaned_player_data.get('best_rookie'), # Added missing field
+            'worst_rookie': cleaned_player_data.get('worst_rookie'), # Added missing field
+            'rank_delta_rookie': cleaned_player_data.get('rank_delta_rookie'), # Added missing field
+            'years_exp': cleaned_player_data.get('years_exp'),
+            'is_rookie': cleaned_player_data.get('is_rookie') # Added missing field
         })
     
     # Debugging: Print a sample of the data being sent to the frontend
