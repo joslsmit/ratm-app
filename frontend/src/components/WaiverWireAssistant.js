@@ -3,8 +3,9 @@ import autoComplete from '@tarekraafat/autocomplete.js';
 
 const RosterInput = ({ id, label, allPlayers }) => {
   useEffect(() => {
+    let autocompleteInstance;
     if (allPlayers.length > 0) {
-      new autoComplete({
+      autocompleteInstance = new autoComplete({
         selector: `#${id}`,
         placeHolder: `Enter player for ${label}...`,
         data: { src: allPlayers, cache: true },
@@ -19,13 +20,51 @@ const RosterInput = ({ id, label, allPlayers }) => {
         },
       });
     }
+    return () => {
+      // Attempt to clean up autocomplete instance if possible
+      if (autocompleteInstance) {
+        autocompleteInstance.unInit && autocompleteInstance.unInit();
+      }
+    };
   }, [allPlayers, id, label]);
+
+  const handleClearInput = () => {
+    const input = document.querySelector(`#${id}`);
+    if (input) {
+      input.value = '';
+    }
+  };
 
   return (
     <div className="roster-input-group">
       <label htmlFor={id}>{label}</label>
-      <div className="autoComplete_wrapper">
-        <input id={id} type="text" />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+        <div className="autoComplete_wrapper" style={{ flexGrow: 1 }}>
+          <input id={id} type="text" />
+        </div>
+        <button 
+          onClick={handleClearInput} 
+          style={{ 
+            background: 'none', 
+            border: 'none', 
+            color: 'var(--danger-color)', 
+            cursor: 'pointer', 
+            padding: '5px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            borderRadius: '4px', 
+            transition: 'background-color 0.2s ease' 
+          }}
+          onMouseOver={(e) => e.target.style.backgroundColor = 'rgba(244, 67, 54, 0.1)'}
+          onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+          aria-label={`Clear ${label} input`}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
       </div>
     </div>
   );
@@ -55,8 +94,9 @@ const WaiverWireAssistant = ({ allPlayers, onAnalyze, analysisResult, isLoading 
   };
   
   useEffect(() => {
+    let autocompleteInstance;
     if (allPlayers.length > 0) {
-        new autoComplete({
+        autocompleteInstance = new autoComplete({
             selector: '#player-to-add',
             placeHolder: "Enter player to add...",
             data: { src: allPlayers, cache: true },
@@ -71,6 +111,12 @@ const WaiverWireAssistant = ({ allPlayers, onAnalyze, analysisResult, isLoading 
             },
         });
     }
+    return () => {
+      // Attempt to clean up autocomplete instance if possible
+      if (autocompleteInstance) {
+        autocompleteInstance.unInit && autocompleteInstance.unInit();
+      }
+    };
   }, [allPlayers]);
 
   const handleTabChange = (tab) => {
