@@ -1,0 +1,141 @@
+/* DraftCard.module.css */
+
+.round-card {
+    background-color: var(--card-bg);
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    padding: 15px;
+    margin-bottom: 15px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    border: 1px solid var(--border-color);
+}
+
+.round-card label {
+    font-weight: bold;
+    color: var(--primary-color);
+    margin-bottom: 10px;
+    display: block;
+    font-size: 1.1em;
+}
+
+.player-display {
+    background-color: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 10px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    color: var(--text-color);
+    min-height: 40px; /* Ensure consistent height */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    transition: background-color 0.2s ease;
+}
+
+.player-display:hover {
+    background-color: var(--input-hover-bg);
+}
+
+.round-card input[type="text"] {
+    width: calc(100% - 22px); /* Account for padding */
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    margin-bottom: 10px;
+}
+
+.round-card button {
+    background-color: var(--button-bg);
+    color: var(--button-text-color);
+    border: none;
+    border-radius: var(--border-radius);
+    padding: 8px 15px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    font-size: 0.9em;
+}
+
+.round-card button:hover {
+    background-color: var(--button-hover-bg);
+}
+
+.remove-btn-small {
+    background: none;
+    border: none;
+    color: var(--danger-color);
+    cursor: pointer;
+    padding: 5px;
+    margin-left: 5px;
+    font-size: 0.8em;
+    transition: color 0.2s ease;
+}
+
+.remove-btn-small:hover {
+    color: var(--danger-hover-color);
+}
+
+.draft-card-details {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 0.9em;
+    color: var(--text-muted);
+}
+
+.draft-card-details span {
+    display: block;
+}
+
+/* Position-specific colors (example - adjust as needed) */
+.pos-qb { border-left: 5px solid var(--qb-color, #FFD700); } /* Gold */
+.pos-rb { border-left: 5px solid var(--rb-color, #FF6347); } /* Tomato */
+.pos-wr { border-left: 5px solid var(--wr-color, #4682B4); } /* SteelBlue */
+.pos-te { border-left: 5px solid var(--te-color, #32CD32); } /* LimeGreen */
+.pos-k { border-left: 5px solid var(--k-color, #8A2BE2); } /* BlueViolet */
+.pos-dst { border-left: 5px solid var(--dst-color, #DAA520); } /* Goldenrod */
+
+/* Autocomplete specific styles */
+.autoComplete_wrapper > ul {
+    background-color: var(--dropdown-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+    position: absolute;
+    width: calc(100% - 30px); /* Adjust based on parent padding */
+    left: 15px;
+    top: calc(100% + 5px); /* Position below the input */
+}
+
+.autoComplete_wrapper > ul > li {
+    padding: 10px 15px;
+    cursor: pointer;
+    color: var(--text-color);
+    border-bottom: 1px solid var(--border-color-light);
+}
+
+.autoComplete_wrapper > ul > li:last-child {
+    border-bottom: none;
+}
+
+.autoComplete_wrapper > ul > li:hover {
+    background-color: var(--dropdown-hover-bg);
+}
+
+.autoComplete_wrapper > ul > li mark {
+    background-color: var(--highlight-color);
+    color: var(--highlight-text-color);
+    padding: 0;
+}

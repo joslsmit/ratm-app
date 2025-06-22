@@ -10,6 +10,7 @@ import MarketInefficiencyFinder from './components/MarketInefficiencyFinder';
 import TrendingPlayers from './components/TrendingPlayers';
 import KeeperEvaluator from './components/KeeperEvaluator';
 import TradeAnalyzer from './components/TradeAnalyzer'; // Import TradeAnalyzer
+import DraftAssistant from './components/DraftAssistant'; // Import DraftAssistant
 
 // The backend API URL. This can be changed to your production URL when you deploy.
 const API_BASE_URL = 'http://localhost:5001/api';
@@ -33,15 +34,13 @@ function App() {
   const [sortDirection, setSortDirection] = useState({ name: 'asc', position: 'asc', adds: 'desc', team: 'asc', ecr: 'asc' });
   const [marketInefficiencies, setMarketInefficiencies] = useState({ sleepers: [], busts: [] });
   const [rookieRankings, setRookieRankings] = useState([]);
-  const [draftBoard, setDraftBoard] = useState({});
-
-  // State for results that are simple markdown/HTML
+  // Removed draftBoard state
+  // Removed draftAnalysisResult state
+  // Removed rosterCompositionResult state
   const [dossierResult, setDossierResult] = useState(null);
   const [tiersResult, setTiersResult] = useState([]);
   const [keeperResult, setKeeperResult] = useState('');
-  const [draftAnalysisResult, setDraftAnalysisResult] = '';
-  const [rosterCompositionResult, setRosterCompositionResult] = '';
-  const [waiverSwapResult, setWaiverSwapResult] = '';
+  const [waiverSwapResult, setWaiverSwapResult] = useState('');
   const [isWaiverSwapLoading, setIsWaiverSwapLoading] = useState(false);
   const [lastUpdateDate, setLastUpdateDate] = useState('Loading...');
 
@@ -250,66 +249,6 @@ function App() {
     setTargetList(prevList => prevList.filter(p => p.toLowerCase() !== playerName.toLowerCase()));
   };
 
-  const getDraftBoardState = useCallback(() => {
-    const board = {};
-    for (let i = 1; i <= 15; i++) {
-      const input = document.getElementById(`round-${i}-player-hidden`);
-      if (input && input.value) {
-        board[`Round ${i}`] = input.value;
-      }
-    }
-    return board;
-  }, []);
-
-    const updateRosterComposition = useCallback(() => {
-    const counts = { QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DST: 0 };
-    const draftedPlayers = getDraftBoardState();
-    Object.values(draftedPlayers).forEach(playerName => {
-      const key = playerName.toLowerCase();
-      const playerData = staticPlayerData[key];
-      if (playerData && playerData.position) { // Use 'position' from ECR data
-        const pos = playerData.position;
-        if (pos in counts) {
-          counts[pos]++;
-        }
-      }
-    });
-
-    // Update the UI
-    for (const pos in counts) {
-      const cell = document.getElementById(`comp-${pos.toLowerCase()}`);
-      if (cell) {
-        cell.textContent = counts[pos];
-      }
-    }
-    return counts;
-  }, [staticPlayerData, getDraftBoardState]);
-
-
-  const saveDraftBoard = useCallback(() => {
-    const board = {};
-    let hasChanges = false;
-    for (let i = 1; i <= 15; i++) {
-      const playerName = document.getElementById(`round-${i}-player-hidden`)?.value;
-      if (playerName) {
-        board[i] = playerName;
-        hasChanges = true;
-      }
-    }
-    if (hasChanges) {
-      localStorage.setItem('draftBoard', JSON.stringify(board));
-    }
-    updateRosterComposition();
-  }, [updateRosterComposition]);
-
-  const loadDraftBoard = useCallback(() => {
-    const savedBoard = localStorage.getItem('draftBoard');
-    if (savedBoard) {
-        return JSON.parse(savedBoard);
-    }
-    return {};
-  }, []);
-
   const generateDossier = useCallback((playerName) => {
     const nameToFetch = playerName || document.getElementById('dossier-player-name')?.value;
     if (!nameToFetch) { alert('Please enter a player name.'); return; }
@@ -481,22 +420,6 @@ function App() {
     renderGeneric('keeper', '/keeper_evaluation', { keepers: keeperList }, setKeeperResult);
   }, [renderGeneric, keeperList]);
 
-  const suggestPosition = useCallback(() => {
-    const currentRound = document.getElementById('draft-current-round')?.value;
-    if (!currentRound) { alert('Please enter the current round.'); return; }
-    renderGeneric('draft-analysis', '/suggest_position', { draft_board: getDraftBoardState(), current_round: currentRound }, setDraftAnalysisResult);
-  }, [renderGeneric, getDraftBoardState]);
-
-  const evaluatePick = useCallback(() => {
-    const playerToPick = document.getElementById('draft-pick-player')?.value;
-    const currentRound = document.getElementById('draft-current-round')?.value;
-    if (!playerToPick || !currentRound) { alert('Please enter both a player and the current round.'); return; }
-    renderGeneric('draft-analysis', '/pick_evaluator', { draft_board: getDraftBoardState(), player_to_pick: playerToPick, current_round: currentRound }, setDraftAnalysisResult);
-  }, [renderGeneric, getDraftBoardState]);
-
-  const analyzeComposition = useCallback(() => {
-    renderGeneric('draft-comp', '/roster_composition_analysis', { composition: updateRosterComposition() }, setRosterCompositionResult);
-  }, [renderGeneric, updateRosterComposition]);
 
   const addKeeper = () => {
     const roundValue = parseInt(keeperRoundInput, 10);
@@ -616,14 +539,6 @@ function App() {
       .catch(error => console.error("Error fetching player names:", error));
   }, []);
 
-  // Create and load the draft board on initial mount
-  useEffect(() => {
-    // Only run if the draft tool is the active one initially
-    if (activeTool === 'draft') {
-        const board = loadDraftBoard();
-        setDraftBoard(board);
-    }
-  }, [activeTool, loadDraftBoard]);
 
 
   // Fetch trending data only when the trending tool is active
@@ -947,63 +862,15 @@ function App() {
           )}
 
           {activeTool === 'draft' && (
-            <section id="draft">
-                <div className="tool-header"><h2>Live Draft Assistant</h2><p>Track your draft and get real-time advice.</p></div>
-                <div className="draft-dashboard">
-                    <div className="draft-main-panel">
-                        <div className="card">
-                            <h3>Analysis & Advice</h3>
-                            <div className="form-group-inline">
-                                <input type="number" id="draft-current-round" placeholder="Current Round #" />
-                                <div className="autoComplete_wrapper"><input id="draft-pick-player" type="text" placeholder="Player being considered..." /></div>
-                            </div>
-                            <div className="form-group-inline">
-                                <button onClick={suggestPosition}>Suggest Position</button>
-                                <button onClick={evaluatePick}>Evaluate Player</button>
-                            </div>
-                            <div id="draft-analysis-loader" className="loader" style={{ display: 'none' }}></div>
-                            <div id="draft-analysis-result" className="result-box" dangerouslySetInnerHTML={{ __html: converter.makeHtml(draftAnalysisResult) }}></div>
-                        </div>
-                    </div>
-                    <div className="draft-sidebar-panel">
-                        <div className="card">
-                            <h3>Roster Composition</h3>
-                            <table className="composition-table">
-                                <thead><tr><th>QB</th><th>RB</th><th>WR</th><th>TE</th><th>K</th><th>DST</th></tr></thead>
-                                <tbody><tr><td id="comp-qb">0</td><td id="comp-rb">0</td><td id="comp-wr">0</td><td id="comp-te">0</td><td id="comp-k">0</td><td id="comp-dst">0</td></tr></tbody>
-                            </table>
-                            <div style={{ textAlign: 'center', marginTop: '15px' }}>
-                                <button onClick={analyzeComposition}>Analyze Balance</button>
-                            </div>
-                            <div id="draft-comp-loader" className="loader" style={{ display: 'none' }}></div>
-                            <div id="draft-comp-result" className="result-box" style={{ marginTop: '15px' }} dangerouslySetInnerHTML={{ __html: converter.makeHtml(rosterCompositionResult) }}></div>
-                        </div>
-                    </div>
-                </div>
-                <div className="draft-board-container" style={{ display: activeTool === 'draft' ? 'flex' : 'none', flexDirection: 'column' }}>
-                    <h3>Your Draft Board</h3>
-                    <div className="draft-board">
-                        {Array.from({ length: 15 }, (_, i) => i + 1).map(round => (
-                            <DraftCard
-                                key={round}
-                                round={round}
-                                staticPlayerData={staticPlayerData}
-                                saveDraftBoard={saveDraftBoard}
-                                allPlayers={allPlayers}
-                                handleGlobalSearch={handleGlobalSearch}
-                                initialPlayerName={draftBoard[round]}
-                                ecrTypePreference={ecrTypePreference}
-                            />
-                        ))}
-                    </div>
-                    <button onClick={() => {
-                        if(window.confirm("Are you sure you want to reset the entire draft board?")) {
-                            localStorage.removeItem('draftBoard');
-                            setDraftBoard({});
-                        }
-                    }} className="action-button btn-danger btn-small" style={{marginTop: "20px", alignSelf: "center"}}>Reset Board</button>
-                </div>
-            </section>
+            <DraftAssistant
+              makeApiRequest={makeApiRequest}
+              staticPlayerData={staticPlayerData}
+              allPlayers={allPlayers}
+              handleGlobalSearch={handleGlobalSearch}
+              converter={converter}
+              activeTool={activeTool}
+              ecrTypePreference={ecrTypePreference}
+            />
           )}
 
           {activeTool === 'trending' && (
@@ -1049,125 +916,5 @@ function App() {
   );
 }
 
-function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handleGlobalSearch, initialPlayerName, ecrTypePreference }) {
-    const [isEditing, setIsEditing] = useState(false);
-    const [playerName, setPlayerName] = useState(initialPlayerName || '');
-    const autoCompleteRef = React.useRef(null);
-
-    useEffect(() => {
-        setPlayerName(initialPlayerName || '');
-    }, [initialPlayerName]);
-
-    useEffect(() => {
-        if (isEditing && !autoCompleteRef.current) {
-            const inputId = `round-${round}-player`;
-            autoCompleteRef.current = new autoComplete({
-                selector: `#${inputId}`,
-                placeHolder: "Player...",
-                data: { src: allPlayers, cache: true },
-                resultItem: { highlight: true },
-                events: {
-                    input: {
-                        selection: event => {
-                            const selectedValue = event.detail.selection.value;
-                            setPlayerName(selectedValue);
-                            const hiddenInput = document.getElementById(`round-${round}-player-hidden`);
-                            if(hiddenInput) {
-                                hiddenInput.value = selectedValue;
-                            }
-                            saveDraftBoard();
-                            if (autoCompleteRef.current) {
-                                autoCompleteRef.current.unInit();
-                                autoCompleteRef.current = null;
-                            }
-                            setIsEditing(false);
-                        }
-                    }
-                }
-            });
-        }
-    }, [isEditing, round, allPlayers, saveDraftBoard]);
-
-    const handleEdit = () => {
-        setIsEditing(true);
-    };
-
-    const handleCancel = () => {
-        if (autoCompleteRef.current) {
-            autoCompleteRef.current.unInit();
-            autoCompleteRef.current = null;
-        }
-        setIsEditing(false);
-    };
-
-    const handleClear = () => {
-        setPlayerName('');
-        const hiddenInput = document.getElementById(`round-${round}-player-hidden`);
-        if(hiddenInput) {
-            hiddenInput.value = '';
-        }
-        saveDraftBoard();
-    };
-
-    const playerData = playerName ? staticPlayerData[playerName.toLowerCase()] : null;
-    const position = playerData?.position;
-
-    // Determine which ECR to display based on the global preference
-    const displayEcr = (ecrType) => {
-        if (!playerData) return 'N/A';
-        const ecrValue = playerData[`ecr_${ecrType}`];
-        return ecrValue ? ecrValue.toFixed(1) : 'N/A';
-    };
-
-    const displaySd = (ecrType) => {
-        if (!playerData) return 'N/A';
-        const sdValue = playerData[`sd_${ecrType}`];
-        return sdValue ? sdValue.toFixed(2) : 'N/A';
-    };
-
-    const displayBest = (ecrType) => {
-        if (!playerData) return 'N/A';
-        return playerData[`best_${ecrType}`] || 'N/A';
-    };
-
-    const displayWorst = (ecrType) => {
-        if (!playerData) return 'N/A';
-        return playerData[`worst_${ecrType}`] || 'N/A';
-    };
-
-    const displayRankDelta = (ecrType) => {
-        if (!playerData) return 'N/A';
-        const rankDeltaValue = playerData[`rank_delta_${ecrType}`];
-        return rankDeltaValue ? rankDeltaValue.toFixed(1) : 'N/A';
-    };
-
-    return (
-        <div className={`round-card pos-${position?.toLowerCase()}`}>
-            <input type="hidden" id={`round-${round}-player-hidden`} value={playerName} />
-            <label>Round {round}</label>
-            {isEditing ? (
-                <div className="autoComplete_wrapper">
-                    <input id={`round-${round}-player`} type="text" placeholder="Player..." />
-                    <button onClick={handleCancel}>Cancel</button>
-                </div>
-            ) : (
-                <div className="player-display" onClick={handleEdit}>
-                    {playerName || 'Click to add player'}
-                </div>
-            )}
-            {playerName && <button onClick={handleClear} className="remove-btn-small">Clear</button>}
-            {playerData && (
-                <div className="draft-card-details">
-                    <span>ECR ({ecrTypePreference === 'overall' ? 'Overall' : 'Positional'}): {displayEcr(ecrTypePreference)}</span>
-                    <span>SD ({ecrTypePreference === 'overall' ? 'Overall' : 'Positional'}): {displaySd(ecrTypePreference)}</span>
-                    <span>Best ({ecrTypePreference === 'overall' ? 'Overall' : 'Positional'}): {displayBest(ecrTypePreference)}</span>
-                    <span>Worst ({ecrTypePreference === 'overall' ? 'Overall' : 'Positional'}): {displayWorst(ecrTypePreference)}</span>
-                    <span>Rank Delta ({ecrTypePreference === 'overall' ? 'Overall' : 'Positional'}): {displayRankDelta(ecrTypePreference)}</span>
-                    <span>Bye: {playerData.bye_week || 'N/A'}</span>
-                </div>
-            )}
-        </div>
-    );
-}
 
 export default App;
