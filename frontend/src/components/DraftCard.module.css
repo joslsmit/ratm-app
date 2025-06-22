@@ -1,9 +1,9 @@
 /* DraftCard.module.css */
 
 .round-card {
-    background-color: var(--card-bg);
-    border-radius: var(--border-radius);
-    box-shadow: var(--box-shadow);
+    background-color: var(--card-background);
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     padding: 15px;
     margin-bottom: 15px;
     text-align: center;
@@ -22,9 +22,9 @@
 }
 
 .player-display {
-    background-color: var(--input-bg);
+    background-color: var(--input-background);
     border: 1px solid var(--border-color);
-    border-radius: var(--border-radius);
+    border-radius: 4px;
     padding: 10px;
     margin-bottom: 10px;
     cursor: pointer;
@@ -38,24 +38,24 @@
 }
 
 .player-display:hover {
-    background-color: var(--input-hover-bg);
+    background-color: var(--input-hover-background);
 }
 
 .round-card input[type="text"] {
     width: calc(100% - 22px); /* Account for padding */
     padding: 10px;
     border: 1px solid var(--border-color);
-    border-radius: var(--border-radius);
-    background-color: var(--input-bg);
+    border-radius: 4px;
+    background-color: var(--input-background);
     color: var(--text-color);
     margin-bottom: 10px;
 }
 
 .round-card button {
-    background-color: var(--button-bg);
-    color: var(--button-text-color);
+    background-color: var(--button-background);
+    color: var(--button-text);
     border: none;
-    border-radius: var(--border-radius);
+    border-radius: 4px;
     padding: 8px 15px;
     cursor: pointer;
     transition: background-color 0.2s ease;
@@ -63,7 +63,7 @@
 }
 
 .round-card button:hover {
-    background-color: var(--button-hover-bg);
+    background-color: var(--button-hover-background);
 }
 
 .remove-btn-small {
@@ -78,7 +78,7 @@
 }
 
 .remove-btn-small:hover {
-    color: var(--danger-hover-color);
+    color: #c82333;
 }
 
 .draft-card-details {
@@ -121,10 +121,10 @@
 
 /* Autocomplete specific styles */
 .autoComplete_wrapper > ul {
-    background-color: var(--dropdown-bg);
+    background-color: var(--input-background);
     border: 1px solid var(--border-color);
-    border-radius: var(--border-radius);
-    box-shadow: var(--box-shadow);
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     max-height: 200px;
     overflow-y: auto;
     z-index: 1000;
@@ -146,11 +146,11 @@
 }
 
 .autoComplete_wrapper > ul > li:hover {
-    background-color: var(--dropdown-hover-bg);
+    background-color: var(--input-hover-background);
 }
 
 .autoComplete_wrapper > ul > li mark {
-    background-color: var(--highlight-color);
-    color: var(--highlight-text-color);
+    background-color: var(--primary-color);
+    color: var(--button-text);
     padding: 0;
 }

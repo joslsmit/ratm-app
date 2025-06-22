@@ -30,8 +30,8 @@
 }
 
 .composition-table th {
-    background-color: var(--table-header-bg);
-    color: var(--table-header-text-color);
+    background-color: var(--table-header-background);
+    color: var(--text-color);
 }
 
 .composition-table td {
@@ -42,9 +42,10 @@
 .draft-board-container {
     margin-top: 30px;
     padding: 20px;
-    background-color: var(--card-bg);
-    border-radius: var(--border-radius);
-    box-shadow: var(--box-shadow);
+    background-color: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .draft-board-container h3 {

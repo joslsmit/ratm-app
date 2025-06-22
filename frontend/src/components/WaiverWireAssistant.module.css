@@ -1,0 +1,220 @@
+.waiverSection {
+  margin-bottom: 40px;
+}
+
+.toolHeader {
+  margin-bottom: 25px;
+  text-align: center;
+}
+
+.toolHeader h2 {
+  color: var(--primary-color);
+  font-size: 2.2em;
+  margin-bottom: 5px;
+}
+
+.toolHeader p {
+  color: var(--text-muted);
+  font-size: 1.1em;
+}
+
+.card {
+  background-color: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.singleColumnLayout {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.rosterSection {
+  width: 100%;
+}
+
+.waiverPlayerSection {
+  width: 100%;
+}
+
+.tabNavigation {
+  display: flex;
+  margin-bottom: 15px;
+}
+
+.tabButton {
+  background-color: var(--input-background);
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  padding: 8px 15px;
+  cursor: pointer;
+  color: var(--text-color);
+  margin-right: 5px;
+  transition: background-color 0.2s ease;
+}
+
+.tabButton.active {
+  background-color: var(--primary-color);
+  color: var(--button-text);
+}
+
+.tabPane {
+  display: none;
+}
+
+.tabPane.active {
+  display: block !important;
+}
+
+.tabPane.hidden {
+  display: none;
+}
+
+.waiverGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 15px;
+}
+
+.rosterInputGroup {
+  margin-bottom: 10px;
+}
+
+.rosterInputGroup label {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-color);
+  font-weight: 500;
+}
+
+.rosterInputGroup div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.autoCompleteWrapper {
+  flex-grow: 1;
+  position: relative;
+}
+
+.autoCompleteWrapper > ul {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  width: 100%;
+  background-color: var(--input-background);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.autoCompleteWrapper > ul > li {
+  padding: 8px 12px;
+  cursor: pointer;
+  color: var(--text-color);
+  border-bottom: 1px solid var(--border-color-light);
+}
+
+.autoCompleteWrapper > ul > li:last-child {
+  border-bottom: none;
+}
+
+.autoCompleteWrapper > ul > li:hover {
+  background-color: var(--input-hover-background);
+}
+
+.autoCompleteWrapper > ul > li mark {
+  background-color: var(--primary-color);
+  color: var(--button-text);
+  padding: 0;
+}
+
+.autoCompleteWrapper input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  background-color: var(--input-background);
+  color: var(--text-color);
+  font-size: 1em;
+  min-height: 40px;
+}
+
+.clearButton {
+  background: none;
+  border: none;
+  color: var(--danger-color);
+  cursor: pointer;
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.clearButton:hover {
+  background-color: rgba(244, 67, 54, 0.1);
+}
+
+.formGroupInline {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 15px;
+  flex-wrap: nowrap;
+}
+
+.actionButton {
+  background-color: var(--primary-color);
+  color: var(--button-text);
+  border: none;
+  border-radius: 4px;
+  padding: 10px 20px;
+  font-size: 1em;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.actionButton:hover {
+  background-color: var(--button-hover-background);
+}
+
+.actionButton:disabled {
+  background-color: var(--button-disabled-background);
+  cursor: not-allowed;
+}
+
+.loader {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid var(--loader-color);
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  animation: spin 1s linear infinite;
+  margin: 20px auto;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.resultBox {
+  background-color: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 20px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  font-size: 1.1em;
+}
