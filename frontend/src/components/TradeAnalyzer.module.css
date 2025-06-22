@@ -10,18 +10,20 @@
 .trade-settings-card {
     flex-basis: 100%;
     padding: 15px;
-    background-color: var(--card-bg);
-    border-radius: var(--border-radius);
-    box-shadow: var(--box-shadow);
+background-color: var(--card-background);
+border: 1px solid var(--border-color);
+border-radius: 8px;
+box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .trade-side {
     flex: 1;
     min-width: 300px;
     padding: 20px;
-    background-color: var(--card-bg);
-    border-radius: var(--border-radius);
-    box-shadow: var(--box-shadow);
+    background-color: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .trade-side h3 {
@@ -43,23 +45,23 @@
     flex-grow: 1;
     padding: 8px 12px;
     border: 1px solid var(--border-color);
-    border-radius: var(--border-radius);
-    background-color: var(--input-bg);
+    border-radius: 8px;
+    background-color: var(--input-background);
     color: var(--text-color);
 }
 
 .form-group-inline button {
     padding: 8px 15px;
-    background-color: var(--button-bg);
-    color: var(--button-text-color);
+    background-color: var(--button-background);
+    color: var(--button-text);
     border: none;
-    border-radius: var(--border-radius);
+    border-radius: 8px;
     cursor: pointer;
     transition: background-color 0.2s ease;
 }
 
 .form-group-inline button:hover {
-    background-color: var(--button-hover-bg);
+    background-color: var(--button-hover-background);
 }
 
 .item-list {
@@ -98,7 +100,7 @@
 }
 
 .remove-btn:hover {
-    color: var(--danger-hover-color);
+    color: #c82333;
 }
 
 .action-button {
@@ -106,17 +108,17 @@
     width: fit-content;
     margin: 20px auto;
     padding: 12px 25px;
-    background-color: var(--accent-color);
-    color: var(--button-text-color);
+    background-color: var(--primary-color);
+    color: var(--button-text);
     border: none;
-    border-radius: var(--border-radius);
+    border-radius: 8px;
     font-size: 1.1em;
     cursor: pointer;
     transition: background-color 0.2s ease;
 }
 
 .action-button:hover {
-    background-color: var(--accent-hover-color);
+    background-color: var(--button-hover-background);
 }
 
 .loader {
@@ -128,9 +130,10 @@
 .result-box {
     margin-top: 20px;
     padding: 20px;
-    background-color: var(--card-bg);
-    border-radius: var(--border-radius);
-    box-shadow: var(--box-shadow);
+    background-color: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     color: var(--text-color);
     line-height: 1.6;
     overflow-x: auto; /* For tables */
@@ -155,16 +158,16 @@
 }
 
 .result-box th {
-    background-color: var(--table-header-bg);
-    color: var(--table-header-text-color);
+background-color: var(--table-header-background);
+color: var(--text-color);
 }
 
 .result-box tr:nth-child(even) {
-    background-color: var(--table-row-even-bg);
+    background-color: rgba(255, 255, 255, 0.02);
 }
 
 .result-box tr:hover {
-    background-color: var(--table-row-hover-bg);
+    background-color: var(--table-row-hover-background);
 }
 
 /* Responsive adjustments */

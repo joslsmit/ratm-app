@@ -9,7 +9,7 @@
 .toolHeader h2 {
   font-size: 1.8rem;
   margin-bottom: 0.5rem;
-  color: var(--text-primary);
+  color: var(--primary-color);
 }
 
 .toolHeader p {
@@ -18,9 +18,10 @@
 }
 
 .card {
-  background: var(--card-bg);
+  background: var(--card-background);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   padding: 1.5rem;
   margin-bottom: 1.5rem;
 }
@@ -44,12 +45,12 @@
 
 .targetTable th {
   font-weight: 600;
-  color: var(--text-secondary);
-  background: var(--table-header-bg);
+  color: var(--text-color);
+  background: var(--table-header-background);
 }
 
 .targetTable td {
-  color: var(--text-primary);
+  color: var(--text-color);
 }
 
 .playerLink {
@@ -59,7 +60,7 @@
 }
 
 .playerLink:hover {
-  color: var(--primary-color-dark);
+  color: var(--link-hover-color);
   text-decoration: underline;
 }
 
@@ -76,7 +77,7 @@
 }
 
 .removeBtnSmall:hover {
-  color: var(--danger-color-dark);
+  color: #c82333;
 }
 
 .emptyMessage {
