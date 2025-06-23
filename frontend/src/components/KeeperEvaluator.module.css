@@ -1,0 +1,165 @@
+.tool-header {
+  margin-bottom: 1rem;
+}
+
+.card {
+  background-color: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.form-group-inline {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  margin-bottom: 15px;
+  flex-wrap: wrap; /* Allow items to wrap on smaller screens */
+}
+
+.autoComplete_wrapper {
+  flex: 1;
+  min-width: 150px;
+}
+
+.inputSmall {
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.form-group-inline > div:nth-child(3) {
+  flex: 1;
+  min-width: 150px;
+}
+
+.buttonSmall {
+  padding: 5px 10px;
+  font-size: 12px;
+  height: 30px;
+  border-radius: 4px;
+  background-color: var(--button-background);
+  color: var(--button-text);
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.buttonSmall:hover {
+  background-color: var(--button-hover-background);
+}
+
+.buttonSmallDanger {
+  padding: 5px 10px;
+  font-size: 12px;
+  height: 30px;
+  border-radius: 4px;
+  background-color: var(--danger-color);
+  color: var(--button-text);
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.buttonSmallDanger:hover {
+  background-color: #c82333;
+}
+
+.keeperActions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.loaderContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 20px 0;
+}
+
+.loaderSpinner {
+  border: 4px solid #f3f3f3;
+  border-radius: 50%;
+  border-top: 4px solid var(--loader-color);
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+
+.loaderText {
+  margin-left: 10px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.keeper-list {
+  margin-top: 15px;
+}
+
+.keeperListGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.keeper-card {
+  background-color: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 15px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex: 1 1 300px; /* Allow cards to grow and wrap */
+  min-width: 300px;
+}
+
+.keeper-card > div {
+  flex: 1;
+}
+
+.keeper-card strong {
+  display: block;
+}
+
+.keeper-card small {
+  font-size: 0.9em;
+  color: var(--text-muted);
+}
+
+.keeper-card .iconButton,
+.keeper-card .iconButtonDanger {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+}
+
+.keeper-card .iconButton:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.keeper-card .iconButtonDanger {
+  color: var(--danger-color);
+}
+
+.keeper-card .iconButtonDanger:hover {
+  background-color: rgba(244, 67, 54, 0.1);
+  color: #c82333;
+}
