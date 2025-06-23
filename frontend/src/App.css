@@ -209,6 +209,31 @@ body {
     color: var(--text-color);
 }
 
+/* ECR Preference Selector in Sidebar */
+.ecr-preference-selector {
+    padding: 0 15px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-muted);
+    font-size: 0.9em;
+}
+
+.ecr-preference-selector label {
+    flex-shrink: 0;
+}
+
+.ecr-preference-selector select {
+    flex-grow: 1;
+    padding: 8px;
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+    background-color: var(--input-background);
+    color: var(--text-color);
+    font-size: 0.9em;
+    cursor: pointer;
+}
+
 .sidebar-nav {
     flex-grow: 1;
     overflow-y: auto; /* Enable scrolling for navigation items */
@@ -473,21 +498,29 @@ section {
     margin-bottom: 15px;
 }
 
-.dossier-header-card {
+/* Player Dossier Specific */
+.dossier-output {
+    margin-top: 20px;
+}
+
+#dossier .form-group-inline {
+    justify-content: center;
+}
+
+#dossier .tool-header {
+    margin-bottom: 15px;
+}
+
+#dossier .card {
+    margin-bottom: 15px;
+}
+
+.player-overview-card {
     padding: 15px;
-    margin-bottom: 15px;
+    margin-bottom: 20px; /* Increased margin for better separation */
 }
 
-.dossier-header-card {
-    background-color: var(--dossier-header-background);
-    border: var(--dossier-header-border);
-    padding: 10px 15px;
-    margin-bottom: 15px;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-}
-
-.dossier-header-card h3 {
+.player-overview-card h3 {
     color: var(--primary-color);
     margin-top: 0;
     margin-bottom: 10px;
@@ -501,7 +534,7 @@ section {
     margin-bottom: 10px;
 }
 
-.dossier-header-stats {
+.player-basic-info {
     display: flex;
     flex-wrap: wrap;
     gap: 15px;
@@ -509,8 +542,67 @@ section {
     color: var(--text-muted);
 }
 
-.dossier-header-stats strong {
+.player-basic-info strong {
     color: var(--text-color);
+}
+
+.ecr-data-card {
+    padding: 15px;
+    margin-bottom: 20px; /* Increased margin for better separation */
+}
+
+.ecr-data-card h3 {
+    color: var(--secondary-color);
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 1.5em;
+    text-align: center;
+}
+
+.ecr-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Two columns for Overall and Positional */
+    gap: 20px;
+}
+
+.ecr-column {
+    background-color: var(--input-background);
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ecr-column h4 {
+    color: var(--primary-color);
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.2em;
+    text-align: center;
+}
+
+.ecr-column span {
+    font-size: 0.95em;
+    color: var(--text-color);
+}
+
+.ecr-column strong {
+    color: var(--text-color);
+}
+
+.ai-analysis-card {
+    padding: 15px;
+    margin-bottom: 20px; /* Increased margin for better separation */
+}
+
+.ai-analysis-card h3 {
+    color: var(--secondary-color);
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 1.5em;
+    text-align: center;
 }
 
 .dossier-output .result-box {
@@ -693,6 +785,10 @@ section {
 .confidence-badge.low { background-color: var(--confidence-low); }
 .confidence-badge.medium { background-color: var(--confidence-medium); }
 .confidence-badge.high { background-color: var(--confidence-high); }
+
+.analysis-card .player-details-grid {
+    margin-bottom: 10px;
+}
 
 .analysis-card p {
     font-size: 0.9em;
@@ -904,26 +1000,6 @@ section {
     background-color: rgba(255, 255, 255, 0.05);
 }
 
-#trending-table th.sortable::after {
-    content: '';
-    display: inline-block;
-    width: 0;
-    height: 0;
-    margin-left: 5px;
-    vertical-align: middle;
-    border-left: 4px solid transparent;
-    border-right: 4px solid transparent;
-    border-top: 4px solid var(--text-color);
-    transition: transform 0.2s ease;
-}
-
-#trending-table th.sortable.asc::after {
-    transform: rotate(0deg);
-}
-
-#trending-table th.sortable.desc::after {
-    transform: rotate(180deg);
-}
 
 #trending-table tr:nth-child(even) {
     background-color: rgba(255, 255, 255, 0.02);
@@ -953,6 +1029,8 @@ section {
     max-height: 200px !important;
     overflow-y: auto !important;
     z-index: 100 !important;
+    list-style-type: none !important; /* Remove bullet points */
+    padding: 0 !important; /* Remove default padding */
 }
 
 .autoComplete_wrapper > ul > li {
@@ -1133,5 +1211,144 @@ section {
 
     .draft-board {
         grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    }
+}
+
+/* Positional Tiers Specific */
+.tiers-output {
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.tier-card {
+    background-color: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+}
+
+.tier-card h3 {
+    color: var(--primary-color);
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1.5em;
+    text-align: center;
+}
+
+.tier-summary {
+    font-style: italic;
+    color: var(--text-muted);
+    margin-bottom: 15px;
+    text-align: center;
+    font-size: 0.95em;
+}
+
+.tier-players {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.tier-player-item {
+    background-color: var(--input-background);
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    padding: 15px;
+}
+
+.player-name-link {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+    font-weight: bold;
+}
+
+.player-details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Two columns for details */
+    gap: 8px 15px;
+    font-size: 0.9em;
+    color: var(--text-muted);
+}
+
+.player-details-grid span strong {
+    color: var(--text-color);
+}
+
+@media (max-width: 768px) {
+    .tiers-output {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Tab Navigation for Waiver Wire Assistant */
+.tab-navigation {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 15px;
+}
+
+.tab-button {
+    background: none;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 1em;
+    transition: color 0.2s ease, border-bottom 0.2s ease;
+    border-bottom: 2px solid transparent;
+}
+
+.tab-button.active {
+    color: var(--primary-color);
+    border-bottom: 2px solid var(--primary-color);
+}
+
+.tab-button:hover:not(.active) {
+    color: var(--text-color);
+    border-bottom: 2px solid var(--secondary-color);
+}
+
+.tab-content {
+    min-height: 200px; /* Adjust based on content */
+}
+
+.tab-pane {
+    transition: opacity 0.3s ease;
+    opacity: 1;
+}
+
+.tab-pane.hidden {
+    display: none;
+    opacity: 0;
+}
+
+.waiver-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+@media (max-width: 500px) {
+    .waiver-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .tab-navigation {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .tab-button {
+        width: 100%;
+        text-align: center;
+        padding: 8px 0;
     }
 }

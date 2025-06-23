@@ -1,0 +1,75 @@
+.settings {
+  margin-bottom: 40px;
+}
+
+.settingsHeader {
+  margin-bottom: 25px;
+  text-align: center;
+}
+
+.settingsHeader h2 {
+  color: var(--primary-color);
+  font-size: 2.2em;
+  margin-bottom: 5px;
+}
+
+.settingsHeader p {
+  color: var(--text-muted);
+  font-size: 1.1em;
+}
+
+.settingsCard {
+  background-color: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.settingsSection {
+  margin-bottom: 20px;
+}
+
+.settingsSection h3 {
+  color: var(--secondary-color);
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.5em;
+}
+
+.settingsFormGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.settingsFormGroup label {
+  color: var(--text-color);
+  font-weight: 600;
+}
+
+.settingsFormGroup input,
+.settingsFormGroup select {
+  padding: 10px;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  background-color: var(--input-background);
+  color: var(--text-color);
+}
+
+.settingsFormGroup button {
+  background-color: var(--primary-color);
+  color: var(--button-text);
+  border: none;
+  border-radius: 4px;
+  padding: 10px 20px;
+  font-size: 1em;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.settingsFormGroup button:hover {
+  background-color: var(--button-hover-background);
+}

@@ -1,0 +1,99 @@
+.trendingSection {
+  padding: 1rem;
+  font-family: Arial, sans-serif;
+  color: var(--text-color);
+}
+
+.toolHeader {
+  margin-bottom: 1rem;
+}
+
+.card {
+  background-color: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  overflow-x: auto;
+}
+
+.gridTable {
+  display: grid;
+  grid-template-columns: 30% 10% 20% 15% 15%;
+  gap: 0;
+  width: 100%;
+}
+
+.gridHeader {
+  display: contents;
+  font-weight: 700;
+  color: var(--text-color);
+  position: sticky;
+  top: 0;
+  background-color: var(--table-header-background);
+  border-bottom: 2px solid var(--border-color);
+  z-index: 1;
+}
+
+.sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-color);
+  box-sizing: border-box;
+}
+
+.sortIcon {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.gridRow {
+  display: contents;
+  border-bottom: 1px solid var(--border-color);
+  transition: background-color 0.2s ease;
+}
+
+.gridRow:hover,
+.gridRow:focus {
+  background-color: var(--table-row-hover-background);
+  outline: none;
+}
+
+.gridRow > div {
+  padding: 0.75rem 1rem;
+  background-color: var(--card-background);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+}
+
+.playerNameCell {
+  font-weight: 600;
+}
+
+.playerLink {
+  color: var(--link-color);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.playerLink:hover,
+.playerLink:focus {
+  text-decoration: underline;
+  color: var(--link-hover-color);
+  outline: none;
+}
+
+.noData {
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 1rem;
+}

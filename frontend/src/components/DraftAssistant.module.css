@@ -1,0 +1,73 @@
+/* DraftAssistant.module.css */
+
+.draft-dashboard {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.draft-main-panel {
+    flex: 2;
+    min-width: 400px;
+}
+
+.draft-sidebar-panel {
+    flex: 1;
+    min-width: 300px;
+}
+
+.composition-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+}
+
+.composition-table th, .composition-table td {
+    border: 1px solid var(--border-color);
+    padding: 8px;
+    text-align: center;
+}
+
+.composition-table th {
+    background-color: var(--table-header-background);
+    color: var(--text-color);
+}
+
+.composition-table td {
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+.draft-board-container {
+    margin-top: 30px;
+    padding: 20px;
+    background-color: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.draft-board-container h3 {
+    color: var(--primary-color);
+    margin-top: 0;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.draft-board {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .draft-dashboard {
+        flex-direction: column;
+    }
+    .draft-main-panel,
+    .draft-sidebar-panel {
+        min-width: unset;
+    }
+}

@@ -1,0 +1,255 @@
+/* Sidebar.module.css */
+
+.sidebar {
+  width: 250px;
+  background-color: var(--sidebar-background);
+  border-right: var(--sidebar-border-right);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 0;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.sidebarHeader {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.sidebarLogoLink {
+  display: inline-block;
+  padding: 10px;
+  border-radius: 8px;
+  transition: background-color 0.2s ease;
+}
+
+.sidebarLogoLink:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.appLogo {
+  width: 150px;
+  height: auto;
+}
+
+.globalSearchContainer {
+  padding: 0 15px 20px;
+}
+
+.globalSearchContainer input {
+  width: calc(100% - 20px);
+  padding: 10px;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  background-color: var(--input-background);
+  color: var(--text-color);
+}
+
+.ecrPreferenceSelector {
+  padding: 0 15px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.ecrPreferenceSelector label {
+  flex-shrink: 0;
+}
+
+.ecrPreferenceSelector select {
+  flex-grow: 1;
+  padding: 8px;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  background-color: var(--input-background);
+  color: var(--text-color);
+  font-size: 0.9em;
+  cursor: pointer;
+}
+
+.sidebarNav {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding-bottom: 20px;
+}
+
+.sidebarNav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebarNav li {
+  margin-bottom: 5px;
+}
+
+.sidebarNav a {
+  display: flex;
+  align-items: center;
+  padding: 10px 15px;
+  color: var(--text-color);
+  text-decoration: none;
+  border-left: 4px solid transparent;
+  transition: background-color 0.2s ease, border-left-color 0.2s ease;
+}
+
+.sidebarNav a:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-left-color: var(--secondary-color);
+}
+
+.sidebarNav a.active {
+  background-color: var(--active-nav-item-background);
+  border-left-color: var(--primary-color);
+  font-weight: bold;
+}
+
+.sidebarNav hr {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 15px 15px;
+}
+
+.sidebarFooter {
+  padding: 20px 15px 10px;
+  border-top: 1px solid var(--border-color);
+  text-align: center;
+  font-size: 0.8em;
+  color: var(--text-muted);
+}
+
+.utilityNav {
+  margin-bottom: 10px;
+}
+
+.utilityNav a {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-muted);
+  text-decoration: none;
+  padding: 5px 10px;
+  border-radius: 4px;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.utilityNav a:hover {
+  color: var(--text-color);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.utilityNav svg {
+  margin-right: 5px;
+}
+
+.navSection {
+  margin-bottom: 5px;
+}
+
+.navSection h3 {
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 15px;
+  color: var(--text-color);
+  font-size: 1em;
+  margin: 0;
+  background-color: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid transparent;
+  transition: background-color 0.2s ease, border-left-color 0.2s ease;
+}
+
+.navSection h3:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-left-color: var(--secondary-color);
+}
+
+.navSection .arrow {
+  border: solid var(--text-color);
+  border-width: 0 2px 2px 0;
+  display: inline-block;
+  padding: 3px;
+  transition: transform 0.2s ease-in-out;
+}
+
+.navSection .arrow.right {
+  transform: rotate(-45deg);
+}
+
+.navSection .arrow.down {
+  transform: rotate(45deg);
+}
+
+.navSection ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  max-height: 500px;
+  transition: max-height 0.3s ease-in-out;
+}
+
+.navSection ul.collapsed {
+  max-height: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 100%;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+    padding: 10px 0;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .sidebarHeader, .globalSearchContainer {
+    width: 100%;
+    text-align: center;
+    margin-bottom: 10px;
+  }
+
+  .sidebarNav {
+    width: 100%;
+    overflow-y: visible;
+    padding-bottom: 0;
+  }
+
+  .sidebarNav ul {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .sidebarNav li {
+    margin: 0 5px 5px 0;
+  }
+
+  .sidebarNav a {
+    padding: 8px 12px;
+    border-left: none;
+    border-bottom: 2px solid transparent;
+  }
+
+  .sidebarNav a.active {
+    border-left: none;
+    border-bottom-color: var(--primary-color);
+  }
+
+  .sidebarNav hr {
+    display: none;
+  }
+
+  .sidebarFooter {
+    width: 100%;
+    border-top: none;
+    padding-top: 10px;
+  }
+}

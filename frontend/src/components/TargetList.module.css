@@ -1,0 +1,88 @@
+.targetSection {
+  margin-bottom: 2rem;
+}
+
+.toolHeader {
+  margin-bottom: 1.5rem;
+}
+
+.toolHeader h2 {
+  font-size: 1.8rem;
+  margin-bottom: 0.5rem;
+  color: var(--primary-color);
+}
+
+.toolHeader p {
+  font-size: 1rem;
+  color: var(--text-muted);
+}
+
+.card {
+  background: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.targetListContainer {
+  overflow-x: auto;
+}
+
+.targetTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+
+.targetTable th,
+.targetTable td {
+  padding: 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.targetTable th {
+  font-weight: 600;
+  color: var(--text-color);
+  background: var(--table-header-background);
+}
+
+.targetTable td {
+  color: var(--text-color);
+}
+
+.playerLink {
+  color: var(--primary-color);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.playerLink:hover {
+  color: var(--link-hover-color);
+  text-decoration: underline;
+}
+
+.removeBtnSmall {
+  background: none;
+  border: none;
+  color: var(--danger-color);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  transition: color 0.2s ease;
+}
+
+.removeBtnSmall:hover {
+  color: #c82333;
+}
+
+.emptyMessage {
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: center;
+  padding: 1rem;
+}
