@@ -13,6 +13,7 @@ import TradeAnalyzer from './components/TradeAnalyzer'; // Import TradeAnalyzer
 import DraftAssistant from './components/DraftAssistant'; // Import DraftAssistant
 import TargetList from './components/TargetList'; // Import TargetList
 import Settings from './components/Settings'; // Import Settings
+import Documentation from './components/Documentation'; // Import Documentation
 import Sidebar from './components/Sidebar'; // Import Sidebar
 
 // The backend API URL. This can be changed to your production URL when you deploy.
@@ -811,6 +812,10 @@ function App() {
               toggleTheme={toggleTheme}
               resetApplication={resetApplication}
             />
+          )}
+
+          {activeTool === 'documentation' && (
+            <Documentation />
           )}
 
 
