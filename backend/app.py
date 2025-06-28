@@ -12,6 +12,7 @@ import logging # Import logging module
 from datetime import datetime # Import datetime class
 from apscheduler.schedulers.background import BackgroundScheduler
 from data_importer import import_data
+from utils import normalize_player_name, fuzzy_find_player_key, get_player_context, make_gemini_request, process_ai_response
 
 # Get the absolute path of the directory where this file is located
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -165,26 +166,6 @@ def get_all_players():
         traceback.print_exc()
         player_data_cache, player_name_to_id = {}, {}
 
-def normalize_player_name(name):
-    """Normalizes player names for consistent matching."""
-    if not name:
-        return None
-    # Remove common suffixes like Jr., Sr., III, IV, V
-    name = re.sub(r'\s(Jr|Sr|[IVX]+)\.?$', '', name, flags=re.IGNORECASE).strip()
-    # Remove non-alphanumeric characters except spaces
-    name = re.sub(r'[^a-zA-Z0-9\s]', '', name).strip()
-    return name.lower()
-
-def fuzzy_find_player_key(name_to_search, key_dictionary):
-    if not key_dictionary: return None
-    normalized_search_name = normalize_player_name(name_to_search)
-    if normalized_search_name in key_dictionary: return normalized_search_name
-    
-    # Fallback to partial match if exact normalized name not found
-    for key in key_dictionary:
-        if normalized_search_name and normalized_search_name in key: return key
-    return None
-
 def create_combined_player_data_cache():
     global combined_player_data_cache, static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data
     if not static_ecr_overall_data and not static_ecr_positional_data and not static_ecr_rookie_data:
@@ -283,144 +264,6 @@ def create_combined_player_data_cache():
     combined_player_data_cache = temp_combined_data
     print(f"✅ Successfully created combined_player_data_cache with {len(combined_player_data_cache)} players.")
 
-def get_player_context(player_name, ecr_type_preference='overall'):
-    sleeper_key = fuzzy_find_player_key(player_name, player_name_to_id)
-    
-    # Determine which static ECR data to use based on preference
-    if ecr_type_preference == 'overall':
-        static_ecr_source = static_ecr_overall_data
-    elif ecr_type_preference == 'positional':
-        static_ecr_source = static_ecr_positional_data
-    elif ecr_type_preference == 'rookie':
-        static_ecr_source = static_ecr_rookie_data
-    else: # Default to overall if preference is unknown or not provided
-        static_ecr_source = static_ecr_overall_data
-
-    static_key = fuzzy_find_player_key(player_name, static_ecr_source)
-    
-    player_id = player_name_to_id.get(sleeper_key) if sleeper_key and player_name_to_id else None
-    # Use combined_player_data_cache for all player context
-    player_data = combined_player_data_cache.get(normalize_player_name(player_name), {})
-    
-    context_lines = []
-    full_name = player_data.get('name', player_name)
-    context_lines.append(f"- Player: {full_name} ({player_data.get('position', 'N/A')}, {player_data.get('team', 'N/A')})")
-    
-    # Get years_exp from combined_player_data_cache
-    years_exp = player_data.get('years_exp')
-    if years_exp is not None:
-        context_lines.append(f"  - Experience: {int(years_exp)} years")
-    else:
-        context_lines.append(f"  - Experience: N/A years") # Indicate if data is missing
-
-    # Add is_rookie status
-    is_rookie_status = "Yes" if player_data.get('is_rookie') else "No"
-    context_lines.append(f"  - Is Rookie: {is_rookie_status}")
-
-    # Use the appropriate ECR and related stats based on preference
-    ecr_label = f"{ecr_type_preference.title()} ECR"
-    ecr_value = player_data.get(f'ecr_{ecr_type_preference}')
-    ecr_display = f"{ecr_value:.1f}" if isinstance(ecr_value, (int, float)) else "N/A"
-    context_lines.append(f"  - {ecr_label}: {ecr_display}")
-    
-    if sd := player_data.get(f'sd_{ecr_type_preference}'): context_lines.append(f"  - Std Dev: {sd:.2f}")
-    if best := player_data.get(f'best_{ecr_type_preference}'): context_lines.append(f"  - Best Rank: {int(best)}")
-    if worst := player_data.get(f'worst_{ecr_type_preference}'): context_lines.append(f"  - Worst Rank: {int(worst)}")
-    if rank_delta := player_data.get(f'rank_delta_{ecr_type_preference}'): context_lines.append(f"  - Rank Delta (1W): {rank_delta:.1f}")
-    if bye_week := player_data.get('bye_week'): context_lines.append(f"  - Bye Week: {int(bye_week)}")
-    
-    return "\n".join(context_lines)
-
-def make_gemini_request(prompt, user_api_key):
-    if not user_api_key: raise Exception("API key is missing from the request.")
-    genai.configure(api_key=user_api_key)
-    try:
-        response = model.generate_content(prompt)
-    except Exception as e:
-        print(f"DEBUG: Error during generate_content: {e}")
-        raise e
-    if not response.candidates:
-        print("AI model did not return a valid response (no candidates).")
-        return "The AI model did not return a valid response. The content may have been blocked due to safety settings."
-    
-    raw_response_text = response.text
-    return raw_response_text
-
-def process_ai_response(response_text):
-    try:
-        # Log the raw response for debugging
-        with open('ai_response.log', 'a') as f:
-            f.write(f"{datetime.now()} - Raw AI Response:\n{response_text}\n\n")
-        
-        # Attempt to find the JSON block more robustly
-        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-        if json_match:
-            cleaned_text = json_match.group(0)
-            try:
-                data = json.loads(cleaned_text)
-            except json.JSONDecodeError as e:
-                print(f"JSON decode error: {e}")
-                # Return raw response as fallback
-                return response_text.strip()
-        else:
-            # If no JSON block found, treat entire response as plain text
-            return response_text.strip()
-
-        raw_confidence = data.get('confidence', 'Medium')
-        analysis_content = data.get('analysis', 'No analysis provided.')
-
-        # Attempt to parse analysis_content if it's a string that looks like JSON
-        if isinstance(analysis_content, str):
-            try:
-                # Try to load it as JSON. If successful, it's a dict.
-                parsed_analysis = json.loads(analysis_content)
-                if isinstance(parsed_analysis, dict):
-                    analysis_content = parsed_analysis
-            except json.JSONDecodeError:
-                # If it's not a valid JSON string, keep it as is (string)
-                pass
-
-        if isinstance(raw_confidence, float):
-            if raw_confidence >= 0.8:
-                confidence = "High"
-            elif raw_confidence >= 0.5:
-                confidence = "Medium"
-            else:
-                confidence = "Low"
-        elif isinstance(raw_confidence, str):
-            confidence = raw_confidence.title()
-        else: # Default if unexpected type
-            confidence = "Medium"
-
-        if isinstance(analysis_content, dict):
-            formatted_analysis = []
-            for key, value in analysis_content.items():
-                display_key = key.replace('_', ' ').title()
-                # Ensure value is a string before stripping
-                formatted_analysis.append(f"**{display_key}:** {str(value).strip()}")
-            analysis_text = "\n".join(formatted_analysis)
-        else:
-            analysis_text = str(analysis_content).strip() # Ensure content is a string before stripping
-
-        # Further clean up multiple newlines
-        analysis_text = re.sub(r'\n\s*\n', '\n\n', analysis_text) # Replace multiple newlines with just two
-        analysis_text = re.sub(r'^\s*\n', '', analysis_text) # Remove leading newline if any
-        analysis_text = re.sub(r'\n\s*$', '', analysis_text) # Remove trailing newline if any
-
-        emoji_map = {'High': '✅', 'Medium': '🤔', 'Low': '⚠️'}
-        confidence_badge = f"**Confidence: {emoji_map.get(confidence, '🤔')} {confidence}**"
-        return f"{confidence_badge}\n\n---\n\n{analysis_text}"
-    except Exception as e:
-        print(f"Error processing AI response: {e}")
-        traceback.print_exc()
-        # Log the error for debugging
-        with open('ai_response.log', 'a') as f:
-            f.write(f"{datetime.now()} - Error processing AI response: {str(e)}\n\n")
-        # Attempt to extract some meaningful content if possible
-        if "confidence" in response_text.lower() and "analysis" in response_text.lower():
-            return "There was an error processing the AI's response, but some content was returned. Please check the logs for the raw response."
-        return "There was an error processing the AI's response. The format was invalid. Please try again."
-
 PROMPT_PREAMBLE = "You are 'The Analyst,' a data-driven, no-nonsense fantasy football expert providing advice for the upcoming 2025 NFL season. All analysis is for a 12-team, PPR league with standard Yahoo scoring rules..."
 JSON_OUTPUT_INSTRUCTION = "Your response MUST be a JSON object with two keys: \"confidence\" and \"analysis\"..."
 
@@ -464,7 +307,8 @@ def player_dossier():
 
         # --- Generate AI Analysis ---
         # Pass the preferred ECR type to get_player_context for AI prompt generation
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** First, create a detailed markdown report for the player with headers: ### Depth Chart Role, ### Value Analysis, ### Risk Factors, ### 2025 Outlook, and ### Final Verdict. Then, wrap this entire markdown report inside the 'analysis' key of your JSON output.\n\n**Player Data:**\n{get_player_context(player_name, ecr_type_preference=ecr_type_pref)}\n\n{JSON_OUTPUT_INSTRUCTION}"
+        player_context = get_player_context(player_name, ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data)
+        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** First, create a detailed markdown report for the player with headers: ### Depth Chart Role, ### Value Analysis, ### Risk Factors, ### 2025 Outlook, and ### Final Verdict. Then, wrap this entire markdown report inside the 'analysis' key of your JSON output.\n\n**Player Data:**\n{player_context}\n\n{JSON_OUTPUT_INSTRUCTION}"
         response_text = make_gemini_request(prompt, user_key)
         
         # --- Combine and Return ---
@@ -543,7 +387,7 @@ def keeper_evaluation():
         user_key = request.headers.get('X-API-Key')
         keepers = request.json.get('keepers')
         ecr_type_pref = request.json.get('ecr_type_preference', 'overall') # Default to overall
-        context_str = "\n".join([f"{get_player_context(k['name'], ecr_type_preference=ecr_type_pref)}\n  - Keeper Cost: A round {int(k['round']) - 1} pick (equivalent to pick {(int(k['round']) - 1) * 12 + 1} in a 12-team league)\n" + (f"  - Additional Context: {k.get('context') or ''}\n") for k in keepers])
+        context_str = "\n".join([f"{get_player_context(k['name'], ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data)}\n  - Keeper Cost: A round {int(k['round']) - 1} pick (equivalent to pick {(int(k['round']) - 1) * 12 + 1} in a 12-team league)\n" + (f"  - Additional Context: {k.get('context') or ''}\n") for k in keepers])
         prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Analyze these keepers. For each player, compare their Overall ECR (which is their overall rank, where a *lower number is better*) to their keeper cost (draft round/pick). A player is **good value** if their ECR number is significantly *lower* (meaning a better rank) than the pick number of their keeper cost. A player is **poor value** if their ECR number is *higher* (meaning a worse rank) than the pick number of their keeper cost. Note bye week overlaps. Prioritize recommendations. Your analysis MUST be a single, comprehensive markdown string, including sections for each player's evaluation and an overall keeper strategy. Do NOT return a nested JSON object for the 'analysis' field. Ensure all relevant details are included directly in this markdown string.\n\n**Data:**\n{context_str}\n\n{JSON_OUTPUT_INSTRUCTION}\n\n**Important:** Ensure your response is a valid JSON object with exactly two keys: 'confidence' (string: 'High', 'Medium', or 'Low') and 'analysis' (string). Do not include any text outside the JSON structure."
         response_text = make_gemini_request(prompt, user_key)
         return jsonify({'result': process_ai_response(response_text)})
@@ -556,8 +400,8 @@ def trade_analyzer():
         user_key = request.headers.get('X-API-Key')
         scoring_format = request.json.get('scoring_format', 'PPR')
         ecr_type_pref = request.json.get('ecr_type_preference', 'overall') # Default to overall
-        my_assets_context = "\n".join([get_player_context(name, ecr_type_preference=ecr_type_pref) if "pick" not in name.lower() else f"- {name}" for name in request.json.get('my_assets', [])])
-        partner_assets_context = "\n".join([get_player_context(name, ecr_type_preference=ecr_type_pref) if "pick" not in name.lower() else f"- {name}" for name in request.json.get('partner_assets', [])])
+        my_assets_context = "\n".join([get_player_context(name, ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data) if "pick" not in name.lower() else f"- {name}" for name in request.json.get('my_assets', [])])
+        partner_assets_context = "\n".join([get_player_context(name, ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data) if "pick" not in name.lower() else f"- {name}" for name in request.json.get('partner_assets', [])])
         prompt = f"{PROMPT_PREAMBLE.replace('PPR', scoring_format)}\n\n**Task:** Analyze this trade from the perspective of 'My Team'. Declare a winner or if it is fair. Justify your answer, consistently referring to the sides as 'My Team' and 'The Other Team'.\n\n**Assets My Team Receives:**\n{my_assets_context}\n\n**Assets The Other Team Receives:**\n{partner_assets_context}\n\n{JSON_OUTPUT_INSTRUCTION}"
         response_text = make_gemini_request(prompt, user_key)
         return jsonify({'result': process_ai_response(response_text)})
@@ -686,7 +530,7 @@ def suggest_position():
         user_key = request.headers.get('X-API-Key')
         data = request.json
         ecr_type_pref = data.get('ecr_type_preference', 'overall') # Default to overall
-        draft_summary = "\n".join([f"{rnd}: Drafted {get_player_context(name, ecr_type_preference=ecr_type_pref)}" for rnd, name in data.get('draft_board', {}).items() if name]) if data.get('draft_board') else "No picks made yet."
+        draft_summary = "\n".join([f"{rnd}: Drafted {get_player_context(name, ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data)}" for rnd, name in data.get('draft_board', {}).items() if name]) if data.get('draft_board') else "No picks made yet."
         prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** It is Round {data.get('current_round')}. Based on my detailed roster below, what are the top 2 positions I should target? Justify.\n\n**My Draft So Far:**\n{draft_summary}"
         response_text = make_gemini_request(prompt, user_key)
         return jsonify({'result': response_text})
@@ -699,8 +543,8 @@ def pick_evaluator():
         user_key = request.headers.get('X-API-Key')
         data = request.json
         ecr_type_pref = data.get('ecr_type_preference', 'overall') # Default to overall
-        draft_summary = "\n".join([f"{rnd}: Drafted {get_player_context(name, ecr_type_preference=ecr_type_pref)}" for rnd, name in data.get('draft_board', {}).items() if name]) if data.get('draft_board') else "This is my first pick."
-        player_context = get_player_context(data.get('player_to_pick'), ecr_type_preference=ecr_type_pref)
+        draft_summary = "\n".join([f"{rnd}: Drafted {get_player_context(name, ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data)}" for rnd, name in data.get('draft_board', {}).items() if name]) if data.get('draft_board') else "This is my first pick."
+        player_context = get_player_context(data.get('player_to_pick'), ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data)
         prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Analyze if this is a good pick for me in Round {data.get('current_round')}. Compare ECR to the round and evaluate roster fit. Give a 'GOOD PICK', 'SOLID PICK,' or 'POOR PICK' verdict.\n\n**My Draft So Far:**\n{draft_summary}\n\n**Player Being Considered:**\n{player_context}\n\n{JSON_OUTPUT_INSTRUCTION}"
         response_text = make_gemini_request(prompt, user_key)
         return jsonify({'result': process_ai_response(response_text)})
@@ -867,8 +711,8 @@ def waiver_swap_analysis():
         if not roster or not player_to_add:
             return jsonify({"error": "Roster and player_to_add are required."}), 400
 
-        roster_context = "\n".join([f"({pos}) {get_player_context(name, ecr_type_preference=ecr_type_pref)}" for pos, name in roster.items() if name])
-        waiver_player_context = get_player_context(player_to_add, ecr_type_preference=ecr_type_pref)
+        roster_context = "\n".join([f"({pos}) {get_player_context(name, ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data)}" for pos, name in roster.items() if name])
+        waiver_player_context = get_player_context(player_to_add, ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data)
 
         prompt = f"""
 {PROMPT_PREAMBLE}
@@ -930,7 +774,7 @@ def waiver_wire_analysis():
         # Sort available players by ECR
         sorted_available_players = sorted(all_players_data, key=lambda x: x.get('ecr') if x.get('ecr') is not None else 999)[:50] # Top 50 available
 
-        roster_context = "\n".join([get_player_context(player_name, ecr_type_preference=ecr_type_pref) for player_name in team_roster])
+        roster_context = "\n".join([get_player_context(player_name, ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data) for player_name in team_roster])
         available_players_context = "\n".join([
             f"- {p['name']} ({p['pos']}, {p['team']}) - ECR: {p['ecr'] or 'N/A'}, SD: {p['sd'] or 'N/A'}, Best: {p['best'] or 'N/A'}, Worst: {p['worst'] or 'N/A'}, RankDelta: {p['rank_delta'] or 'N/A'}"
             for p in sorted_available_players
