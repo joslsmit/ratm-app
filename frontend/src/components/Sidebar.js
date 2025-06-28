@@ -1,7 +1,7 @@
 import React from 'react';
 import styles from './Sidebar.module.css';
 
-const Sidebar = ({ activeTool, targetList, navSections, toggleNavSection, setActiveTool }) => {
+const Sidebar = ({ activeTool, targetList, navSections, toggleNavSection, setEcrTypePreference }) => {
   return (
     <div className="sidebar">
       <div className="sidebar-header">
@@ -16,7 +16,7 @@ const Sidebar = ({ activeTool, targetList, navSections, toggleNavSection, setAct
       </div>
       <div className="ecr-preference-selector">
         <label htmlFor="ecr-type-preference">ECR Type:</label>
-        <select id="ecr-type-preference" onChange={(e) => setActiveTool(e.target.value)}>
+        <select id="ecr-type-preference" onChange={(e) => setEcrTypePreference(e.target.value)}>
           <option value="overall">Overall ECR</option>
           <option value="positional">Positional ECR</option>
         </select>

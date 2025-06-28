@@ -197,7 +197,6 @@
   max-height: 0;
 }
 
-/* Responsive adjustments */
 @media (max-width: 768px) {
   .sidebar {
     width: 100%;
