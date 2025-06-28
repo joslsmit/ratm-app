@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import showdown from 'showdown';
+import React, { useState, useEffect, useCallback, useMemo, useContext } from 'react';
 import autoComplete from '@tarekraafat/autocomplete.js';
 import './App.css';
 import WaiverWireAssistant from './components/WaiverWireAssistant';
@@ -15,41 +14,52 @@ import TargetList from './components/TargetList'; // Import TargetList
 import Settings from './components/Settings'; // Import Settings
 import Documentation from './components/Documentation'; // Import Documentation
 import Sidebar from './components/Sidebar'; // Import Sidebar
-
-// The backend API URL. This can be changed to your production URL when you deploy.
-const API_BASE_URL = 'http://localhost:5001/api';
+import { AppContext } from './context/AppContext';
+import { useApi } from './hooks/useApi';
 
 function App() {
-  // State for API Key and Modal
-  const [userApiKey, setUserApiKey] = useState(() => localStorage.getItem('geminiApiKey') || '');
-  const [showApiKeyModal, setShowApiKeyModal] = useState(() => !localStorage.getItem('geminiApiKey'));
+  const {
+    showApiKeyModal,
+    saveApiKey,
+    activeTool,
+    setActiveTool,
+    allPlayers,
+    staticPlayerData,
+    trendingData,
+    setTrendingData,
+    marketInefficiencies,
+    setMarketInefficiencies,
+    rookieRankings,
+    setRookieRankings,
+    dossierResult,
+    setDossierResult,
+    tiersResult,
+    setTiersResult,
+    keeperResult,
+    setKeeperResult,
+    waiverSwapResult,
+    setWaiverSwapResult,
+    isWaiverSwapLoading,
+    setIsWaiverSwapLoading,
+    lastUpdateDate,
+    setLastUpdateDate,
+    targetList,
+    setTargetList,
+    ecrTypePreference,
+    setEcrTypePreference,
+    converter,
+    API_BASE_URL,
+    setShowApiKeyModal
+  } = useContext(AppContext);
 
-  // State for navigation sections collapse/expand
+  const { makeApiRequest } = useApi();
+
   const [navSections, setNavSections] = useState({
     playerAnalysis: false,
     teamManagement: false,
   });
 
-  // State for active tool and data
-  const [activeTool, setActiveTool] = useState('dossier');
-  const [allPlayers, setAllPlayers] = useState([]);
-  const [staticPlayerData, setStaticPlayerData] = useState({}); // This will now hold combined data
-  const [trendingData, setTrendingData] = useState([]);
   const [sortDirection, setSortDirection] = useState({ name: 'asc', position: 'asc', adds: 'desc', team: 'asc', ecr: 'asc' });
-  const [marketInefficiencies, setMarketInefficiencies] = useState({ sleepers: [], busts: [] });
-  const [rookieRankings, setRookieRankings] = useState([]);
-  // Removed draftBoard state
-  // Removed draftAnalysisResult state
-  // Removed rosterCompositionResult state
-  const [dossierResult, setDossierResult] = useState(null);
-  const [tiersResult, setTiersResult] = useState([]);
-  const [keeperResult, setKeeperResult] = useState('');
-  const [waiverSwapResult, setWaiverSwapResult] = useState('');
-  const [isWaiverSwapLoading, setIsWaiverSwapLoading] = useState(false);
-  const [lastUpdateDate, setLastUpdateDate] = useState('Loading...');
-
-  // States for list-based tools
-  const [targetList, setTargetList] = useState([]);
   const [keeperList, setKeeperList] = useState([]);
   const [keeperPlayerName, setKeeperPlayerName] = useState('');
   const [keeperRoundInput, setKeeperRoundInput] = useState('');
@@ -57,10 +67,6 @@ function App() {
   const [editingKeeperIndex, setEditingKeeperIndex] = useState(null);
   const [editRoundInput, setEditRoundInput] = useState('');
   const [editContextInput, setEditContextInput] = useState('');
-  const [ecrTypePreference, setEcrTypePreference] = useState('overall'); // New state for ECR type preference
-
-  // Memoize the Showdown converter to avoid recreating it on every render
-  const converter = useMemo(() => new showdown.Converter({ simplifiedAutoLink: true, tables: true, strikethrough: true }), []);
 
   /**
    * Determines the consensus label and icon for Rookie SD values.
@@ -145,56 +151,6 @@ function App() {
     return `Rnd ${round}`;
   }, []);
 
-  /**
-   * Saves the user's API key to state and local storage.
-   * @param {string} key - The Google Gemini API key.
-   */
-  const saveApiKey = (key) => {
-    if (key) {
-      setUserApiKey(key);
-      localStorage.setItem('geminiApiKey', key);
-      setShowApiKeyModal(false);
-    } else {
-      alert('Please enter a valid API key.');
-    }
-  };
-
-  /**
-   * A centralized function for making API requests to the backend.
-   * @param {string} endpoint - The API endpoint to call (e.g., '/player_dossier').
-   * @param {object} body - The JSON body for the request.
-   * @returns {Promise<object|null>} - The JSON response from the server or null on error.
-   */
-  const makeApiRequest = useCallback(async (endpoint, body) => {
-    if (!userApiKey) {
-      alert('API Key not found. Please enter your key.');
-      setShowApiKeyModal(true);
-      return null;
-    }
-    if (!endpoint || typeof endpoint !== 'string') {
-      return null;
-    }
-    const url = `${API_BASE_URL}${endpoint}`;
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': userApiKey
-        },
-        body: JSON.stringify({ ...body, ecr_type_preference: ecrTypePreference }), // Include ECR type preference
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `An unknown server error occurred on endpoint: ${endpoint}`);
-      }
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      throw error; // Re-throw the error to be caught by the calling function
-    }
-  }, [userApiKey, ecrTypePreference]); // Add ecrTypePreference as a dependency
-
   // Verify API_BASE_URL port
   useEffect(() => {
     try {
@@ -207,7 +163,7 @@ function App() {
     } catch (e) {
       // console.error('Invalid API_BASE_URL:', API_BASE_URL);
     }
-  }, []);
+  }, [API_BASE_URL]);
 
   /**
    * Generic function to render results for tools that return simple markdown.
@@ -235,7 +191,7 @@ function App() {
     } finally {
       if (loader) loader.style.display = 'none';
     }
-  }, [makeApiRequest]);
+  }, [makeApiRequest, setDossierResult, setTiersResult, setKeeperResult, setWaiverSwapResult]);
 
   // --- Target List Management ---
   const handleAddToTargets = useCallback((playerName) => {
@@ -275,7 +231,7 @@ function App() {
       .finally(() => {
         if (loader) loader.style.display = 'none';
       });
-  }, [makeApiRequest]);
+  }, [makeApiRequest, setDossierResult]);
 
   const handleGlobalSearch = useCallback((playerName) => {
     setActiveTool('dossier');
@@ -310,7 +266,7 @@ function App() {
     } finally {
       if (loader) loader.style.display = 'none';
     }
-  }, [makeApiRequest]);
+  }, [makeApiRequest, setTiersResult]);
 
   // Autocomplete for Global Search
   useEffect(() => {
@@ -401,7 +357,7 @@ function App() {
     } finally {
       if (loader) loader.style.display = 'none';
     }
-  }, [makeApiRequest]);
+  }, [makeApiRequest, setMarketInefficiencies]);
 
   const generateRookieRankings = useCallback(async () => {
     const loader = document.getElementById('rookie-loader');
@@ -417,7 +373,7 @@ function App() {
     } finally {
       if (loader) loader.style.display = 'none';
     }
-  }, [makeApiRequest]);
+  }, [makeApiRequest, setRookieRankings]);
 
   const evaluateKeepers = useCallback(() => {
     if (keeperList.length === 0) { alert('Please add at least one keeper.'); return; }
@@ -500,7 +456,7 @@ function App() {
     } finally {
       setIsWaiverSwapLoading(false);
     }
-  }, [makeApiRequest, converter]);
+  }, [makeApiRequest, converter, setWaiverSwapResult, setIsWaiverSwapLoading]);
 
   // --- Effect Hooks for Initialization and Side Effects ---
 
@@ -510,7 +466,7 @@ function App() {
     if (savedTargets) {
       setTargetList(JSON.parse(savedTargets));
     }
-  }, []);
+  }, [setTargetList]);
 
   // Save target list to local storage when it changes
   useEffect(() => {
@@ -520,28 +476,6 @@ function App() {
       localStorage.removeItem('targetList'); // Clean up if list is empty
     }
   }, [targetList]);
-
-  // Fetch all player names for autocomplete functionality and static player data
-  useEffect(() => {
-    fetch(`${API_BASE_URL}/all_player_names_with_data`)
-      .then(response => response.json())
-      .then(data => {
-        if (data && Array.isArray(data)) {
-          // Use display_name for the autocomplete list, fall back to name if display_name is not present
-          // Use autocomplete_name for the autocomplete list
-          setAllPlayers(data.map(p => p.autocomplete_name));
-          // Store the full player data object, keyed by the normalized 'name' from the backend
-          const staticData = data.reduce((acc, p) => {
-            if (p.name) { // Ensure player name exists (this is the normalized name key)
-              acc[p.name.toLowerCase()] = p;
-            }
-            return acc;
-          }, {});
-          setStaticPlayerData(staticData);
-        }
-      })
-      .catch(error => console.error("Error fetching player names:", error));
-  }, []);
 
 
 
@@ -628,7 +562,6 @@ function App() {
       localStorage.removeItem('draftBoard');
       localStorage.removeItem('targetList');
       localStorage.removeItem('theme');
-      setUserApiKey('');
       setTargetList([]);
       setShowApiKeyModal(true);
       document.documentElement.setAttribute('data-theme', 'dark');
