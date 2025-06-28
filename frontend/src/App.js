@@ -629,7 +629,7 @@ function App() {
         targetList={targetList}
         navSections={navSections}
         toggleNavSection={toggleNavSection}
-        setActiveTool={setEcrTypePreference}
+        setEcrTypePreference={setEcrTypePreference}
       />
 
       <div className="main-content">

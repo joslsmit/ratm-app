@@ -1,5 +1,8 @@
 import React from 'react';
 import styles from './PositionalTiers.module.css';
+import LoadingSpinner from './LoadingSpinner';
+import EmptyState from './EmptyState';
+import { useApi } from '../hooks/useApi';
 
 export default function PositionalTiers({
   tiersResult,
@@ -8,6 +11,8 @@ export default function PositionalTiers({
   getEstimatedDraftRound,
   getPositionalSdLabel,
 }) {
+  const { isLoading } = useApi();
+
   return (
     <section id="tiers" className={styles.tiersSection}>
       <div className={styles.toolHeader}>
@@ -22,12 +27,20 @@ export default function PositionalTiers({
             <option value="WR">WR</option>
             <option value="TE">TE</option>
           </select>
-          <button onClick={generateTiers} className={styles.button}>Generate Tiers</button>
+          <button onClick={generateTiers} className={styles.button} disabled={isLoading}>
+            {isLoading ? 'Generating...' : 'Generate Tiers'}
+          </button>
         </div>
       </div>
-      <div id="tiers-loader" className={styles.loader} style={{ display: 'none' }}></div>
+      {isLoading && <LoadingSpinner />}
+      {!isLoading && tiersResult.length === 0 && (
+        <EmptyState
+          title="No Tiers to Display"
+          message="Generate tiers for a position to see the results."
+        />
+      )}
       <div className={styles.tiersOutput}>
-        {tiersResult.length > 0 ? tiersResult.map((tier, tierIndex) => (
+        {tiersResult.length > 0 && tiersResult.map((tier, tierIndex) => (
           <div key={tierIndex} className={styles.tierCard}>
             <h3>{tier.header}</h3>
             <p className={styles.tierSummary}>{tier.summary}</p>
@@ -60,7 +73,7 @@ export default function PositionalTiers({
               ))}
             </div>
           </div>
-        )) : <p className={styles.resultBox}>No tiers to display. Generate tiers for a position.</p>}
+        ))}
       </div>
     </section>
   );

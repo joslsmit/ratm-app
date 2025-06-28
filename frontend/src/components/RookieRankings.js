@@ -1,5 +1,8 @@
 import React from 'react';
 import styles from './RookieRankings.module.css';
+import LoadingSpinner from './LoadingSpinner';
+import EmptyState from './EmptyState';
+import { useApi } from '../hooks/useApi';
 
 export default function RookieRankings({
   rookieRankings,
@@ -7,6 +10,8 @@ export default function RookieRankings({
   handleAddToTargets,
   getRookieSdLabel,
 }) {
+  const { isLoading } = useApi();
+
   return (
     <section id="rookie" className={styles.rookieSection}>
       <div className={styles.toolHeader}>
@@ -22,12 +27,20 @@ export default function RookieRankings({
             <option value="WR">WR</option>
             <option value="TE">TE</option>
           </select>
-          <button onClick={generateRookieRankings} className={styles.button}>Generate</button>
+          <button onClick={generateRookieRankings} className={styles.button} disabled={isLoading}>
+            {isLoading ? 'Generating...' : 'Generate'}
+          </button>
         </div>
       </div>
-      <div id="rookie-loader" className={styles.loader} style={{ display: 'none' }}></div>
+      {isLoading && <LoadingSpinner />}
+      {!isLoading && rookieRankings.length === 0 && (
+        <EmptyState
+          title="No Rookie Rankings"
+          message="Generate a new list to see rookie rankings."
+        />
+      )}
       <div className={styles.resultBoxCards}>
-        {rookieRankings.length > 0 ? rookieRankings.map((rookie, index) => (
+        {rookieRankings.length > 0 && rookieRankings.map((rookie, index) => (
           <div key={index} className={styles.rookieCard}>
             <div className={styles.rookieHeader}>
               <h3>
@@ -53,7 +66,7 @@ export default function RookieRankings({
             </div>
             <p className={styles.rookieAnalysis}>{rookie.analysis}</p>
           </div>
-        )) : <p>No rookie rankings to display. Generate a new list.</p>}
+        ))}
       </div>
     </section>
   );
