@@ -17,6 +17,7 @@ import Sidebar from './components/Sidebar'; // Import Sidebar
 import { AppContext } from './context/AppContext';
 import { useApi } from './hooks/useApi';
 
+// This is a meaningless change to trigger a Vercel deployment.
 function App() {
   const {
     showApiKeyModal,
