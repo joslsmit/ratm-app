@@ -267,7 +267,45 @@ def create_combined_player_data_cache():
 PROMPT_PREAMBLE = "You are 'The Analyst,' a data-driven, no-nonsense fantasy football expert providing advice for the upcoming 2025 NFL season. All analysis is for a 12-team, PPR league with standard Yahoo scoring rules..."
 JSON_OUTPUT_INSTRUCTION = "Your response MUST be a JSON object with two keys: \"confidence\" and \"analysis\"..."
 
-# --- Existing API Endpoints (modified to pass user_key) ---
+# --- Data Loading and Initialization ---
+def load_all_data():
+    """Load all necessary data into memory."""
+    global player_data_cache, player_name_to_id, static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data, player_values_cache, pick_values_cache, combined_player_data_cache
+    
+    try:
+        import_data()  # Initial data import
+        
+        get_all_players()
+        csv_file_path = os.path.join(basedir, 'db_fpecr_latest.csv')
+        
+        # Load different ECR types into their respective caches
+        static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data = load_ecr_data_from_csv(csv_file_path)
+        
+        player_values_cache = load_values_from_csv(os.path.join(basedir, 'values-players.csv'))
+        pick_values_cache = load_values_from_csv(os.path.join(basedir, 'values-picks.csv'))
+
+        # Create the combined player data cache at startup
+        create_combined_player_data_cache()
+
+        print(f"Player data cache size: {len(player_data_cache) if player_data_cache else 0}")
+        print(f"Static Overall ECR data size: {len(static_ecr_overall_data) if static_ecr_overall_data else 0}")
+        print(f"Static Positional ECR data size: {len(static_ecr_positional_data) if static_ecr_positional_data else 0}")
+        print(f"Static Rookie ECR data size: {len(static_ecr_rookie_data) if static_ecr_rookie_data else 0}")
+
+    except Exception as e:
+        print(f"❌ FATAL ERROR during application startup data loading: {e}")
+        traceback.print_exc()
+
+# Load data on application start
+load_all_data()
+
+# --- Background Scheduler for Data Refresh ---
+scheduler = BackgroundScheduler()
+scheduler.add_job(func=import_data, trigger="interval", hours=24)
+scheduler.start()
+
+
+# --- API Endpoints ---
 @app.route('/api/player_dossier', methods=['POST'])
 def player_dossier():
     try:
@@ -844,34 +882,10 @@ def debug_player_cache(player_name):
     return jsonify({"message": "Player data cache not loaded"}), 500
 
 if __name__ == '__main__':
-    try:
-        import_data()  # Initial data import
-        scheduler = BackgroundScheduler()
-        scheduler.add_job(func=import_data, trigger="interval", hours=24)
-        scheduler.start()
-
-        get_all_players()
-        csv_file_path = os.path.join(basedir, 'db_fpecr_latest.csv')
-        
-        # Load different ECR types into their respective caches
-        static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data = load_ecr_data_from_csv(csv_file_path)
-        
-        player_values_cache = load_values_from_csv(os.path.join(basedir, 'values-players.csv'))
-        pick_values_cache = load_values_from_csv(os.path.join(basedir, 'values-picks.csv'))
-
-        # Create the combined player data cache at startup
-        create_combined_player_data_cache()
-
-        print(f"Player data cache size: {len(player_data_cache) if player_data_cache else 0}")
-        print(f"Static Overall ECR data size: {len(static_ecr_overall_data) if static_ecr_overall_data else 0}")
-        print(f"Static Positional ECR data size: {len(static_ecr_positional_data) if static_ecr_positional_data else 0}")
-        print(f"Static Rookie ECR data size: {len(static_ecr_rookie_data) if static_ecr_rookie_data else 0}")
-
-        if static_ecr_overall_data and player_data_cache is not None: # Check if at least overall ECR is loaded
-            app.run(debug=True, host='0.0.0.0', port=5001) # Bind to 0.0.0.0 for Render deployment
-        else:
-            print("Application will not start because essential data failed to load.")
-            # sys.exit(1) # Uncomment to force exit if data loading fails
-    except Exception as e:
-        print(f"❌ FATAL ERROR during application startup: {e}")
-        traceback.print_exc()
+    # This block is for local development only.
+    # When deployed on Render with Gunicorn, this block is not executed.
+    # Data loading is handled by the `load_all_data()` call at the top level.
+    if static_ecr_overall_data and player_data_cache is not None:
+        app.run(debug=True, host='0.0.0.0', port=5001)
+    else:
+        print("Application will not start because essential data failed to load.")
