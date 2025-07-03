@@ -25,6 +25,10 @@ The immediate focus is on ensuring the deployed frontend and backend are fully f
 *   Established `memory-bank/` as the dedicated directory for project documentation and context files.
 
 ## 6. Next Steps
-*   After creating `activeContext.md`, it will be committed to the repository.
-*   Continue to monitor the deployed application for stability and functionality.
-*   Await further instructions or feedback regarding new features, bug fixes, or enhancements.
+*   **Begin Phase 4: Yahoo API Integration.** This involves:
+    1.  Registering the app with Yahoo to get a Client ID and Secret.
+    2.  Implementing the OAuth2 flow in the Flask backend (`/yahoo/login` and `/yahoo/callback` endpoints).
+    3.  Adding a "Sign in with Yahoo" button to the React frontend.
+    4.  Handling the user's session on the frontend based on their Yahoo login status.
+*   Continue to monitor the deployed application for stability.
+*   Await further instructions to begin the implementation of Phase 4.
