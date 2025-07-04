@@ -47,5 +47,28 @@ export const useApi = () => {
     }
   }, [userApiKey, ecrTypePreference, API_BASE_URL, setShowApiKeyModal]);
 
-  return { makeApiRequest, isLoading, error };
+  const get = useCallback(async (endpoint, options = {}) => {
+    setIsLoading(true);
+    setError(null);
+    const url = `${API_BASE_URL}${endpoint}`;
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        ...options,
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `An unknown server error occurred on endpoint: ${endpoint}`);
+      }
+      const data = await response.json();
+      setIsLoading(false);
+      return data;
+    } catch (err) {
+      setError(err);
+      setIsLoading(false);
+      throw err;
+    }
+  }, [API_BASE_URL]);
+
+  return { makeApiRequest, get, isLoading, error };
 };

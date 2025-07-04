@@ -50,6 +50,7 @@ const Sidebar = ({ activeTool, targetList, navSections, toggleNavSection, setEcr
               <li><a href="#trade" className={activeTool === 'trade' ? 'active' : ''}>Trade Analyzer</a></li>
               <li><a href="#draft" className={activeTool === 'draft' ? 'active' : ''}>Draft Assistant</a></li>
               <li><a href="#waiver" className={activeTool === 'waiver' ? 'active' : ''}>Waiver Wire Assistant</a></li>
+              <li><a href="http://localhost:5000/api/yahoo/login" className="yahoo-login-button">Sign in with Yahoo</a></li>
             </ul>
           )}
         </div>
@@ -63,6 +64,10 @@ const Sidebar = ({ activeTool, targetList, navSections, toggleNavSection, setEcr
           <a href="#documentation" className={activeTool === 'documentation' ? 'active' : ''}>
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-help-circle"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
             Help
+          </a>
+          <a href="#" onClick={() => { localStorage.removeItem('yahoo_token'); window.location.hash = ''; }} className="utility-nav-item">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-log-out"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="17 16 22 12 17 8"></polyline><line x1="22" y1="12" x2="10" y2="12"></line></svg>
+            Logout (Yahoo)
           </a>
         </nav>
         <p>© 2025 RATM</p>

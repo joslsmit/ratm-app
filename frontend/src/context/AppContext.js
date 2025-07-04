@@ -1,7 +1,9 @@
 import React, { createContext, useState, useEffect, useCallback, useMemo } from 'react';
 import showdown from 'showdown';
 
-const API_BASE_URL = 'https://ratm-app.onrender.com/api';
+const API_BASE_URL = process.env.NODE_ENV === 'development'
+  ? 'http://localhost:5000/api' // Use local Flask backend in development
+  : 'https://ratm-app.onrender.com/api'; // Use Render production backend in production
 
 export const AppContext = createContext();
 

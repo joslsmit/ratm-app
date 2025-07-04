@@ -1352,3 +1352,19 @@ section {
         padding: 8px 0;
     }
 }
+
+.yahoo-login-button {
+  display: inline-block;
+  padding: 8px 12px;
+  background-color: #6a2de0; /* Yahoo Purple */
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  margin-top: 5px;
+  text-align: center;
+  transition: background-color 0.2s;
+}
+
+.yahoo-login-button:hover {
+  background-color: #5a1dd0;
+}

@@ -29,18 +29,31 @@ Make the RATM Draft Kit app live for friends, affordably and reliably, ensuring 
 *   **Status:** **COMPLETED** (Assumed to be completed by user as per plan, though not explicitly confirmed via a task.)
 *   **Description:** The Render backend service has been upgraded to an always-on plan to ensure continuous availability for future integrations like Yahoo OAuth.
 
-## Current Phase
+## Completed Phases
 
 ### Phase 4: Implementing Yahoo API Integration
-*   **Status:** **IN PROGRESS**
-*   **Description:** This phase involves integrating the Yahoo Fantasy Sports API for user authentication and data access.
-*   **Next Steps:**
-    *   **Step 1: Register App with Yahoo:** Register the application with Yahoo Developer Network, obtain Client ID and Secret, and configure the Callback URL. These credentials need to be saved as environment variables on Render.
-    *   **Step 2: Add OAuth Flow to Backend:** Implement `/yahoo/login` and `/yahoo/callback` endpoints in the Flask backend to handle the OAuth2 flow (redirection, token exchange, token storage in session).
-    *   **Step 3: Add "Sign in with Yahoo" Button to Frontend:** Integrate the official Yahoo sign-in button into the React frontend, linking it to the backend's `/yahoo/login` endpoint.
-    *   **Step 4: Handle User Session on Frontend:** Update the frontend to manage the user's Yahoo session status, dynamically showing/hiding login/logout buttons and displaying relevant user data.
+*   **Status:** **COMPLETED**
+*   **Description:** This phase involved integrating the Yahoo Fantasy Sports API for user authentication and data access.
+*   **Key Accomplishments:**
+    *   **Backend OAuth Flow Implemented:** Flask backend successfully handles Yahoo OAuth2 Authorization Code Grant flow.
+        *   `requests-oauthlib` added to `requirements.txt`.
+        *   Yahoo Client ID and Secret configured in `backend/.env`.
+        *   `/api/yahoo/login` and `/api/yahoo/callback` endpoints implemented in `app.py`.
+        *   `werkzeug.middleware.proxy_fix.ProxyFix` applied to `app.py` to handle HTTPS when behind `ngrok`.
+        *   Backend successfully exchanges authorization code for access tokens with Yahoo.
+    *   **Frontend Integration:**
+        *   `YahooLeagues.js` component created to display leagues.
+        *   `Sidebar.js` updated with "Sign in with Yahoo" button.
+        *   Frontend `API_BASE_URL` in `AppContext.js` configured for dynamic switching between local (http://localhost:5000) and production (Render) environments.
+        *   Frontend successfully receives the OAuth token in the URL hash after Yahoo redirect and stores it in `localStorage`.
+        *   Frontend now sends the `access_token` string in the `Authorization` header to the backend's `/api/yahoo/leagues` endpoint.
+        *   Backend successfully receives and processes the `access_token` from the frontend.
+        *   Robust frontend parsing logic implemented in `frontend/src/components/YahooLeagues.js` to correctly handle nested Yahoo API response structures.
+        *   Resolved race conditions and authentication issues in the frontend token processing.
+        *   Cleaned up all temporary debugging statements from both frontend and backend.
 
 ## Future Phases (Planned)
 
-### Phase 5 (Optional): Local Development with ngrok
-*   **Description:** Setting up ngrok for local testing of the full Yahoo OAuth flow without constant redeployments. This involves tunneling local ports and temporarily updating Yahoo app settings.
+### Phase 5: Local Development with ngrok
+*   **Description:** Setting up `ngrok` is crucial for local testing of the full Yahoo OAuth flow due to Yahoo's HTTPS callback requirements. This involves tunneling local ports and ensuring the `ngrok` URL is correctly registered with Yahoo. This phase has been actively utilized during the debugging of Phase 4.
+    *   `memory-bank/local_development.md` has been created to document these steps.
