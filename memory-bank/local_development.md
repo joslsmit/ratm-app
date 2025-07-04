@@ -38,6 +38,6 @@ To overcome this, we use `ngrok` to create a secure, public-facing URL that tunn
         ```
         https://<your-ngrok-url>/api/yahoo/callback
         ```
-        For example: `https://1a2b-3c4d-5e6f.ngrok-free.app/api/yahoo/callback`
+        For example: `https://f520-24-130-64-180.ngrok-free.app/api/yahoo/callback`
 
 **IMPORTANT:** The `ngrok` URL is temporary and will change every time you restart the `ngrok` command. You must remember to update the "Redirect URI(s)" in your Yahoo app settings with the new `ngrok` URL each time you start a new local development session. **Also, remember to update the `YAHOO_REDIRECT_URI` in `backend/app.py` to match your current `ngrok` URL for local development.**

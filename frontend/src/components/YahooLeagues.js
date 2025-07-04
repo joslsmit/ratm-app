@@ -158,7 +158,6 @@ const YahooLeagues = () => {
             ) : (
                 <p>No fantasy football leagues found for the current season.</p>
             )}
-            <button onClick={handleLogout} className={styles.logoutButton}>Logout from Yahoo</button>
         </div>
     );
 };
