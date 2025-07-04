@@ -13,6 +13,7 @@ import DraftAssistant from './components/DraftAssistant'; // Import DraftAssista
 import TargetList from './components/TargetList'; // Import TargetList
 import Settings from './components/Settings'; // Import Settings
 import Documentation from './components/Documentation'; // Import Documentation
+import YahooLeagues from './components/YahooLeagues'; // Import YahooLeagues
 import Sidebar from './components/Sidebar'; // Import Sidebar
 import { AppContext } from './context/AppContext';
 import { useApi } from './hooks/useApi';
@@ -509,31 +510,26 @@ function App() {
   // Handle URL parameters and hash changes for tool navigation
   useEffect(() => {
     const handleNavigation = () => {
-      const hash = window.location.hash.substring(1);
+      const hash = window.location.hash.substring(1).split('?')[0]; // Correctly parse hash
+      const urlParams = new URLSearchParams(window.location.search);
+      const toolFromParam = urlParams.get('tool');
+      const playerFromParam = urlParams.get('player');
+
       if (hash) {
         setActiveTool(hash);
         // Clear search params when navigating via hash
         if (window.location.search) {
           window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
         }
-        return;
-      }
-
-      const urlParams = new URLSearchParams(window.location.search);
-      const toolFromParam = urlParams.get('tool');
-      const playerFromParam = urlParams.get('player');
-
-      if (toolFromParam === 'dossier' && playerFromParam) {
+      } else if (toolFromParam === 'dossier' && playerFromParam) {
         setActiveTool('dossier');
         const decodedPlayerName = decodeURIComponent(playerFromParam);
-        // Set the input value immediately
         const dossierInput = document.getElementById('dossier-player-name');
         if (dossierInput) {
           dossierInput.value = decodedPlayerName;
         }
-        // Then generate the dossier
         generateDossier(decodedPlayerName);
-      } else {
+      } else { // Default to dossier if no hash or specific tool param
         setActiveTool('dossier');
       }
     };
@@ -752,6 +748,9 @@ function App() {
             <Documentation />
           )}
 
+          {activeTool === 'yahoo-leagues' && (
+            <YahooLeagues />
+          )}
 
         </div>
       </div>

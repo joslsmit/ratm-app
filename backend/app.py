@@ -1,5 +1,7 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, session, redirect
 from flask_cors import CORS
+from requests_oauthlib import OAuth2Session
+from werkzeug.middleware.proxy_fix import ProxyFix # Import ProxyFix
 import requests
 import os
 import pandas as pd
@@ -28,8 +30,9 @@ except Exception as e:
 
 load_dotenv()
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_host=1, x_proto=1, x_port=1, x_prefix=1) # Apply ProxyFix
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "supersecretkey") # Needed for Flask sessions
-CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000", "https://ratm-app-git-oauth-dev-joshua-smiths-projects-2dcfc522.vercel.app"]}})
+CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000", "https://ratm-app-git-oauth-dev-joshua-smiths-projects-2dcfc522.vercel.app", "https://4180-24-130-64-180.ngrok-free.app"]}}) # Updated ngrok URL in CORS
 
 # --- Configuration (API key will be passed per request) ---
 # Using the latest available preview model as requested
@@ -881,11 +884,120 @@ def debug_player_cache(player_name):
         }), 404
     return jsonify({"message": "Player data cache not loaded"}), 500
 
+# --- Yahoo API Endpoints ---
+# Note: These are simplified for clarity. In a real app, you'd handle token
+# storage, refresh, and error handling more robustly.
+
+YAHOO_CLIENT_ID = os.getenv("YAHOO_CLIENT_ID")
+YAHOO_CLIENT_SECRET = os.getenv("YAHOO_CLIENT_SECRET")
+# Ensure this matches what you set in the Yahoo Developer Network app settings
+YAHOO_REDIRECT_URI = 'https://4180-24-130-64-180.ngrok-free.app/api/yahoo/callback' # <-- Make sure this is up-to-date with your ngrok URL for local dev
+AUTHORIZATION_BASE_URL = 'https://api.login.yahoo.com/oauth2/request_auth'
+TOKEN_URL = 'https://api.login.yahoo.com/oauth2/get_token'
+
+
+@app.route('/api/yahoo/login')
+def yahoo_login():
+    """
+    Redirects the user to Yahoo's authorization page.
+    """
+    if not YAHOO_CLIENT_ID or not YAHOO_CLIENT_SECRET:
+        return "Yahoo client ID or secret not configured on the server.", 500
+
+    yahoo = OAuth2Session(YAHOO_CLIENT_ID, redirect_uri=YAHOO_REDIRECT_URI)
+    authorization_url, state = yahoo.authorization_url(AUTHORIZATION_BASE_URL)
+
+    # State is used to prevent CSRF, keep this for later verification
+    session['oauth_state'] = state
+    return redirect(authorization_url)
+
+
+@app.route('/api/yahoo/callback')
+def yahoo_callback():
+    """
+    Handles the callback from Yahoo after the user has authorized the app.
+    """
+    if not YAHOO_CLIENT_ID or not YAHOO_CLIENT_SECRET:
+        return "Yahoo client ID or secret not configured on the server.", 500
+
+    # Use the state stored in the session to verify the request
+    yahoo = OAuth2Session(YAHOO_CLIENT_ID, state=session.get('oauth_state'), redirect_uri=YAHOO_REDIRECT_URI)
+    
+    try:
+        token = yahoo.fetch_token(
+            TOKEN_URL,
+            client_secret=YAHOO_CLIENT_SECRET,
+            authorization_response=request.url
+        )
+
+        # For local development, pass the token to the frontend via URL.
+        # In a production app, you would store this more securely (e.g., in a database).
+        token_json = json.dumps(token)
+        encoded_token = requests.utils.quote(token_json)
+
+        return redirect(f'http://localhost:3000/#yahoo-leagues?token={encoded_token}')
+
+    except Exception as e:
+        print(f"Error fetching Yahoo token: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"Yahoo token error response: {e.response.text}")
+        traceback.print_exc()
+        return "Error fetching Yahoo token.", 500
+
+
+@app.route('/api/yahoo/leagues')
+def get_yahoo_leagues():
+    """
+    Fetches the user's fantasy football leagues from the Yahoo API.
+    Expects the token in the Authorization header.
+    """
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        print("DEBUG: Authorization header missing or malformed.")
+        return jsonify({"error": "Not authenticated with Yahoo. Authorization header missing."}), 401
+
+    try:
+        # Extract the access_token string from the Authorization header
+        # The frontend now sends "Bearer <ACCESS_TOKEN_STRING>"
+        access_token_string = auth_header.split(' ')[1]
+        
+        if not access_token_string:
+            return jsonify({"error": "Invalid token format: access_token missing."}), 401
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": "Invalid token format in Authorization header."}), 401
+
+    # Use the extracted access_token string to create the OAuth2Session
+    yahoo = OAuth2Session(YAHOO_CLIENT_ID, token={'access_token': access_token_string})
+
+    try:
+        # The URL for fetching a user's games, then leagues for the NFL game (game_key=nfl)
+        # We use 'use_login=1' to specify the logged-in user.
+        url = 'https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games;game_keys=nfl/leagues?format=json'
+        
+        response = yahoo.get(url)
+        response.raise_for_status() # Raise an exception for bad status codes
+        
+        return jsonify(response.json())
+
+    except requests.exceptions.RequestException as req_e:
+        print(f"Error fetching Yahoo leagues (RequestException): {req_e}")
+        if req_e.response is not None:
+            print(f"Yahoo leagues error response content: {req_e.response.text}")
+        traceback.print_exc()
+        # This could be a token expiration error, you might need to handle token refresh here
+        return jsonify({"error": "Failed to fetch leagues from Yahoo.", "details": str(req_e)}), 500
+    except Exception as e:
+        print(f"Error fetching Yahoo leagues (General Exception): {e}")
+        traceback.print_exc()
+        return jsonify({"error": "Failed to fetch leagues from Yahoo.", "details": str(e)}), 500
+
 if __name__ == '__main__':
     # This block is for local development only.
     # When deployed on Render with Gunicorn, this block is not executed.
     # Data loading is handled by the `load_all_data()` call at the top level.
     if static_ecr_overall_data and player_data_cache is not None:
-        app.run(debug=True, host='0.0.0.0', port=5001)
+        app.run(debug=True, host='0.0.0.0', port=5000) # Changed port to 5000 to match ngrok
     else:
         print("Application will not start because essential data failed to load.")
