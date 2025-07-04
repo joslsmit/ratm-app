@@ -35,7 +35,7 @@ FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY")
 if not FLASK_SECRET_KEY:
     raise ValueError("FLASK_SECRET_KEY environment variable not set. This is required for Flask sessions.")
 app.secret_key = FLASK_SECRET_KEY # Needed for Flask sessions
-CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000", "https://ratm-app-git-oauth-dev-joshua-smiths-projects-2dcfc522.vercel.app", "https://4180-24-130-64-180.ngrok-free.app"]}}) # Updated ngrok URL in CORS
+CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000", "https://ratm-app-git-oauth-dev-joshua-smiths-projects-2dcfc522.vercel.app", "https://f520-24-130-64-180.ngrok-free.app"]}}) # Updated ngrok URL in CORS
 
 # --- Configuration (API key will be passed per request) ---
 # Using the latest available preview model as requested
@@ -894,7 +894,7 @@ def debug_player_cache(player_name):
 YAHOO_CLIENT_ID = os.getenv("YAHOO_CLIENT_ID")
 YAHOO_CLIENT_SECRET = os.getenv("YAHOO_CLIENT_SECRET")
 # Ensure this matches what you set in the Yahoo Developer Network app settings
-YAHOO_REDIRECT_URI = 'https://4180-24-130-64-180.ngrok-free.app/api/yahoo/callback' # <-- Make sure this is up-to-date with your ngrok URL for local dev
+YAHOO_REDIRECT_URI = 'https://f520-24-130-64-180.ngrok-free.app/api/yahoo/callback' # <-- Make sure this is up-to-date with your ngrok URL for local dev
 AUTHORIZATION_BASE_URL = 'https://api.login.yahoo.com/oauth2/request_auth'
 TOKEN_URL = 'https://api.login.yahoo.com/oauth2/get_token'
 
