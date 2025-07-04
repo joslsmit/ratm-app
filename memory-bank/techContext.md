@@ -69,7 +69,10 @@ This document provides detailed technical information about the RATM Draft Kit p
 *   **Production Branch:** Configured to `oauth-dev` to enable automatic deployments from this branch.
 *   **Build & Start Commands:** Vercel automatically detects React projects and handles these.
 
-## 4. Troubleshooting Checklist
+## 5. Security Considerations (Production Roadmap)
+
+*   **Secure Yahoo Token Handling:** For production deployments, the current method of passing Yahoo access tokens via URL parameters is insecure. Implement a more robust and secure method, such as HTTP-only cookies or server-side token exchange, to prevent token exposure.
+
 *   **Frontend not loading/connecting:**
     *   Check `API_BASE_URL` in `frontend/src/context/AppContext.js` for correctness.
     *   Verify Vercel deployment status.

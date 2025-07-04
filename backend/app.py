@@ -31,7 +31,10 @@ except Exception as e:
 load_dotenv()
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_host=1, x_proto=1, x_port=1, x_prefix=1) # Apply ProxyFix
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "supersecretkey") # Needed for Flask sessions
+FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY")
+if not FLASK_SECRET_KEY:
+    raise ValueError("FLASK_SECRET_KEY environment variable not set. This is required for Flask sessions.")
+app.secret_key = FLASK_SECRET_KEY # Needed for Flask sessions
 CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000", "https://ratm-app-git-oauth-dev-joshua-smiths-projects-2dcfc522.vercel.app", "https://4180-24-130-64-180.ngrok-free.app"]}}) # Updated ngrok URL in CORS
 
 # --- Configuration (API key will be passed per request) ---
