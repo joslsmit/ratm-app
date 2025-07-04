@@ -96,3 +96,4 @@ typings/
 backend/ai_response.log
 backend/*.csv
 backend/venv/
+backend/certs/

@@ -35,7 +35,7 @@ FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY")
 if not FLASK_SECRET_KEY:
     raise ValueError("FLASK_SECRET_KEY environment variable not set. This is required for Flask sessions.")
 app.secret_key = FLASK_SECRET_KEY # Needed for Flask sessions
-CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000", "https://ratm-app-git-oauth-dev-joshua-smiths-projects-2dcfc522.vercel.app", "https://f520-24-130-64-180.ngrok-free.app"]}}) # Updated ngrok URL in CORS
+CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000", "https://ratm-app-git-oauth-dev-joshua-smiths-projects-2dcfc522.vercel.app", "https://localhost:5000"]}}) # Updated ngrok URL in CORS
 
 # --- Configuration (API key will be passed per request) ---
 # Using the latest available preview model as requested
@@ -894,7 +894,7 @@ def debug_player_cache(player_name):
 YAHOO_CLIENT_ID = os.getenv("YAHOO_CLIENT_ID")
 YAHOO_CLIENT_SECRET = os.getenv("YAHOO_CLIENT_SECRET")
 # Ensure this matches what you set in the Yahoo Developer Network app settings
-YAHOO_REDIRECT_URI = 'https://f520-24-130-64-180.ngrok-free.app/api/yahoo/callback' # <-- Make sure this is up-to-date with your ngrok URL for local dev
+YAHOO_REDIRECT_URI = 'https://localhost:5000/api/yahoo/callback' # <-- Make sure this is up-to-date with your ngrok URL for local dev
 AUTHORIZATION_BASE_URL = 'https://api.login.yahoo.com/oauth2/request_auth'
 TOKEN_URL = 'https://api.login.yahoo.com/oauth2/get_token'
 
@@ -909,6 +909,11 @@ def yahoo_login():
 
     yahoo = OAuth2Session(YAHOO_CLIENT_ID, redirect_uri=YAHOO_REDIRECT_URI)
     authorization_url, state = yahoo.authorization_url(AUTHORIZATION_BASE_URL)
+
+    # Debug: Log the authorization URL and parameters for troubleshooting
+    print(f"DEBUG: Yahoo OAuth Authorization URL: {authorization_url}")
+    print(f"DEBUG: OAuth State: {state}")
+    print(f"DEBUG: Redirect URI used: {YAHOO_REDIRECT_URI}")
 
     # State is used to prevent CSRF, keep this for later verification
     session['oauth_state'] = state
@@ -1001,6 +1006,7 @@ if __name__ == '__main__':
     # When deployed on Render with Gunicorn, this block is not executed.
     # Data loading is handled by the `load_all_data()` call at the top level.
     if static_ecr_overall_data and player_data_cache is not None:
-        app.run(debug=True, host='0.0.0.0', port=5000) # Changed port to 5000 to match ngrok
+        # Use SSL context for HTTPS
+        app.run(debug=True, host='0.0.0.0', port=5000, ssl_context=('backend/certs/localhost.pem', 'backend/certs/localhost-key.pem'))
     else:
         print("Application will not start because essential data failed to load.")
