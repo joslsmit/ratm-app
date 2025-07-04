@@ -25,10 +25,10 @@ The immediate focus is on ensuring the deployed frontend and backend are fully f
 *   Established `memory-bank/` as the dedicated directory for project documentation and context files.
 
 ## 6. Next Steps
-*   **Begin Phase 4: Yahoo API Integration.** This involves:
-    1.  Registering the app with Yahoo to get a Client ID and Secret.
-    2.  Implementing the OAuth2 flow in the Flask backend (`/yahoo/login` and `/yahoo/callback` endpoints).
-    3.  Adding a "Sign in with Yahoo" button to the React frontend.
-    4.  Handling the user's session on the frontend based on their Yahoo login status.
+*   **Yahoo API Integration (Local Development):** Successfully migrated from `ngrok` to `mkcert` for local HTTPS development. The `INVALID_REDIRECT_URI` error was resolved by creating a new Yahoo application and ensuring precise matching of `https://localhost:5000/api/yahoo/callback` in both `backend/app.py` and the new Yahoo app settings. Autocomplete functionality is now working.
+*   **Continue Phase 4: Yahoo API Integration (Core Functionality).** This involves:
+    1.  Implementing the fetching and display of user's Yahoo leagues.
+    2.  Handling token storage and refresh more robustly.
+    3.  Proceeding with the planned future phases (Personalized Roster Analysis, AI-Powered Waiver Wire Assistant, etc.) which leverage the Yahoo API.
 *   Continue to monitor the deployed application for stability.
-*   Await further instructions to begin the implementation of Phase 4.
+*   Await further instructions to begin the implementation of core Yahoo API functionality.

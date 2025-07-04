@@ -36,7 +36,7 @@ This document provides detailed technical information about the RATM Draft Kit p
 
 ### B. API Endpoints
 *   **Frontend `API_BASE_URL`:** Configured in `frontend/src/context/AppContext.js`.
-    *   Local: `http://localhost:5001/api`
+    *   Local: `https://localhost:5000/api` (using `mkcert` for HTTPS)
     *   Production: `https://ratm-app.onrender.com/api`
 *   **Backend `/api/*` endpoints:** All API endpoints are prefixed with `/api/` (e.g., `/api/player_dossier`, `/api/rookie_rankings`).
 
@@ -74,8 +74,13 @@ This document provides detailed technical information about the RATM Draft Kit p
 *   **Secure Yahoo Token Handling:** For production deployments, the current method of passing Yahoo access tokens via URL parameters is insecure. Implement a more robust and secure method, such as HTTP-only cookies or server-side token exchange, to prevent token exposure.
 
 *   **Frontend not loading/connecting:**
-    *   Check `API_BASE_URL` in `frontend/src/context/AppContext.js` for correctness.
+    *   Check `API_BASE_URL` in `frontend/src/context/AppContext.js` for correctness (should be `https://localhost:5000/api` for local development).
     *   Verify Vercel deployment status.
+*   **Yahoo OAuth `INVALID_REDIRECT_URI` error:**
+    *   Ensure `YAHOO_REDIRECT_URI` in `backend/app.py` exactly matches the active `localhost` URL (`https://localhost:5000/api/yahoo/callback`).
+    *   Verify that the Yahoo Developer Network application settings have *only* `https://localhost:5000/api/yahoo/callback` registered as a redirect URI.
+    *   Confirm Client ID and Client Secret are correct in `backend/.env`.
+    *   If persistent, create a new Yahoo application with fresh credentials and the correct `localhost` redirect URI.
 *   **Backend errors/API calls failing:**
     *   Check Render service logs for Python tracebacks (e.g., `AttributeError: 'NoneType' object has no attribute 'get'`).
     *   Verify environment variables are set correctly on Render.

@@ -6,7 +6,7 @@ This document outlines the key architectural patterns, design patterns, and codi
 
 ### A. Client-Server Architecture (Frontend-Backend Separation)
 *   **Description:** The project adheres to a strict client-server architecture, with the React application serving as the frontend client and the Flask application as the backend server.
-*   **Communication:** All interactions between the frontend and backend occur via RESTful API calls over HTTP(S).
+*   **Communication:** All interactions between the frontend and backend occur via RESTful API calls over HTTP(S). Local development uses `mkcert` for trusted HTTPS connections to `localhost`.
 *   **Benefits:** Clear separation of concerns, scalability (frontend and backend can be scaled independently), easier maintenance, and ability to use different technologies for each layer.
 *   **Implementation:**
     *   Frontend (React): Uses `fetch` API calls, encapsulated within a custom `useApi` hook.

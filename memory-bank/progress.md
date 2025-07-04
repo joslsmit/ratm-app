@@ -17,7 +17,7 @@ Make the RATM Draft Kit app live for friends, affordably and reliably, ensuring 
 *   **Status:** **COMPLETED**
 
 ### Phase 4: Implementing Yahoo API Integration
-*   **Status:** **COMPLETED**
+*   **Status:** **COMPLETED** (Local development now uses `mkcert` for HTTPS, resolving previous `ngrok` and `INVALID_REDIRECT_URI` issues. Autocomplete is functional.)
 
 ## Future Phases (Planned)
 
