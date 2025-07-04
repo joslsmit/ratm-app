@@ -6,7 +6,7 @@ The RATM Draft Kit is a fantasy football draft assistant designed to provide AI-
 ## 2. Current Project Status
 *   **Backend Deployment:** The Flask backend is deployed on Render.
 *   **Frontend Deployment:** The React frontend is deployed on Vercel.
-*   **Yahoo API Integration:** The application is integrated with the Yahoo Fantasy Sports API for user authentication and basic league listing.
+*   **Yahoo API Integration:** The application is integrated with the Yahoo Fantasy Sports API for user authentication and basic league listing. Local development now uses `mkcert` for HTTPS.
 
 ## 3. Technology Stack
 *   **Frontend:** React, JavaScript, HTML, CSS, autoComplete.js, Showdown.js.
