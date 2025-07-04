@@ -40,7 +40,7 @@ This document outlines the key architectural patterns, design patterns, and codi
 
 ### A. Python (`backend/`)
 *   **Environment Variables:** Sensitive information (like `FLASK_SECRET_KEY`) is loaded from environment variables using `os.getenv()`.
-*   **Error Handling:** `try-except` blocks are used for robust error handling in API endpoints and data loading functions, often including `traceback.print_exc()` for detailed logging.
+*   **Error Handling:** `try-except` blocks are used for robust error handling in API endpoints and data loading functions. **For production, replace `traceback.print_exc()` with generic error messages for users, and log detailed errors server-side.**
 *   **Logging:** Basic logging is implemented to track application events and AI responses.
 *   **Data Normalization:** Player names are normalized (`normalize_player_name` in `utils.py`) for consistent matching across different data sources.
 
