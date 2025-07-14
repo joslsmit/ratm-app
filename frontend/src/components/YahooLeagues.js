@@ -56,47 +56,15 @@ const YahooLeagues = () => {
                         headers: { 'Authorization': authHeader }
                     });
 
-                    // --- Robust parsing logic for Yahoo API response ---
-                    const fantasyContent = response?.fantasy_content;
-                    if (!fantasyContent) {
-                        throw new Error('Could not retrieve fantasy content. Please ensure your Yahoo account has fantasy sports data.');
+                    // Backend now returns clean array format: [{league_key, league_name, team_key}]
+                    if (!Array.isArray(response)) {
+                        throw new Error('Invalid response format from server.');
                     }
 
-                    const gamesObject = fantasyContent.users?.[0]?.user?.[1]?.games;
-                    if (!gamesObject) {
-                        throw new Error('No fantasy games found in your Yahoo account data.');
-                    }
-
-                    const gamesArray = Array.isArray(gamesObject)
-                        ? gamesObject
-                        : Object.values(gamesObject).filter(item => typeof item === 'object' && item.hasOwnProperty('game'));
-
-                    if (!gamesArray || gamesArray.length === 0) {
-                        throw new Error('Fantasy games data is not in the expected format.');
-                    }
-
-                    const nflGame = gamesArray.find(g => g.game?.[0]?.code === 'nfl')?.game;
-                    if (!nflGame) {
-                        throw new Error('No NFL fantasy game found for your account.');
-                    }
-
-                    const leaguesData = Array.isArray(nflGame)
-                        ? nflGame.find(item => item.leagues)?.leagues
-                        : Object.values(nflGame).find(item => typeof item === 'object' && item.hasOwnProperty('leagues'))?.leagues;
-                    
-                    if (leaguesData) {
-                        const leaguesArray = Array.isArray(leaguesData)
-                            ? leaguesData
-                            : Object.values(leaguesData).filter(item => typeof item === 'object' && item.hasOwnProperty('league'));
-                        
-                        const extractedLeagues = leaguesArray.map(l => l.league?.[0]).filter(Boolean);
-                        setLeagues(extractedLeagues);
-
-                        if (extractedLeagues.length === 0) {
-                            setError('While we connected to your Yahoo account, no fantasy football leagues were found.');
-                        }
+                    if (response.length === 0) {
+                        setError('No fantasy football leagues found for your Yahoo account.');
                     } else {
-                        setError('No leagues found within the NFL game data for your account.');
+                        setLeagues(response);
                     }
                 } catch (err) {
                     console.error("Error fetching leagues:", err);
@@ -146,12 +114,9 @@ const YahooLeagues = () => {
                 <ul className={styles.leagueList}>
                     {leagues.map(league => (
                         <li key={league.league_key} className={styles.leagueItem}>
-                            <h3>{league.name}</h3>
-                            <p>Scoring Type: {league.scoring_type}</p>
-                            <p>Number of Teams: {league.num_teams}</p>
-                            <a href={league.url} target="_blank" rel="noopener noreferrer">
-                                Go to League
-                            </a>
+                            <h3>{league.league_name}</h3>
+                            <p>League Key: {league.league_key}</p>
+                            <p>Team Key: {league.team_key}</p>
                         </li>
                     ))}
                 </ul>

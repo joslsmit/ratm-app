@@ -24,15 +24,24 @@ Make the RATM Draft Kit app live for friends, affordably and reliably, ensuring 
 This roadmap outlines the development and implementation of new features that leverage the Yahoo Fantasy Sports API, as detailed in the updated `implementation_plan.md`.
 
 ### Pre-requisite: Centralized League Data Endpoint
-*   **Status:** **Not Started**
+*   **Status:** **✅ COMPLETED**
 *   **Concept:** Create a reusable backend endpoint `/api/yahoo/leagues` to fetch all of a user's fantasy football leagues, serving as a foundation for other Yahoo-integrated features.
-*   **Details:** Involves creating a protected endpoint to fetch and parse league data from Yahoo API, returning a clean list of league objects with `league_key`, `league_name`, and `team_key`.
+*   **Implementation Details:** 
+    *   Created `/api/yahoo/leagues` endpoint in `backend/app.py` with defensive JSON parsing
+    *   Uses Yahoo API URL: `https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games;game_keys=nfl/leagues;out=teams?format=json`
+    *   Returns clean array format: `[{league_key, league_name, team_key}]`
+    *   Handles complex nested Yahoo API structure with proper error handling
+    *   Updated frontend `YahooLeagues.js` to display league data correctly
+    *   **Testing:** Verified working with live Yahoo account data
 
 ### Phase 5: Personalized Roster Analysis
-*   **Status:** **Not Started**
+*   **Status:** **Ready to Start** (Pre-requisite completed)
 *   **Concept:** Display a user's Yahoo Fantasy Football roster with integrated AI analysis for each player.
 *   **UX Vision:** A new "My Team" tab will appear in the sidebar after a user logs in with Yahoo. This view will feature a dropdown to select a league and will display a card for each player on their roster.
-*   **Details:** Includes creating a backend `/api/yahoo/roster` endpoint to fetch and enrich roster data, and a frontend "My Team" view with league selection and roster display.
+*   **Next Steps:** 
+    *   **Phase 1.1:** Implement `/api/yahoo/roster` endpoint that accepts `team_key` parameter
+    *   **Phase 1.2:** Create frontend "My Team" component with league dropdown and roster display
+*   **Dependencies:** ✅ `/api/yahoo/leagues` endpoint completed and provides required `team_key` data
 
 ### Phase 6: AI-Powered Waiver Wire Assistant (Yahoo Integrated)
 *   **Status:** **Not Started**
@@ -56,4 +65,6 @@ This roadmap outlines the development and implementation of new features that le
 *   **UX Vision:** The "Market Inefficiency Finder" will be enhanced with a league selector for logged-in users, showing a tailored list of potential draft-day bargains.
 
 ## Development & Testing
-*   **Local Development with ngrok:** Setting up `ngrok` is crucial for local testing of the full Yahoo OAuth flow due to Yahoo's HTTPS callback requirements. `memory-bank/local_development.md` has been created to document these steps.
+*   **✅ Local Development with mkcert:** Successfully implemented local HTTPS development using `mkcert` instead of `ngrok`. SSL certificates are generated in `backend/certs/` directory. This provides a stable, secure local development environment for Yahoo OAuth testing.
+*   **✅ Yahoo OAuth Flow:** Complete authentication flow working locally with proper token storage and endpoint protection.
+*   **✅ API Integration:** Successfully integrated with Yahoo Fantasy Sports API with proper defensive JSON parsing patterns.

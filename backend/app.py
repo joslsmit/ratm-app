@@ -982,12 +982,13 @@ def get_yahoo_leagues():
     try:
         # The URL for fetching a user's games, then leagues for the NFL game (game_key=nfl)
         # We use 'use_login=1' to specify the logged-in user.
-        url = 'https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games;game_keys=nfl/leagues?format=json'
+        url = 'https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games;game_keys=nfl/leagues;out=teams?format=json'
         
         response = yahoo.get(url)
         response.raise_for_status() # Raise an exception for bad status codes
         
-        return jsonify(response.json())
+        # Parse and transform the response using defensive JSON parsing
+        return jsonify(parse_yahoo_leagues_response(response.json()))
 
     except requests.exceptions.RequestException as req_e:
         print(f"Error fetching Yahoo leagues (RequestException): {req_e}")
@@ -1001,12 +1002,89 @@ def get_yahoo_leagues():
         traceback.print_exc()
         return jsonify({"error": "Failed to fetch leagues from Yahoo.", "details": str(e)}), 500
 
+def parse_yahoo_leagues_response(data):
+    """
+    Parse Yahoo API leagues response with defensive JSON parsing.
+    Returns a clean array of league objects or empty array on failure.
+    """
+    try:
+        # Navigate the complex JSON structure using defensive .get() calls
+        fantasy_content = data.get('fantasy_content', {})
+        users = fantasy_content.get('users', {})
+        
+        # Get the first user (index "0")
+        user_data = users.get('0', {})
+        user_info = user_data.get('user', [])
+        
+        # User info is typically an array where [1] contains the games
+        if not isinstance(user_info, list) or len(user_info) < 2:
+            print("DEBUG: User info structure unexpected")
+            return []
+        
+        games = user_info[1].get('games', {})
+        
+        # Get the NFL game (index "0" typically)
+        game_data = games.get('0', {})
+        game_info = game_data.get('game', [])
+        
+        # Game info is typically an array where [1] contains the leagues
+        if not isinstance(game_info, list) or len(game_info) < 2:
+            print("DEBUG: Game info structure unexpected")
+            return []
+        
+        leagues_data = game_info[1].get('leagues', {})
+        
+        # Parse leagues - could be a dict with numbered keys or direct list
+        leagues = []
+        
+        # Handle case where leagues is a dict with numbered keys
+        if isinstance(leagues_data, dict):
+            for key, league_container in leagues_data.items():
+                if key.isdigit():  # Skip non-numeric keys like "count"
+                    league_info = league_container.get('league', [])
+                    
+                    # League info is typically an array where [0] has basic info and [1] has teams
+                    if isinstance(league_info, list) and len(league_info) >= 1:
+                        basic_info = league_info[0]
+                        
+                        # Extract basic league information
+                        league_key = basic_info.get('league_key', '')
+                        league_name = basic_info.get('name', 'Unknown League')
+                        
+                        # Extract team_key from teams data if available
+                        team_key = ''
+                        if len(league_info) > 1:
+                            teams_data = league_info[1].get('teams', {})
+                            # Get the first team (user's team)
+                            first_team = teams_data.get('0', {})
+                            team_info = first_team.get('team', [])
+                            if isinstance(team_info, list) and len(team_info) >= 1:
+                                # team_info is a nested list: [[{team_key: ...}, {team_id: ...}, ...]]
+                                team_data_list = team_info[0]
+                                if isinstance(team_data_list, list) and len(team_data_list) >= 1:
+                                    team_key = team_data_list[0].get('team_key', '')
+                        
+                        if league_key:  # Only add if we have a valid league_key
+                            leagues.append({
+                                'league_key': league_key,
+                                'league_name': league_name,
+                                'team_key': team_key
+                            })
+        
+        # Successfully parsed leagues
+        return leagues
+        
+    except Exception as e:
+        print(f"ERROR: Failed to parse Yahoo leagues response: {e}")
+        traceback.print_exc()
+        return []
+
 if __name__ == '__main__':
     # This block is for local development only.
     # When deployed on Render with Gunicorn, this block is not executed.
     # Data loading is handled by the `load_all_data()` call at the top level.
     if static_ecr_overall_data and player_data_cache is not None:
         # Use SSL context for HTTPS
-        app.run(debug=True, host='0.0.0.0', port=5000, ssl_context=('backend/certs/localhost.pem', 'backend/certs/localhost-key.pem'))
+        app.run(debug=True, host='0.0.0.0', port=5000, ssl_context=('certs/localhost.pem', 'certs/localhost-key.pem'))
     else:
         print("Application will not start because essential data failed to load.")
