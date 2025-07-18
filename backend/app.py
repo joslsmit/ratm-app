@@ -1079,6 +1079,193 @@ def parse_yahoo_leagues_response(data):
         traceback.print_exc()
         return []
 
+@app.route('/api/yahoo/roster')
+def get_yahoo_roster():
+    """
+    Fetches the user's fantasy team roster from the Yahoo API.
+    Expects team_key as query parameter and token in Authorization header.
+    """
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Not authenticated with Yahoo. Authorization header missing."}), 401
+    
+    # Get and validate team_key parameter
+    team_key = request.args.get('team_key')
+    if not team_key:
+        return jsonify({"error": "team_key parameter is required."}), 400
+    
+    # Optional week parameter for NFL
+    week = request.args.get('week')
+    
+    try:
+        # Extract the access_token string from the Authorization header
+        access_token_string = auth_header.split(' ')[1]
+        
+        if not access_token_string:
+            return jsonify({"error": "Invalid token format: access_token missing."}), 401
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"error": "Invalid token format in Authorization header."}), 401
+
+    # Use the extracted access_token string to create the OAuth2Session
+    yahoo = OAuth2Session(YAHOO_CLIENT_ID, token={'access_token': access_token_string})
+
+    try:
+        # Build URL with optional week parameter
+        if week:
+            url = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster;week={week}?format=json'
+        else:
+            url = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster?format=json'
+        
+        response = yahoo.get(url)
+        response.raise_for_status()
+        
+        # Parse and transform the response using defensive JSON parsing
+        return jsonify(parse_yahoo_roster_response(response.json()))
+
+    except requests.exceptions.RequestException as req_e:
+        print(f"Error fetching Yahoo roster: {req_e}")
+        if req_e.response is not None:
+            print(f"Yahoo roster error response content: {req_e.response.text}")
+        traceback.print_exc()
+        return jsonify({"error": "Failed to fetch roster from Yahoo.", "details": str(req_e)}), 500
+    except Exception as e:
+        print(f"Error processing Yahoo roster: {e}")
+        traceback.print_exc()
+        return jsonify({"error": "Failed to process roster data.", "details": str(e)}), 500
+
+def parse_yahoo_roster_response(data):
+    """
+    Parse Yahoo API roster response with defensive JSON parsing.
+    Returns a clean array of player objects or empty array on failure.
+    """
+    try:
+        # DEBUG: Log the raw response structure to understand what we're getting
+        print(f"DEBUG: Raw Yahoo roster response keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+        if isinstance(data, dict) and 'fantasy_content' in data:
+            print(f"DEBUG: fantasy_content keys: {list(data['fantasy_content'].keys())}")
+        
+        # Navigate the complex JSON structure using defensive .get() calls
+        fantasy_content = data.get('fantasy_content', {})
+        
+        # Team data is typically an array where [1] contains roster
+        team_data = fantasy_content.get('team', [])
+        print(f"DEBUG: team_data type: {type(team_data)}")
+        print(f"DEBUG: team_data keys/length: {list(team_data.keys()) if isinstance(team_data, dict) else len(team_data) if isinstance(team_data, list) else 'Neither dict nor list'}")
+        
+        if not isinstance(team_data, list) or len(team_data) < 2:
+            print("DEBUG: Team data structure unexpected - checking if it's a dict instead")
+            if isinstance(team_data, dict):
+                print(f"DEBUG: team_data is dict with keys: {list(team_data.keys())}")
+            return []
+        
+        roster_container = team_data[1].get('roster', {})
+        players_data = roster_container.get('players', {})
+        
+        # Parse players - dict with numbered keys
+        players = []
+        
+        if isinstance(players_data, dict):
+            for key, player_container in players_data.items():
+                if key.isdigit():  # Skip non-numeric keys like "count"
+                    player_info = player_container.get('player', [])
+                    
+                    # Player info is typically an array where [0] has player data
+                    if isinstance(player_info, list) and len(player_info) >= 1:
+                        player_data = player_info[0]
+                        
+                        # Extract player information with defensive parsing
+                        player_key = player_data.get('player_key', '')
+                        player_id = player_data.get('player_id', '')
+                        
+                        # Handle name structure (could be nested)
+                        name_data = player_data.get('name', {})
+                        if isinstance(name_data, dict):
+                            full_name = name_data.get('full', '')
+                        else:
+                            full_name = str(name_data) if name_data else ''
+                        
+                        # Handle position data
+                        selected_pos_data = player_data.get('selected_position', {})
+                        if isinstance(selected_pos_data, dict):
+                            selected_position = selected_pos_data.get('position', '')
+                        else:
+                            selected_position = str(selected_pos_data) if selected_pos_data else ''
+                        
+                        eligible_positions = player_data.get('eligible_positions', [])
+                        if not isinstance(eligible_positions, list):
+                            eligible_positions = [str(eligible_positions)] if eligible_positions else []
+                        
+                        status = player_data.get('status', '')
+                        
+                        if player_key and full_name:  # Only add if we have key data
+                            players.append({
+                                'player_key': player_key,
+                                'player_id': player_id,
+                                'name': full_name,
+                                'selected_position': selected_position,
+                                'eligible_positions': eligible_positions,
+                                'status': status
+                            })
+        
+        # Enrich players with local data
+        if players:
+            players = enrich_roster_players(players)
+        
+        return players
+        
+    except Exception as e:
+        print(f"ERROR: Failed to parse Yahoo roster response: {e}")
+        traceback.print_exc()
+        return []
+
+def enrich_roster_players(yahoo_players):
+    """
+    Enrich Yahoo roster players with local ECR and analysis data.
+    """
+    enriched_players = []
+    
+    for player in yahoo_players:
+        try:
+            # Normalize player name for matching
+            normalized_name = normalize_player_name(player['name'])
+            
+            # Get combined player data for additional info
+            combined_info = combined_player_data_cache.get(normalized_name, {})
+            
+            # Merge Yahoo data with local data
+            enriched_player = {
+                # Yahoo roster data
+                'player_key': player['player_key'],
+                'player_id': player['player_id'],
+                'name': player['name'],
+                'selected_position': player['selected_position'],
+                'eligible_positions': player['eligible_positions'],
+                'status': player['status'],
+                
+                # Local enrichment data
+                'team': combined_info.get('team', 'N/A'),
+                'position': combined_info.get('position', player['selected_position']),
+                'bye_week': combined_info.get('bye_week'),
+                'ecr_overall': combined_info.get('ecr_overall'),
+                'sd_overall': combined_info.get('sd_overall'),
+                'best_overall': combined_info.get('best_overall'),
+                'worst_overall': combined_info.get('worst_overall'),
+                'rank_delta_overall': combined_info.get('rank_delta_overall'),
+                'years_exp': combined_info.get('years_exp'),
+                'is_rookie': combined_info.get('is_rookie', False)
+            }
+            
+            enriched_players.append(enriched_player)
+            
+        except Exception as e:
+            print(f"Error enriching player {player.get('name', 'Unknown')}: {e}")
+            # Include player even if enrichment fails
+            enriched_players.append(player)
+    
+    return enriched_players
+
 if __name__ == '__main__':
     # This block is for local development only.
     # When deployed on Render with Gunicorn, this block is not executed.
