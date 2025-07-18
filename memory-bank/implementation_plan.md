@@ -67,11 +67,16 @@ The Yahoo API's JSON is converted from XML and can be unpredictable. Keys may be
     *   Make a `GET` request to: `https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster?format=json`.
 5.  **Parse and Enrich Data:**
     *   **CRITICAL:** Apply the **"Defensive JSON Parsing"** principles outlined above.
-    *   **Parsing Logic:** Navigate the response to find the list of players. For each player, safely extract `player_key`, `name.full`, `editorial_position`, and `editorial_team_abbr`.
+    *   **⚠️ FIELD CORRECTIONS:** Based on API research, actual field names are:
+        *   `name.full` → `name` (simpler structure)
+        *   `editorial_position` → `selected_position` 
+        *   `editorial_team_abbr` → verify in implementation
+    *   **Parsing Logic:** Navigate the response to find the list of players. For each player, safely extract `player_key`, `name`, `selected_position`, and verify other fields.
     *   **Enrichment Logic:** For each valid player found:
         1.  Call `normalize_player_name()` from `utils.py`.
-        2.  Call `get_player_analysis()` from `utils.py`.
+        2.  Call `get_player_context()` from `utils.py` (NOT `get_player_analysis()` - that function doesn't exist).
         3.  Merge the analysis data into the player object.
+    *   **⚠️ IMPLEMENTATION NOTE:** See `yahoo_roster_implementation.md` for complete, researched implementation details.
     *   **Output Data Structure:** The final response **MUST** be a JSON array of enriched player objects. Return `[]` on failure.
         ```json
         [
