@@ -1079,6 +1079,86 @@ def parse_yahoo_leagues_response(data):
         traceback.print_exc()
         return []
 
+@app.route('/api/test/roster')
+def test_roster_parser():
+    """
+    Test endpoint to debug roster parsing logic with mock Yahoo data.
+    """
+    # Mock Yahoo API response structure based on what we've learned
+    mock_response = {
+        "fantasy_content": {
+            "xml:lang": "en-US",
+            "yahoo:uri": "/fantasy/v2/team/461.l.42889.t.8/roster",
+            "team": [
+                {
+                    "team_key": "461.l.42889.t.8",
+                    "team_id": "8",
+                    "name": "Test Team"
+                },
+                {
+                    "roster": {
+                        "coverage_type": "week",
+                        "week": "17",
+                        "players": {
+                            "0": {
+                                "player": [
+                                    {
+                                        "player_key": "461.p.31000",
+                                        "player_id": "31000",
+                                        "name": {
+                                            "full": "Patrick Mahomes",
+                                            "first": "Patrick",
+                                            "last": "Mahomes"
+                                        },
+                                        "selected_position": {
+                                            "coverage_type": "week",
+                                            "week": "17",
+                                            "position": "QB"
+                                        },
+                                        "eligible_positions": [
+                                            {"position": "QB"}
+                                        ],
+                                        "status": "Healthy"
+                                    }
+                                ]
+                            },
+                            "1": {
+                                "player": [
+                                    {
+                                        "player_key": "461.p.32000",
+                                        "player_id": "32000",
+                                        "name": {
+                                            "full": "Derrick Henry",
+                                            "first": "Derrick", 
+                                            "last": "Henry"
+                                        },
+                                        "selected_position": {
+                                            "coverage_type": "week",
+                                            "week": "17",
+                                            "position": "RB"
+                                        },
+                                        "eligible_positions": [
+                                            {"position": "RB"}
+                                        ],
+                                        "status": "Healthy"
+                                    }
+                                ]
+                            },
+                            "count": 2
+                        }
+                    }
+                }
+            ],
+            "time": "33.649963378906ms",
+            "copyright": "Data provided by Yahoo! and STATS, LLC",
+            "refresh_rate": "60"
+        }
+    }
+    
+    # Test the parser with mock data
+    result = parse_yahoo_roster_response(mock_response)
+    return jsonify(result)
+
 @app.route('/api/yahoo/roster')
 def get_yahoo_roster():
     """
