@@ -14,6 +14,7 @@ import TargetList from './components/TargetList'; // Import TargetList
 import Settings from './components/Settings'; // Import Settings
 import Documentation from './components/Documentation'; // Import Documentation
 import YahooLeagues from './components/YahooLeagues'; // Import YahooLeagues
+import MyTeam from './components/MyTeam'; // Import MyTeam
 import Sidebar from './components/Sidebar'; // Import Sidebar
 import { AppContext } from './context/AppContext';
 import { useApi } from './hooks/useApi';
@@ -750,6 +751,10 @@ function App() {
 
           {activeTool === 'yahoo-leagues' && (
             <YahooLeagues />
+          )}
+
+          {activeTool === 'my-team' && (
+            <MyTeam />
           )}
 
         </div>
