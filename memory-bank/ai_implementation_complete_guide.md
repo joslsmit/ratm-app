@@ -8,6 +8,16 @@ This document provides the complete, step-by-step implementation guide for fixin
 Please read my memory bank files to understand the current project state, then review the current AI implementation issues we need to fix.
 ```
 
+## 🚨 CRITICAL IMPLEMENTATION INSTRUCTIONS FOR AI ASSISTANT
+
+**MANDATORY STEP-BY-STEP APPROACH**:
+1. **Phase 1**: Complete prompt fixes, test thoroughly, STOP and confirm success before Phase 2
+2. **Phase 2**: Update ONE endpoint at a time, test each individually, STOP after each update
+3. **Never proceed to next step without explicit user confirmation**
+4. **If any step fails, STOP immediately and provide rollback instructions**
+
+**DO NOT ATTEMPT TO IMPLEMENT EVERYTHING AT ONCE** - This could break the entire application.
+
 ---
 
 ## CRITICAL ISSUES IDENTIFIED
@@ -227,6 +237,13 @@ def process_ai_response_v2(response_text, endpoint_name="unknown"):
 
 ### Step 2.2: Update Endpoints One by One
 
+**🚨 CRITICAL SAFETY PROTOCOL**: 
+- Update ONE endpoint at a time
+- Test thoroughly after each update  
+- STOP and confirm success before proceeding to next endpoint
+- Wait for user approval before continuing to next endpoint
+- Do NOT attempt to update multiple endpoints in sequence
+
 **IMPORTANT**: Test each endpoint individually before proceeding to the next!
 
 #### Update 1: Player Dossier
@@ -242,6 +259,11 @@ def process_ai_response_v2(response_text, endpoint_name="unknown"):
 ```
 **Test**: Player Dossier tool with "Josh Allen"
 
+**🛑 STOP HERE**: 
+- Verify Player Dossier works correctly
+- Confirm improved response quality
+- Get user approval before proceeding to next endpoint
+
 #### Update 2: Trade Analyzer
 **File**: `/backend/app.py`  
 **Line**: 451  
@@ -254,6 +276,11 @@ return jsonify({'result': process_ai_response(response_text)})
 return jsonify({'result': process_ai_response_v2(response_text, 'trade_analyzer')})
 ```
 **Test**: Trade Analyzer with simple 1v1 trade
+
+**🛑 STOP HERE**: 
+- Verify Trade Analyzer works correctly
+- Confirm winner declarations are clear
+- Get user approval before proceeding to next endpoint
 
 #### Update 3: Keeper Evaluator
 **File**: `/backend/app.py`  
@@ -268,6 +295,11 @@ return jsonify({'result': process_ai_response_v2(response_text, 'keeper_evaluato
 ```
 **Test**: Keeper Evaluator with sample data
 
+**🛑 STOP HERE**: 
+- Verify Keeper Evaluator works correctly
+- Confirm value analysis is clear
+- Get user approval before proceeding to next endpoint
+
 #### Update 4: Generate Tiers
 **File**: `/backend/app.py`  
 **Line**: 492  
@@ -280,6 +312,11 @@ return jsonify({'result': process_ai_response_v2(response_text, 'keeper_evaluato
 'tiers': process_ai_response_v2(response_text, 'generate_tiers')
 ```
 **Test**: Generate QB tiers
+
+**🛑 STOP HERE**: 
+- Verify tier generation works correctly
+- Confirm tier structure and groupings
+- Get user approval before proceeding to next endpoint
 
 #### Update 5: Market Inefficiencies
 **File**: `/backend/app.py`  
@@ -294,6 +331,11 @@ return jsonify({'result': process_ai_response_v2(response_text, 'keeper_evaluato
 ```
 **Test**: Market Inefficiency Finder
 
+**🛑 STOP HERE**: 
+- Verify Market Inefficiency Finder works correctly
+- Confirm sleepers and busts analysis
+- Get user approval before proceeding to next endpoint
+
 #### Update 6: Suggest Position (SPECIAL CASE - NO PROCESSING CURRENTLY)
 **File**: `/backend/app.py`  
 **Line**: 580  
@@ -306,6 +348,11 @@ return jsonify({'result': response_text})
 return jsonify({'result': process_ai_response_v2(response_text, 'suggest_position')})
 ```
 **Test**: Draft position suggestion
+
+**🛑 STOP HERE**: 
+- Verify Suggest Position works correctly
+- Confirm position recommendations are clear
+- Get user approval before proceeding to next endpoint
 
 #### Update 7: Pick Evaluator
 **File**: `/backend/app.py`  
@@ -320,6 +367,11 @@ return jsonify({'result': process_ai_response_v2(response_text, 'pick_evaluator'
 ```
 **Test**: Pick evaluation tool
 
+**🛑 STOP HERE**: 
+- Verify Pick Evaluator works correctly
+- Confirm pick analysis is appropriate
+- Get user approval before proceeding to next endpoint
+
 #### Update 8: Roster Composition Analysis
 **File**: `/backend/app.py**  
 **Line**: 608  
@@ -332,6 +384,11 @@ return jsonify({'result': process_ai_response(response_text)})
 return jsonify({'result': process_ai_response_v2(response_text, 'roster_composition')})
 ```
 **Test**: Roster composition analysis
+
+**🛑 STOP HERE**: 
+- Verify Roster Composition Analysis works correctly
+- Confirm roster balance advice
+- Get user approval before proceeding to next endpoint
 
 #### Update 9: Waiver Swap Analysis
 **File**: `/backend/app.py`  
@@ -346,6 +403,11 @@ return jsonify({'result': process_ai_response_v2(response_text, 'waiver_swap')})
 ```
 **Test**: Waiver swap analysis
 
+**🛑 STOP HERE**: 
+- Verify Waiver Swap Analysis works correctly
+- Confirm add/drop recommendations
+- Get user approval before proceeding to next endpoint
+
 #### Update 10: Waiver Wire Analysis
 **File**: `/backend/app.py`  
 **Line**: 829  
@@ -359,6 +421,11 @@ return jsonify({'result': process_ai_response_v2(response_text, 'waiver_wire')})
 ```
 **Test**: Waiver wire analysis
 
+**🛑 STOP HERE**: 
+- Verify Waiver Wire Analysis works correctly
+- Confirm player recommendations
+- Get user approval before proceeding to next endpoint
+
 #### Update 11: Rookie Rankings
 **File**: `/backend/app.py`  
 **Line**: 402  
@@ -371,6 +438,12 @@ return jsonify({"rookies": process_ai_response(response_text)})
 return jsonify({"rookies": process_ai_response_v2(response_text, 'rookie_rankings')})
 ```
 **Test**: Rookie rankings generation
+
+**🛑 FINAL ENDPOINT COMPLETE**: 
+- Verify Rookie Rankings works correctly
+- Confirm ranking quality and structure
+- All 11 endpoints now updated with enhanced processing
+- Move to comprehensive system testing phase
 
 ---
 
