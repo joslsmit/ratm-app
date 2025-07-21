@@ -19,9 +19,29 @@ Make the RATM Draft Kit app live for friends, affordably and reliably, ensuring 
 ### Phase 4: Implementing Yahoo API Integration (Local Development)
 *   **Status:** **COMPLETED** (Local development now uses `mkcert` for HTTPS, resolving previous `ngrok` and `INVALID_REDIRECT_URI` issues. Autocomplete is functional.)
 
-## Current and Future Phases (Planned)
+## CRITICAL PRIORITY SHIFT: AI Enhancement Phase 0
 
-This roadmap outlines the development and implementation of new features that leverage the Yahoo Fantasy Sports API, as detailed in the updated `implementation_plan.md`.
+**MAJOR DISCOVERY**: Comprehensive analysis of the AI integration revealed critical issues that must be addressed before any feature expansion.
+
+### Phase 0: AI Enhancement (CRITICAL PRIORITY - Supersedes All Other Features)
+*   **Status:** **Ready to Start - HIGHEST PRIORITY**
+*   **Discovery Date:** Analysis completed during Phase 1.2 review
+*   **Critical Issues Found:**
+    *   **🚨 Truncated Core Prompts:** PROMPT_PREAMBLE and JSON_OUTPUT_INSTRUCTION are incomplete with "..."
+    *   **🚨 Poor Response Processing:** Complex regex parsing, file-based logging, inconsistent error handling
+    *   **🚨 No Prompt Engineering:** Missing examples, chain-of-thought, structured templates
+    *   **🚨 13 Affected Endpoints:** All AI-powered features suffer from these fundamental issues
+*   **Business Impact:** AI quality directly impacts every user interaction and app credibility
+*   **Implementation Plan:** Complete technical specification in `ai_enhancement_masterplan.md`
+*   **Timeline:** 6 weeks (Phase 0A: Week 1, Phase 0B: Weeks 2-3, Phase 0C: Weeks 4-6)
+*   **Success Metrics:** 40-60% improvement in response quality, <2% error rate, sub-5 second response times
+
+### 🚨 ALL YAHOO API FEATURES NOW BLOCKED
+**Rationale:** All future features depend on reliable AI analysis. Building on current flawed foundation would create technical debt and poor user experience.
+
+## Current and Future Phases (BLOCKED - Dependent on Phase 0 Completion)
+
+**IMPORTANT:** The following roadmap is now BLOCKED until Phase 0 (AI Enhancement) is completed. All Yahoo API features depend on reliable AI analysis to provide value to users.
 
 ### Pre-requisite: Centralized League Data Endpoint
 *   **Status:** **✅ COMPLETED**
@@ -65,7 +85,7 @@ This roadmap outlines the development and implementation of new features that le
         *   Empty roster display for pre-draft scenario
         *   Complete error handling and responsive design
         *   **✅ User Testing Confirmed:** Component works successfully with limited pre-draft data
-*   **Next Priority:** Ready for post-draft testing when players are actually drafted
+*   **🚨 PRIORITY CHANGED:** Post-draft testing now secondary to AI enhancement (Phase 0)
 *   **Implementation Guide:** Detailed specifications available in `yahoo_roster_implementation.md`
 
 #### Post-Draft Testing Checklist
@@ -92,23 +112,23 @@ This roadmap outlines the development and implementation of new features that le
   - Confirm player cards show enriched data (ECR, bye weeks, AI analysis) correctly
 
 ### Phase 6: AI-Powered Waiver Wire Assistant (Yahoo Integrated)
-*   **Status:** **Not Started**
+*   **Status:** **🚨 BLOCKED - Dependent on Phase 0 AI Enhancement**
 *   **Concept:** Provide personalized waiver wire recommendations based on a user's league and roster.
 *   **UX Vision:** The existing "Waiver Wire Assistant" will be enhanced. When a user is logged in with Yahoo, it will show a league selector. The UI will present a list of top free agents and allow the user to select a player from their own roster to drop, triggering a personalized AI analysis.
 *   **Details:** Involves creating a backend `/api/yahoo/waiver_wire` endpoint for free agent and roster data, with optional AI analysis, and updating the frontend UI for league selection and recommendation display.
 
 ### Phase 7: League-Aware Trade Analyzer
-*   **Status:** **Not Started**
+*   **Status:** **🚨 BLOCKED - Dependent on Phase 0 AI Enhancement**
 *   **Concept:** Analyze trades within the context of the specific league and the rosters of the teams involved.
 *   **UX Vision:** The "Trade Analyzer" will be updated to include dropdowns to select the league and the two teams involved in the trade. The player selection inputs will then be populated with the actual rosters of those teams.
 
 ### Phase 8: "Draft Grade" Generator
-*   **Status:** **Not Started**
+*   **Status:** **🚨 BLOCKED - Dependent on Phase 0 AI Enhancement**
 *   **Concept:** Provide a comprehensive AI-powered analysis and letter grade of a user's completed draft.
 *   **UX Vision:** A new "Draft Grade" tool will be added. After logging in with Yahoo and selecting a league, the user will get a detailed report card for their draft.
 
 ### Phase 9: Personalized "Market Inefficiency" Finder
-*   **Status:** **Not Started**
+*   **Status:** **🚨 BLOCKED - Dependent on Phase 0 AI Enhancement**
 *   **Concept:** Highlight players who are undervalued in a user's specific Yahoo league compared to the app's ECR and AI analysis.
 *   **UX Vision:** The "Market Inefficiency Finder" will be enhanced with a league selector for logged-in users, showing a tailored list of potential draft-day bargains.
 

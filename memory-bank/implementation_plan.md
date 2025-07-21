@@ -1,10 +1,90 @@
-# RATM Draft Kit: Granular Implementation Plan for Yahoo! API
+# RATM Draft Kit: Comprehensive Implementation Roadmap
 
-This document provides a highly detailed, step-by-step guide for implementing Yahoo Fantasy Sports API features. It is designed to be executed by an AI assistant, minimizing ambiguity and the need for inference.
+This document provides the complete implementation roadmap for RATM Draft Kit, prioritizing AI enhancement as the foundation before expanding feature set.
 
-**Note for AI Assistant:** Follow these instructions precisely. Do not deviate from the specified file names, function calls, or data structures.
+**CRITICAL PRIORITY SHIFT:** AI Enhancement (Phase 0) now supersedes all other features as the core app functionality depends on reliable AI analysis.
+
+**Note for AI Assistant:** AI enhancement must be completed before any new feature development. Follow the phased approach precisely.
 
 ---
+
+## **PHASE 0: AI ENHANCEMENT (CRITICAL PRIORITY)**
+
+### **Overview**
+AI analysis quality is the core value proposition of RATM Draft Kit. Current AI integration has critical issues that undermine user experience and must be resolved before any feature expansion.
+
+### **Critical Issues Identified**
+1. **Truncated Core Prompts**: PROMPT_PREAMBLE and JSON_OUTPUT_INSTRUCTION are incomplete with "..."
+2. **Poor Response Processing**: Complex regex parsing, file-based logging, inconsistent error handling
+3. **No Prompt Engineering**: Missing examples, chain-of-thought, structured templates
+4. **Performance Issues**: Slow processing, high error rates, unreliable responses
+
+### **Phase 0A: Emergency Fixes (Week 1) - IMMEDIATE PRIORITY**
+
+#### **Task 1: Reconstruct Core Prompts**
+- **File**: `backend/app.py` lines 273-274
+- **Action**: Replace truncated constants with complete, structured prompts
+- **Details**: See `ai_enhancement_masterplan.md` Section B.1.1 for complete implementation
+
+#### **Task 2: Implement Enhanced Response Processing**
+- **File**: `backend/utils.py` 
+- **Action**: Replace `process_ai_response()` with `process_ai_response_v2()`
+- **Features**: JSON schema validation, structured error handling, standardized confidence scoring
+- **Details**: See `ai_enhancement_masterplan.md` Section B.1.2 for complete implementation
+
+#### **Task 3: Update All AI Endpoints**
+- **Files**: 13 endpoints in `backend/app.py`
+- **Action**: Standardize prompt construction and response processing
+- **Endpoints**: player_dossier, rookie_rankings, keeper_evaluator, trade_analyzer, generate_tiers, find_market_inefficiencies, suggest_position, pick_evaluator, roster_composition_analysis, waiver_wire_recommendation, waiver_wire_analysis
+- **Template**: See `ai_enhancement_masterplan.md` Section B.1.3
+
+### **Phase 0B: Prompt Engineering Overhaul (Week 2-3)**
+
+#### **Task 1: Create Modular Prompt System**
+- **File**: `backend/prompt_templates.py` (new)
+- **Features**: Reusable templates, structured task definitions, consistent formatting
+- **Classes**: PromptBuilder, PromptTemplate, ExampleLibrary
+
+#### **Task 2: Implement Few-Shot Prompting** 
+- **Action**: Add high-quality examples for each analysis type
+- **Benefits**: 40-60% improvement in response relevance and consistency
+- **Examples**: Player analysis, trade evaluation, waiver recommendations
+
+#### **Task 3: Add Chain-of-Thought Reasoning**
+- **Purpose**: Guide AI through structured reasoning process
+- **Implementation**: Step-by-step analysis templates for complex decisions
+
+### **Phase 0C: Advanced AI Features (Week 4-6)**
+
+#### **Task 1: Dynamic Context Adjustment**
+- **File**: `backend/context_formatters.py` (new)
+- **Purpose**: Optimize data presentation based on analysis type
+- **Features**: Relevance filtering, structured formatting, contextual comparisons
+
+#### **Task 2: Response Validation Framework**
+- **File**: `backend/response_schemas.py` (new)
+- **Purpose**: Ensure consistent, high-quality AI responses
+- **Features**: JSON schema validation, confidence calibration, error detection
+
+#### **Task 3: Performance Optimization**
+- **Metrics**: Sub-5 second response times, <2% error rate, 95%+ proper formatting
+- **Monitoring**: Quality tracking, user feedback collection, A/B testing framework
+
+### **Success Criteria for Phase 0**
+- ✅ All truncated prompts reconstructed and functional
+- ✅ Consistent JSON response format across all 13 endpoints
+- ✅ Confidence scores calibrated and meaningful (0.0-1.0 scale)
+- ✅ 40-60% improvement in response quality metrics
+- ✅ Sub-5 second response times for 95% of requests
+- ✅ Error rate below 2% across all AI endpoints
+
+---
+
+## **PHASE 1: YAHOO API INTEGRATION (Dependent on Phase 0 Completion)**
+
+### **Prerequisites**
+- ✅ **Phase 0 Complete**: AI enhancement must be finished before Yahoo features
+- ✅ **Rationale**: All Yahoo features depend on reliable AI analysis for value proposition
 
 ## **Guiding Principle: Defensive JSON Parsing**
 
@@ -19,8 +99,9 @@ The Yahoo API's JSON is converted from XML and can be unpredictable. Keys may be
 
 --- 
 
-## **Pre-requisite: Centralized League Data Endpoint**
+## **Phase 1.0: Pre-requisite - Centralized League Data Endpoint** ✅ COMPLETED
 
+*   **Status:** **COMPLETED** - This functionality is already implemented and operational
 *   **Goal:** Create a single, reusable backend endpoint to fetch all of a user's fantasy football leagues.
 
 ### **Backend Task: Create `/api/yahoo/leagues` Endpoint**
@@ -54,11 +135,12 @@ The Yahoo API's JSON is converted from XML and can be unpredictable. Keys may be
 
 ---
 
-## **Feature 1: Personalized Roster Analysis**
+## **Phase 1.1: Personalized Roster Analysis** ✅ COMPLETED
 
+*   **Status:** **COMPLETED** - Both backend and frontend implementation finished
 *   **Concept:** Display a user's Yahoo roster with integrated AI analysis for each player.
 
-### **Phase 1.1: Backend - Roster Endpoint**
+### **Phase 1.1A: Backend - Roster Endpoint** ✅ COMPLETED
 
 1.  **Modify File:** Open `backend/app.py`.
 2.  **Define Route:** Create a new Flask route: `GET /api/yahoo/roster`.
@@ -88,7 +170,7 @@ The Yahoo API's JSON is converted from XML and can be unpredictable. Keys may be
         ]
         ```
 
-### **Phase 1.2: Frontend - "My Team" View**
+### **Phase 1.1B: Frontend - "My Team" View** ✅ COMPLETED
 
 1.  **Create Component:** `frontend/src/components/MyTeam.js`.
 2.  **Add Route:** In `frontend/src/App.js`, add a route for `/my-team`.
@@ -102,11 +184,23 @@ The Yahoo API's JSON is converted from XML and can be unpredictable. Keys may be
 
 ---
 
-## **Feature 2: AI-Powered Waiver Wire Assistant (Yahoo Integrated)**
+## **PHASE 1.2+: FUTURE YAHOO API FEATURES (🚨 BLOCKED - Dependent on Phase 0 Completion)**
+
+**CRITICAL DEPENDENCY**: All future Yahoo API features are **BLOCKED** until Phase 0 (AI Enhancement) is completed. These features depend on reliable AI analysis to provide value to users.
+
+### **Blocking Rationale**
+- All Yahoo features integrate with AI analysis endpoints
+- Current AI issues (truncated prompts, poor processing) would undermine these features
+- User experience would be poor with unreliable AI recommendations
+- Technical debt would compound if built on flawed AI foundation
+
+---
+
+## **Phase 1.2: AI-Powered Waiver Wire Assistant (Yahoo Integrated)** 🚨 BLOCKED
 
 *   **Concept:** Provide personalized waiver wire recommendations.
 
-### **Phase 2.1: Backend - Free Agent & Analysis Endpoint**
+### **Phase 1.2A: Backend - Free Agent & Analysis Endpoint**
 
 1.  **Modify File:** Open `backend/app.py`.
 2.  **Define Route:** Create `GET /api/yahoo/waiver_wire`.
@@ -120,7 +214,7 @@ The Yahoo API's JSON is converted from XML and can be unpredictable. Keys may be
 7.  **Final Response Structure:**
     *   Return a JSON object: `{ "free_agents": [], "user_roster": [], "ai_recommendation": "..." }`. The `ai_recommendation` key is optional.
 
-### **Phase 2.2: Frontend - Enhanced Waiver Wire UI**
+### **Phase 1.2B: Frontend - Enhanced Waiver Wire UI**
 
 1.  **Modify Component:** `frontend/src/components/WaiverWireAssistant.js`.
 2.  **Logic:** Add league selection, fetch initial data, allow user to select a player to add and drop, trigger analysis, and display the recommendation.
