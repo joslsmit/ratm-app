@@ -14,7 +14,7 @@ import logging # Import logging module
 from datetime import datetime # Import datetime class
 from apscheduler.schedulers.background import BackgroundScheduler
 from data_importer import import_data
-from utils import normalize_player_name, fuzzy_find_player_key, get_player_context, make_gemini_request, process_ai_response
+from utils import normalize_player_name, fuzzy_find_player_key, get_player_context, make_gemini_request, process_ai_response, process_ai_response_v2
 
 # Get the absolute path of the directory where this file is located
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -270,8 +270,50 @@ def create_combined_player_data_cache():
     combined_player_data_cache = temp_combined_data
     print(f"✅ Successfully created combined_player_data_cache with {len(combined_player_data_cache)} players.")
 
-PROMPT_PREAMBLE = "You are 'The Analyst,' a data-driven, no-nonsense fantasy football expert providing advice for the upcoming 2025 NFL season. All analysis is for a 12-team, PPR league with standard Yahoo scoring rules..."
-JSON_OUTPUT_INSTRUCTION = "Your response MUST be a JSON object with two keys: \"confidence\" and \"analysis\"..."
+PROMPT_PREAMBLE = """You are 'The Analyst' - an expert fantasy football advisor specializing in data-driven analysis for the 2025 NFL season.
+
+CONTEXT:
+- League Format: 12-team, PPR scoring, standard Yahoo rules
+- Season: 2025 NFL season with current roster compositions
+- Data Sources: Expert Consensus Rankings (ECR), injury reports, depth charts
+- Analysis Philosophy: Objective, data-driven, actionable insights
+
+APPROACH:
+- Base recommendations on provided ECR data (lower ECR = better ranking)
+- Consider positional scarcity and value-based drafting
+- Factor in injury history, role security, and team context
+- Account for bye week timing and roster construction
+- Acknowledge uncertainty when data is limited
+
+RESPONSE STYLE:
+- Professional and analytical tone
+- Concise but thorough explanations
+- Clear section headers using markdown formatting
+- Focus on actionable recommendations with reasoning
+- Provide confidence assessment based on data quality"""
+JSON_OUTPUT_INSTRUCTION = """RESPONSE FORMAT REQUIREMENTS:
+Your response MUST be a valid JSON object with exactly these keys:
+{
+  "confidence": "High" | "Medium" | "Low",
+  "analysis": "markdown-formatted analysis string"
+}
+
+CONFIDENCE DEFINITIONS:
+- "High": Strong data consensus, established patterns, minimal uncertainty
+- "Medium": Good data quality with some variables or moderate uncertainty  
+- "Low": Limited data, high uncertainty, or significant unknowns
+
+ANALYSIS FORMATTING:
+- Use markdown headers (### Section Name) for organization
+- Include bullet points and bold text for emphasis
+- Structure analysis logically with clear reasoning
+- End with actionable recommendation or summary
+
+CRITICAL JSON REQUIREMENTS:
+- Use double quotes for all strings
+- No trailing commas
+- Escape any internal quotes properly
+- Ensure valid JSON syntax throughout"""
 
 # --- Data Loading and Initialization ---
 def load_all_data():
@@ -358,7 +400,7 @@ def player_dossier():
         # --- Combine and Return ---
         return jsonify({
             'player_data': player_data_response,
-            'analysis': process_ai_response(response_text)
+            'analysis': process_ai_response_v2(response_text, 'player_dossier')
         })
     except Exception as e:
         traceback.print_exc()
@@ -434,7 +476,7 @@ def keeper_evaluation():
         context_str = "\n".join([f"{get_player_context(k['name'], ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data)}\n  - Keeper Cost: A round {int(k['round']) - 1} pick (equivalent to pick {(int(k['round']) - 1) * 12 + 1} in a 12-team league)\n" + (f"  - Additional Context: {k.get('context') or ''}\n") for k in keepers])
         prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Analyze these keepers. For each player, compare their Overall ECR (which is their overall rank, where a *lower number is better*) to their keeper cost (draft round/pick). A player is **good value** if their ECR number is significantly *lower* (meaning a better rank) than the pick number of their keeper cost. A player is **poor value** if their ECR number is *higher* (meaning a worse rank) than the pick number of their keeper cost. Note bye week overlaps. Prioritize recommendations. Your analysis MUST be a single, comprehensive markdown string, including sections for each player's evaluation and an overall keeper strategy. Do NOT return a nested JSON object for the 'analysis' field. Ensure all relevant details are included directly in this markdown string.\n\n**Data:**\n{context_str}\n\n{JSON_OUTPUT_INSTRUCTION}\n\n**Important:** Ensure your response is a valid JSON object with exactly two keys: 'confidence' (string: 'High', 'Medium', or 'Low') and 'analysis' (string). Do not include any text outside the JSON structure."
         response_text = make_gemini_request(prompt, user_key)
-        return jsonify({'result': process_ai_response(response_text)})
+        return jsonify({'result': process_ai_response_v2(response_text, 'keeper_evaluator')})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -448,7 +490,7 @@ def trade_analyzer():
         partner_assets_context = "\n".join([get_player_context(name, ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data) if "pick" not in name.lower() else f"- {name}" for name in request.json.get('partner_assets', [])])
         prompt = f"{PROMPT_PREAMBLE.replace('PPR', scoring_format)}\n\n**Task:** Analyze this trade from the perspective of 'My Team'. Declare a winner or if it is fair. Justify your answer, consistently referring to the sides as 'My Team' and 'The Other Team'.\n\n**Assets My Team Receives:**\n{my_assets_context}\n\n**Assets The Other Team Receives:**\n{partner_assets_context}\n\n{JSON_OUTPUT_INSTRUCTION}"
         response_text = make_gemini_request(prompt, user_key)
-        return jsonify({'result': process_ai_response(response_text)})
+        return jsonify({'result': process_ai_response_v2(response_text, 'trade_analyzer')})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -591,7 +633,7 @@ def pick_evaluator():
         player_context = get_player_context(data.get('player_to_pick'), ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data)
         prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Analyze if this is a good pick for me in Round {data.get('current_round')}. Compare ECR to the round and evaluate roster fit. Give a 'GOOD PICK', 'SOLID PICK,' or 'POOR PICK' verdict.\n\n**My Draft So Far:**\n{draft_summary}\n\n**Player Being Considered:**\n{player_context}\n\n{JSON_OUTPUT_INSTRUCTION}"
         response_text = make_gemini_request(prompt, user_key)
-        return jsonify({'result': process_ai_response(response_text)})
+        return jsonify({'result': process_ai_response_v2(response_text, 'pick_evaluator')})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -605,7 +647,7 @@ def roster_composition_analysis():
         comp_str = ", ".join([f"{count} {pos}" for pos, count in composition.items()])
         prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Provide a brief, 2-3 sentence analysis of my roster balance based on these position counts. Consider that only {drafted_count} players have been drafted so far, and adjust your advice based on the current stage of the draft.\n\n**Composition (after {drafted_count} picks):**\n{comp_str}"
         response_text = make_gemini_request(prompt, user_key)
-        return jsonify({'result': process_ai_response(response_text)})
+        return jsonify({'result': process_ai_response_v2(response_text, 'roster_composition')})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -779,7 +821,7 @@ def waiver_swap_analysis():
 {JSON_OUTPUT_INSTRUCTION}
 """
         response_text = make_gemini_request(prompt, user_key)
-        return jsonify({'result': process_ai_response(response_text)})
+        return jsonify({'result': process_ai_response_v2(response_text, 'waiver_swap')})
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
@@ -826,7 +868,7 @@ def waiver_wire_analysis():
 
         prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Analyze my current roster and the top available waiver wire players. Recommend 3-5 players to add, justifying each recommendation based on Yahoo PPR scoring, current performance, and potential upside. Also, suggest 1-2 players to drop if necessary.\n\n**My Current Roster:**\n{roster_context}\n\n**Top Available Waiver Wire Players:**\n{available_players_context}\n\n{JSON_OUTPUT_INSTRUCTION}"
         response_text = make_gemini_request(prompt, user_key)
-        return jsonify({'result': process_ai_response(response_text)})
+        return jsonify({'result': process_ai_response_v2(response_text, 'waiver_wire')})
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500

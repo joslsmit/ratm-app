@@ -76,7 +76,7 @@ def make_gemini_request(prompt, user_api_key):
     if not user_api_key: raise Exception("API key is missing from the request.")
     genai.configure(api_key=user_api_key)
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash-lite-preview-06-17')
+        model = genai.GenerativeModel('gemini-2.5-flash-lite')
         response = model.generate_content(prompt)
     except Exception as e:
         print(f"DEBUG: Error during generate_content: {e}")
@@ -162,3 +162,79 @@ def process_ai_response(response_text):
         if "confidence" in response_text.lower() and "analysis" in response_text.lower():
             return "There was an error processing the AI's response, but some content was returned. Please check the logs for the raw response."
         return "There was an error processing the AI's response. The format was invalid. Please try again."
+
+
+def process_ai_response_v2(response_text, endpoint_name="unknown"):
+    """
+    Enhanced AI response processing with validation and fallback.
+    Maintains compatibility with existing frontend expectations.
+    """
+    try:
+        # Log for debugging (same as original)
+        with open('ai_response.log', 'a') as f:
+            f.write(f"{datetime.now()} - Enhanced Processing ({endpoint_name}):\n{response_text}\n\n")
+        
+        # Clean response text
+        cleaned_response = response_text.strip()
+        
+        # Extract JSON block using same method as original
+        start_idx = cleaned_response.find('{')
+        end_idx = cleaned_response.rfind('}') + 1
+        
+        if start_idx == -1 or end_idx == 0:
+            print(f"No JSON found in response for {endpoint_name}")
+            return process_ai_response(response_text)  # Fallback to original
+            
+        json_str = cleaned_response[start_idx:end_idx]
+        
+        try:
+            parsed_response = json.loads(json_str)
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error for {endpoint_name}: {e}")
+            return process_ai_response(response_text)  # Fallback to original
+        
+        # Validate required fields
+        if 'confidence' not in parsed_response:
+            print(f"Missing confidence field for {endpoint_name}")
+            return process_ai_response(response_text)  # Fallback to original
+            
+        if 'analysis' not in parsed_response:
+            print(f"Missing analysis field for {endpoint_name}")
+            return process_ai_response(response_text)  # Fallback to original
+        
+        # Normalize confidence to ensure valid values
+        raw_confidence = parsed_response['confidence']
+        if raw_confidence not in ['High', 'Medium', 'Low']:
+            # Handle legacy numeric confidence or invalid values
+            if isinstance(raw_confidence, (int, float)):
+                if raw_confidence >= 0.8:
+                    confidence = 'High'
+                elif raw_confidence >= 0.5:
+                    confidence = 'Medium'
+                else:
+                    confidence = 'Low'
+            else:
+                confidence = 'Medium'  # Safe default
+        else:
+            confidence = raw_confidence
+            
+        # Get analysis text and ensure it's a string
+        analysis_text = str(parsed_response['analysis']).strip()
+        
+        # Clean up analysis formatting (remove excessive newlines)
+        analysis_text = re.sub(r'\n\s*\n\s*\n+', '\n\n', analysis_text)
+        analysis_text = re.sub(r'^\s*\n+', '', analysis_text)
+        analysis_text = re.sub(r'\n+\s*$', '', analysis_text)
+        
+        # Format output exactly like original function for frontend compatibility
+        emoji_map = {'High': '✅', 'Medium': '🤔', 'Low': '⚠️'}
+        confidence_badge = f"**Confidence: {emoji_map.get(confidence, '🤔')} {confidence}**"
+        
+        return f"{confidence_badge}\n\n---\n\n{analysis_text}"
+        
+    except Exception as e:
+        # Log error and fallback to original function - NEVER crash
+        print(f"Enhanced processing failed for {endpoint_name}: {e}")
+        with open('ai_response.log', 'a') as f:
+            f.write(f"{datetime.now()} - Enhanced processing error ({endpoint_name}): {str(e)}\n\n")
+        return process_ai_response(response_text)
