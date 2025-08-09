@@ -15,6 +15,10 @@ from datetime import datetime # Import datetime class
 from apscheduler.schedulers.background import BackgroundScheduler
 from data_importer import import_data
 from utils import normalize_player_name, fuzzy_find_player_key, get_player_context, make_gemini_request, process_ai_response, process_ai_response_v2
+from prompt_templates import PromptBuilder
+from few_shot_examples import ExampleLibrary
+from chain_of_thought import ChainOfThoughtBuilder, ReasoningType
+from context_formatters import ContextFormatter, AnalysisType
 
 # Get the absolute path of the directory where this file is located
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -391,11 +395,36 @@ def player_dossier():
             "rank_delta_rookie": combined_info.get('rank_delta_rookie'),
         }
 
-        # --- Generate AI Analysis ---
-        # Pass the preferred ECR type to get_player_context for AI prompt generation
-        player_context = get_player_context(player_name, ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data)
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** First, create a detailed markdown report for the player with headers: ### Depth Chart Role, ### Value Analysis, ### Risk Factors, ### 2025 Outlook, and ### Final Verdict. Then, wrap this entire markdown report inside the 'analysis' key of your JSON output.\n\n**Player Data:**\n{player_context}\n\n{JSON_OUTPUT_INSTRUCTION}"
-        response_text = make_gemini_request(prompt, user_key)
+        # --- Generate Enhanced AI Analysis (Phase 0B) ---
+        # Create enhanced player context using Phase 0B context formatter
+        enhanced_player_context = ContextFormatter.format_enhanced_player_context(
+            combined_info, AnalysisType.PLAYER_DOSSIER
+        )
+        
+        # Get few-shot examples for player analysis
+        examples = ExampleLibrary.get_examples_for_analysis_type('player_analysis')
+        
+        # Get chain-of-thought reasoning questions
+        reasoning_questions = ChainOfThoughtBuilder.get_reasoning_questions_list(ReasoningType.PLAYER_EVALUATION)
+        
+        # Build enhanced prompt with all Phase 0B components
+        methodology_steps = [
+            'Evaluate current role security and depth chart position within team context',
+            'Compare Expert Consensus Ranking to projected fantasy performance and draft value',
+            'Assess injury history, age factors, and other risk variables that could impact season',
+            'Project 2025 season outlook considering all supporting factors and potential scenarios',
+            'Synthesize analysis into clear, actionable draft recommendation with appropriate confidence'
+        ]
+        
+        enhanced_prompt = PromptBuilder.build_enhanced_prompt(
+            task_description='Comprehensive Player Analysis for Fantasy Football Drafting',
+            player_data=enhanced_player_context,
+            methodology_steps=methodology_steps,
+            examples=examples[:1],  # Include one high-quality example
+            chain_of_thought=reasoning_questions
+        )
+        
+        response_text = make_gemini_request(enhanced_prompt, user_key)
         
         # --- Combine and Return ---
         return jsonify({
@@ -439,8 +468,58 @@ def rookie_rankings():
         
         rookie_list_for_prompt = [f"- {r['name']} ({r['position']}, {r['team']}) - ECR: {r.get('ecr')}, SD: {r.get('sd')}, Best: {r.get('best')}, Worst: {r.get('worst')}, RankDelta: {r.get('rank_delta')}" for r in sorted_rookies[:50]]
         
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** From the provided Rookie Data, create a ranked list of the top 15 rookies. Ensure that the 'position' field in your output matches the position of the player in the provided data. If a position filter was applied, only include players matching that filter.\n\n**Rookie Data:**\n{chr(10).join(rookie_list_for_prompt)}\n\n**Instructions:** Your response MUST be a single, valid JSON object. This object must have one top-level key: \"rookies\". The value of \"rookies\" MUST be a JSON array. Each element in this array MUST be a JSON object representing a rookie. Each rookie object MUST have the following keys, in this exact order, with correctly formatted JSON values: \"rank\" (integer), \"name\" (string), \"position\" (string), \"team\" (string), \"ecr\" (float or null), \"sd\" (float or null), \"best\" (integer or null), \"worst\" (integer or null), \"rank_delta\" (float or null), and \"analysis\" (string, 1-2 sentences). For any numeric field where data is not available, use `null` instead of \"N/A\" or any other string. Ensure all strings are properly quoted and all necessary commas are included between key-value pairs and between objects in the array. Do not include any text or formatting outside of this single JSON object."
-        response_text = make_gemini_request(prompt, user_key)
+        # --- Enhanced Rookie Rankings (Phase 0B) ---
+        
+        # Build enhanced methodology for rookie evaluation  
+        methodology_steps = [
+            'Evaluate rookie draft capital and NFL team commitment as foundation for opportunity',
+            'Assess college production, skillset translation, and NFL-readiness factors',
+            'Analyze expert consensus patterns and uncertainty levels using standard deviation',
+            'Consider team context, coaching fit, and projected role within offensive system',
+            'Rank rookies balancing upside potential against rookie adjustment risk factors'
+        ]
+        
+        rookie_reasoning = [
+            'Which rookies have the highest draft capital and clearest path to early opportunity?',
+            'How do college metrics and skillsets project to NFL success in 2025?',
+            'Where do I see expert disagreement (high SD) suggesting value opportunities?',
+            'What team situations and coaching systems best support rookie success?',
+            'How should I balance ceiling potential against floor concerns for each rookie?'
+        ]
+        
+        # Enhanced prompt with Phase 0B components
+        enhanced_prompt = f"""{PromptBuilder.get_base_system_prompt()}
+
+TASK: Advanced Rookie Rankings for 2025 Fantasy Football Season
+Create strategic rookie rankings that balance opportunity, talent, and situation for fantasy success.
+
+ANALYSIS METHODOLOGY:
+{chr(10).join(f"{i}. {step}" for i, step in enumerate(methodology_steps, 1))}
+
+STEP-BY-STEP THINKING PROCESS:
+{chr(10).join(f"{i}. {step}" for i, step in enumerate(rookie_reasoning, 1))}
+
+ROOKIE DATA FOR ANALYSIS:
+{chr(10).join(rookie_list_for_prompt)}
+
+RESPONSE FORMAT REQUIREMENTS:
+Your response MUST be a single, valid JSON object with one top-level key: "rookies".
+The "rookies" value MUST be a JSON array of the top 15 rookies.
+
+Each rookie object MUST have these exact keys:
+- "rank" (integer): 1-15 ranking
+- "name" (string): Player name
+- "position" (string): Position matching provided data  
+- "team" (string): NFL team
+- "ecr" (float or null): Expert consensus ranking
+- "sd" (float or null): Standard deviation
+- "best" (integer or null): Best expert ranking
+- "worst" (integer or null): Worst expert ranking
+- "rank_delta" (float or null): Recent ranking change
+- "analysis" (string): 1-2 sentence evaluation focusing on opportunity and upside
+
+CRITICAL: Use null for unavailable numeric data, ensure proper JSON syntax with quotes and commas."""
+        response_text = make_gemini_request(enhanced_prompt, user_key)
         
         # Use a more robust method to extract the JSON block
         json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
@@ -473,9 +552,58 @@ def keeper_evaluation():
         user_key = request.headers.get('X-API-Key')
         keepers = request.json.get('keepers')
         ecr_type_pref = request.json.get('ecr_type_preference', 'overall') # Default to overall
-        context_str = "\n".join([f"{get_player_context(k['name'], ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data)}\n  - Keeper Cost: A round {int(k['round']) - 1} pick (equivalent to pick {(int(k['round']) - 1) * 12 + 1} in a 12-team league)\n" + (f"  - Additional Context: {k.get('context') or ''}\n") for k in keepers])
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Analyze these keepers. For each player, compare their Overall ECR (which is their overall rank, where a *lower number is better*) to their keeper cost (draft round/pick). A player is **good value** if their ECR number is significantly *lower* (meaning a better rank) than the pick number of their keeper cost. A player is **poor value** if their ECR number is *higher* (meaning a worse rank) than the pick number of their keeper cost. Note bye week overlaps. Prioritize recommendations. Your analysis MUST be a single, comprehensive markdown string, including sections for each player's evaluation and an overall keeper strategy. Do NOT return a nested JSON object for the 'analysis' field. Ensure all relevant details are included directly in this markdown string.\n\n**Data:**\n{context_str}\n\n{JSON_OUTPUT_INSTRUCTION}\n\n**Important:** Ensure your response is a valid JSON object with exactly two keys: 'confidence' (string: 'High', 'Medium', or 'Low') and 'analysis' (string). Do not include any text outside the JSON structure."
-        response_text = make_gemini_request(prompt, user_key)
+        # --- Enhanced Keeper Evaluation (Phase 0B) ---
+        # Build enhanced keeper analysis for each player
+        keeper_contexts = []
+        for k in keepers:
+            player_name = k['name']
+            keeper_round = int(k['round']) - 1  # Adjust for 0-indexing
+            keeper_pick = keeper_round * 12 + 1
+            
+            # Get player data for enhanced context formatting
+            normalized_name = normalize_player_name(player_name)
+            player_data = combined_player_data_cache.get(normalized_name, {})
+            
+            # Enhanced context with keeper-specific information
+            if player_data:
+                enhanced_context = ContextFormatter.format_enhanced_player_context(
+                    player_data, AnalysisType.KEEPER_EVALUATION, 
+                    {'keeper_cost': f'Round {keeper_round + 1} pick (#{keeper_pick} overall)'}
+                )
+            else:
+                # Fallback to basic context
+                enhanced_context = f"**{player_name}** - No data available\n- Keeper Cost: Round {keeper_round + 1} pick (#{keeper_pick} overall)"
+            
+            # Add additional context if provided
+            if k.get('context'):
+                enhanced_context += f"\n- Additional Context: {k['context']}"
+            
+            keeper_contexts.append(enhanced_context)
+        
+        context_str = "\n\n".join(keeper_contexts)
+        
+        # Get keeper analysis examples and reasoning
+        keeper_examples = ExampleLibrary.get_examples_for_analysis_type('keeper_analysis')
+        value_reasoning = ChainOfThoughtBuilder.get_reasoning_questions_list(ReasoningType.VALUE_ASSESSMENT)
+        
+        # Build enhanced keeper evaluation prompt
+        methodology_steps = [
+            'Compare market value (ECR) to keeper cost for each player to calculate surplus value',
+            'Assess age trajectory and multi-year value sustainability for keeper decisions',
+            'Evaluate opportunity cost of keeper slots versus draft flexibility',
+            'Consider bye week overlaps and roster construction implications',
+            'Prioritize keeper recommendations based on total value and strategic fit'
+        ]
+        
+        enhanced_prompt = PromptBuilder.build_enhanced_prompt(
+            task_description='Comprehensive Keeper Evaluation for Fantasy Football',
+            player_data=context_str,
+            methodology_steps=methodology_steps,
+            examples=keeper_examples[:1] if keeper_examples else None,
+            chain_of_thought=value_reasoning
+        )
+        
+        response_text = make_gemini_request(enhanced_prompt, user_key)
         return jsonify({'result': process_ai_response_v2(response_text, 'keeper_evaluator')})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -486,10 +614,37 @@ def trade_analyzer():
         user_key = request.headers.get('X-API-Key')
         scoring_format = request.json.get('scoring_format', 'PPR')
         ecr_type_pref = request.json.get('ecr_type_preference', 'overall') # Default to overall
-        my_assets_context = "\n".join([get_player_context(name, ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data) if "pick" not in name.lower() else f"- {name}" for name in request.json.get('my_assets', [])])
-        partner_assets_context = "\n".join([get_player_context(name, ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data) if "pick" not in name.lower() else f"- {name}" for name in request.json.get('partner_assets', [])])
-        prompt = f"{PROMPT_PREAMBLE.replace('PPR', scoring_format)}\n\n**Task:** Analyze this trade from the perspective of 'My Team'. Declare a winner or if it is fair. Justify your answer, consistently referring to the sides as 'My Team' and 'The Other Team'.\n\n**Assets My Team Receives:**\n{my_assets_context}\n\n**Assets The Other Team Receives:**\n{partner_assets_context}\n\n{JSON_OUTPUT_INSTRUCTION}"
-        response_text = make_gemini_request(prompt, user_key)
+        # --- Enhanced Trade Analysis (Phase 0B) ---
+        # Format assets for enhanced analysis
+        my_assets_names = request.json.get('my_assets', [])
+        partner_assets_names = request.json.get('partner_assets', [])
+        
+        my_assets_context = "\n".join([get_player_context(name, ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data) if "pick" not in name.lower() else f"- {name}" for name in my_assets_names])
+        partner_assets_context = "\n".join([get_player_context(name, ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data) if "pick" not in name.lower() else f"- {name}" for name in partner_assets_names])
+        
+        # Get trade analysis examples and reasoning
+        trade_examples = ExampleLibrary.get_examples_for_analysis_type('trade_analysis')
+        trade_reasoning = ChainOfThoughtBuilder.get_reasoning_questions_list(ReasoningType.TRADE_ANALYSIS)
+        
+        # Enhanced trade context formatting
+        league_context = f"{scoring_format} scoring format in 12-team league"
+        
+        # Build enhanced trade analysis prompt
+        methodology_steps = [
+            'Calculate raw fantasy value of each side using ECR and projected points',
+            'Assess positional scarcity and replaceability for all positions involved',
+            'Evaluate timing factors (bye weeks, playoff schedules, age curves)',
+            'Consider roster construction and team-specific needs impact',
+            'Declare clear winner with supporting reasoning and confidence assessment'
+        ]
+        
+        enhanced_prompt = PromptBuilder.build_trade_analysis_prompt(
+            my_assets=my_assets_context,
+            their_assets=partner_assets_context,
+            league_context=league_context
+        )
+        
+        response_text = make_gemini_request(enhanced_prompt, user_key)
         return jsonify({'result': process_ai_response_v2(response_text, 'trade_analyzer')})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -526,11 +681,67 @@ def generate_tiers():
                     'rank_delta': clean_numeric_value(p_data.get('rank_delta'))
                 })
         
+        # --- Enhanced Tier Generation (Phase 0B) ---
         # Convert the list of dictionaries to a JSON string for the prompt
         player_list_str = json.dumps(player_list_for_tiers, indent=2)
         
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Group the following {position}s into Tiers. Your response MUST be a single JSON object with one key, 'tiers', whose value is a JSON array. Each object in the 'tiers' array should represent a tier and have the following keys: 'header' (string, e.g., 'Tier 1: Elite Quarterbacks'), 'summary' (string, a 1-sentence summary), and 'players' (JSON array of player objects. Each player object MUST have 'name', 'position', 'team', 'ecr', 'sd', 'best', 'worst', 'rank_delta' keys).\n\n**Example Desired JSON Structure:**\n```json\n{{\n  \"tiers\": [\n    {{\n      \"header\": \"Tier 1: Elite Quarterbacks\",\n      \"summary\": \"These QBs are top-tier.\",\n      \"players\": [\n        {{\"name\": \"Player A\", \"position\": \"QB\", \"team\": \"BUF\", \"ecr\": 1.0, \"sd\": 1.5, \"best\": 1, \"worst\": 3, \"rank_delta\": 0.2}},\n        {{\"name\": \"Player B\", \"position\": \"QB\", \"team\": \"KC\", \"ecr\": 2.0, \"sd\": 1.2, \"best\": 1, \"worst\": 4, \"rank_delta\": -0.1}}\n      ]\n    }}\n  ]\n}}\n```\n\n**Player List for Tiers (JSON Array):**\n{player_list_str}"
-        response_text = make_gemini_request(prompt, user_key)
+        # Get tier analysis examples and reasoning
+        tier_examples = ExampleLibrary.get_examples_for_analysis_type('tier_analysis')
+        
+        # Build enhanced tier generation prompt with methodology
+        methodology_steps = [
+            f'Analyze the {position} rankings using ECR and standard deviation to identify natural tier breaks',
+            'Group players with similar ECR ranges and statistical profiles into meaningful tiers',
+            'Consider expert consensus (lower SD = clearer tier placement) when setting tier boundaries', 
+            'Create descriptive tier headers that capture each group\'s fantasy value and role',
+            'Write concise summaries explaining what differentiates each tier from others'
+        ]
+        
+        tier_reasoning = [
+            f'Where are the natural breaks in {position} ECR that suggest tier separations?',
+            'Which players have high expert consensus (low SD) vs high disagreement (high SD)?',
+            'How should positional scarcity and draft strategy influence tier groupings?',
+            'What tier names and descriptions best capture each group\'s fantasy value?'
+        ]
+        
+        # Enhanced prompt with Phase 0B components
+        enhanced_prompt = f"""{PromptBuilder.get_base_system_prompt()}
+
+TASK: Advanced Tier Generation for {position} Position
+Create strategic fantasy football tiers that group players by similar value and draft cost.
+
+ANALYSIS METHODOLOGY:
+{chr(10).join(f"{i}. {step}" for i, step in enumerate(methodology_steps, 1))}
+
+STEP-BY-STEP THINKING PROCESS:
+{chr(10).join(f"{i}. {step}" for i, step in enumerate(tier_reasoning, 1))}
+
+PLAYER DATA:
+{player_list_str}
+
+RESPONSE FORMAT REQUIREMENTS:
+Your response MUST be a single JSON object with one key 'tiers', whose value is a JSON array.
+Each tier object requires: 'header' (descriptive name), 'summary' (1-sentence explanation), 'players' (array).
+Each player object MUST have: 'name', 'position', 'team', 'ecr', 'sd', 'best', 'worst', 'rank_delta'.
+
+EXAMPLE STRUCTURE:
+```json
+{{
+  "tiers": [
+    {{
+      "header": "Tier 1: Elite {position}s",
+      "summary": "These {position}s are top-tier with elite upside and minimal risk.",
+      "players": [
+        {{"name": "Player A", "position": "{position}", "team": "BUF", "ecr": 1.0, "sd": 1.5, "best": 1, "worst": 3, "rank_delta": 0.2}}
+      ]
+    }}
+  ]
+}}
+```
+
+CRITICAL: Ensure valid JSON syntax with proper quotes and commas."""
+        
+        response_text = make_gemini_request(enhanced_prompt, user_key)
         
         try:
             cleaned_text = re.sub(r'^```json\s*|```\s*$', '', response_text.strip(), flags=re.MULTILINE)
@@ -603,8 +814,56 @@ def find_market_inefficiencies():
             for p in candidates_list
         ])
 
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Find market inefficiencies. Your response MUST be a single JSON object with two keys: \"sleepers\" and \"busts\". Each key must contain a JSON array of 3-5 player objects. Each player object MUST have the following keys: \"name\" (string), \"justification\" (string), \"confidence\" (string: 'High', 'Medium', or 'Low'), \"ecr\" (float or null), \"sd\" (float or null), \"best\" (integer or null), \"worst\" (integer or null), \"rank_delta\" (float or null), and \"is_rookie\" (boolean). For any numeric field where data is not available, use `null`. For the \"is_rookie\" field, use `true` or `false`.\n\n**Data:**\n{candidates_str}"
-        response_text = make_gemini_request(prompt, user_key)
+        # --- Enhanced Market Inefficiency Analysis (Phase 0B) ---
+        
+        # Build enhanced methodology for market inefficiency detection
+        methodology_steps = [
+            'Analyze expert consensus patterns using standard deviation to identify disagreement',
+            'Compare ECR ranking ranges (best vs worst) to find wide variances indicating uncertainty',
+            'Evaluate recent ranking trends (rank_delta) for momentum and market shifts',
+            'Assess rookie status and experience level for potential over/under-valuation',
+            'Identify sleepers (undervalued with upside) and busts (overvalued with downside risk)'
+        ]
+        
+        inefficiency_reasoning = [
+            'Which players have high standard deviation indicating expert disagreement?',
+            'Where do I see wide ECR ranges suggesting market uncertainty?',
+            'What recent trends show players rising or falling in expert opinion?',
+            'Are there rookie or veteran factors creating valuation inefficiencies?',
+            'Which specific players represent clear sleeper or bust opportunities?'
+        ]
+        
+        # Enhanced prompt with Phase 0B components
+        enhanced_prompt = f"""{PromptBuilder.get_base_system_prompt()}
+
+TASK: Advanced Market Inefficiency Detection for Fantasy Football
+Identify undervalued players (sleepers) and overvalued players (busts) based on expert consensus patterns.
+
+ANALYSIS METHODOLOGY:
+{chr(10).join(f"{i}. {step}" for i, step in enumerate(methodology_steps, 1))}
+
+STEP-BY-STEP THINKING PROCESS:
+{chr(10).join(f"{i}. {step}" for i, step in enumerate(inefficiency_reasoning, 1))}
+
+PLAYER ANALYSIS DATA:
+{candidates_str}
+
+RESPONSE FORMAT REQUIREMENTS:
+Your response MUST be a single JSON object with two keys: "sleepers" and "busts".
+Each key contains a JSON array of 3-5 player objects with these exact fields:
+- "name" (string): Player name
+- "justification" (string): Detailed reasoning for sleeper/bust designation
+- "confidence" (string): 'High', 'Medium', or 'Low'
+- "ecr" (float or null): Expert consensus ranking
+- "sd" (float or null): Standard deviation
+- "best" (integer or null): Best expert ranking
+- "worst" (integer or null): Worst expert ranking  
+- "rank_delta" (float or null): Recent ranking change
+- "is_rookie" (boolean): true or false
+
+CRITICAL: Use null for unavailable numeric data, true/false for is_rookie boolean."""
+        
+        response_text = make_gemini_request(enhanced_prompt, user_key)
         cleaned_text = re.sub(r'^```json\s*|```\s*$', '', response_text.strip(), flags=re.MULTILINE)
         return jsonify(json.loads(cleaned_text))
     except Exception as e:
@@ -616,10 +875,48 @@ def suggest_position():
         user_key = request.headers.get('X-API-Key')
         data = request.json
         ecr_type_pref = data.get('ecr_type_preference', 'overall') # Default to overall
-        draft_summary = "\n".join([f"{rnd}: Drafted {get_player_context(name, ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data)}" for rnd, name in data.get('draft_board', {}).items() if name]) if data.get('draft_board') else "No picks made yet."
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** It is Round {data.get('current_round')}. Based on my detailed roster below, what are the top 2 positions I should target? Justify.\n\n**My Draft So Far:**\n{draft_summary}"
-        response_text = make_gemini_request(prompt, user_key)
-        return jsonify({'result': response_text})
+        # --- Enhanced Draft Position Suggestion (Phase 0B) ---
+        current_round = data.get('current_round', 1)
+        draft_board = data.get('draft_board', {})
+        
+        draft_summary = "\n".join([f"{rnd}: Drafted {get_player_context(name, ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data)}" for rnd, name in draft_board.items() if name]) if draft_board else "No picks made yet."
+        
+        # Build enhanced draft assistance methodology
+        methodology_steps = [
+            'Analyze current roster composition and identify positional gaps or weaknesses',
+            'Evaluate positional scarcity and value available in upcoming draft rounds',
+            'Consider best player available (BPA) versus positional need strategy',
+            'Assess bye week timing and roster construction balance requirements',
+            'Recommend top 2 positions with strategic reasoning and timing considerations'
+        ]
+        
+        draft_reasoning = [
+            f'What positions are missing or weak in my current Round {current_round} roster?',
+            'Which positions have the best value available in upcoming rounds?',
+            'Should I prioritize best player available or fill specific positional needs?',
+            'How do bye weeks and roster balance affect my positional priorities?',
+            'What are the top 2 positions I should target and why?'
+        ]
+        
+        # Enhanced prompt with Phase 0B components
+        enhanced_prompt = f"""{PromptBuilder.get_base_system_prompt()}
+
+TASK: Strategic Draft Position Recommendation for Round {current_round}
+Provide the top 2 positions to target based on roster analysis and draft strategy.
+
+ANALYSIS METHODOLOGY:
+{chr(10).join(f"{i}. {step}" for i, step in enumerate(methodology_steps, 1))}
+
+STEP-BY-STEP THINKING PROCESS:
+{chr(10).join(f"{i}. {step}" for i, step in enumerate(draft_reasoning, 1))}
+
+CURRENT DRAFT BOARD:
+{draft_summary}
+
+{PromptBuilder.get_json_instruction()}"""
+        
+        response_text = make_gemini_request(enhanced_prompt, user_key)
+        return jsonify({'result': process_ai_response_v2(response_text, 'suggest_position')})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -629,10 +926,69 @@ def pick_evaluator():
         user_key = request.headers.get('X-API-Key')
         data = request.json
         ecr_type_pref = data.get('ecr_type_preference', 'overall') # Default to overall
-        draft_summary = "\n".join([f"{rnd}: Drafted {get_player_context(name, ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data)}" for rnd, name in data.get('draft_board', {}).items() if name]) if data.get('draft_board') else "This is my first pick."
-        player_context = get_player_context(data.get('player_to_pick'), ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data)
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Analyze if this is a good pick for me in Round {data.get('current_round')}. Compare ECR to the round and evaluate roster fit. Give a 'GOOD PICK', 'SOLID PICK,' or 'POOR PICK' verdict.\n\n**My Draft So Far:**\n{draft_summary}\n\n**Player Being Considered:**\n{player_context}\n\n{JSON_OUTPUT_INSTRUCTION}"
-        response_text = make_gemini_request(prompt, user_key)
+        # --- Enhanced Pick Evaluation (Phase 0B) ---
+        current_round = data.get('current_round', 1)
+        player_to_pick = data.get('player_to_pick', 'Unknown Player')
+        draft_board = data.get('draft_board', {})
+        
+        draft_summary = "\n".join([f"{rnd}: Drafted {get_player_context(name, ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data)}" for rnd, name in draft_board.items() if name]) if draft_board else "This is my first pick."
+        
+        # Get enhanced player context for the pick being evaluated
+        normalized_name = normalize_player_name(player_to_pick)
+        player_data = combined_player_data_cache.get(normalized_name, {})
+        
+        if player_data:
+            enhanced_player_context = ContextFormatter.format_enhanced_player_context(
+                player_data, AnalysisType.DRAFT_ASSISTANCE, 
+                {'pick_number': current_round * 12}  # Approximate pick number for 12-team league
+            )
+        else:
+            enhanced_player_context = f"**{player_to_pick}** - No data available"
+        
+        # Build enhanced pick evaluation methodology
+        methodology_steps = [
+            f'Compare player\'s ECR to Round {current_round} draft value to assess if pick represents good value',
+            'Analyze current roster composition and determine how this player fits positional needs',
+            'Evaluate opportunity cost of this pick versus other players available in this round',
+            'Consider player\'s risk profile, consistency, and upside relative to draft position',
+            'Assign clear verdict: GOOD PICK (great value), SOLID PICK (fair value), or POOR PICK (poor value)'
+        ]
+        
+        pick_reasoning = [
+            f'Is this player\'s ECR significantly better than Round {current_round} draft position?',
+            'How does this player address my current roster strengths and weaknesses?', 
+            'What other players of similar or better value might be available?',
+            'Does this player\'s risk/reward profile justify the draft investment?',
+            'Based on value, fit, and alternatives, what\'s my verdict on this pick?'
+        ]
+        
+        # Enhanced prompt with Phase 0B components
+        enhanced_prompt = f"""{PromptBuilder.get_base_system_prompt()}
+
+TASK: Comprehensive Draft Pick Evaluation for Round {current_round}
+Analyze whether {player_to_pick} represents good draft value and roster fit.
+
+ANALYSIS METHODOLOGY:
+{chr(10).join(f"{i}. {step}" for i, step in enumerate(methodology_steps, 1))}
+
+STEP-BY-STEP THINKING PROCESS:
+{chr(10).join(f"{i}. {step}" for i, step in enumerate(pick_reasoning, 1))}
+
+CURRENT ROSTER COMPOSITION:
+{draft_summary}
+
+PLAYER BEING EVALUATED:
+{enhanced_player_context}
+
+VERDICT REQUIREMENTS:
+You must provide one of these exact verdicts in your analysis:
+- **GOOD PICK**: Excellent value, ECR significantly better than round
+- **SOLID PICK**: Fair value, reasonable pick for this round  
+- **POOR PICK**: Poor value, much better options likely available
+
+{PromptBuilder.get_json_instruction()}"""
+        
+        response_text = make_gemini_request(enhanced_prompt, user_key)
         return jsonify({'result': process_ai_response_v2(response_text, 'pick_evaluator')})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -642,11 +998,59 @@ def roster_composition_analysis():
     try:
         user_key = request.headers.get('X-API-Key')
         data = request.json
+        # --- Enhanced Roster Composition Analysis (Phase 0B) ---
         composition = data.get('composition', {})
         drafted_count = data.get('drafted_count', 0)
-        comp_str = ", ".join([f"{count} {pos}" for pos, count in composition.items()])
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Provide a brief, 2-3 sentence analysis of my roster balance based on these position counts. Consider that only {drafted_count} players have been drafted so far, and adjust your advice based on the current stage of the draft.\n\n**Composition (after {drafted_count} picks):**\n{comp_str}"
-        response_text = make_gemini_request(prompt, user_key)
+        
+        # Calculate draft progress and remaining picks
+        total_roster_spots = 16  # Typical fantasy roster size
+        remaining_picks = total_roster_spots - drafted_count
+        draft_progress = round((drafted_count / total_roster_spots) * 100)
+        
+        comp_str = ", ".join([f"{count} {pos}" for pos, count in composition.items() if count > 0])
+        
+        # Build enhanced roster analysis methodology
+        methodology_steps = [
+            f'Evaluate positional balance after {drafted_count} picks ({draft_progress}% complete)',
+            'Identify critical gaps or over-drafting at specific positions relative to typical roster construction',
+            'Assess remaining roster needs based on standard starting lineup requirements (1 QB, 2 RB, 2-3 WR, 1 TE, etc.)',
+            f'Consider draft stage implications for remaining {remaining_picks} picks and available player quality',
+            'Provide specific strategic guidance for addressing roster imbalances in upcoming rounds'
+        ]
+        
+        roster_reasoning = [
+            'Which positions am I over-drafted or under-drafted compared to typical roster construction?',
+            'What are my most critical positional needs that must be addressed?',
+            f'At {draft_progress}% completion, what positions should I prioritize in remaining picks?',
+            'How does my current roster balance affect my draft strategy flexibility?',
+            'What specific recommendations will improve my roster construction going forward?'
+        ]
+        
+        # Enhanced prompt with Phase 0B components
+        enhanced_prompt = f"""{PromptBuilder.get_base_system_prompt()}
+
+TASK: Strategic Roster Composition Analysis
+Evaluate roster balance and provide strategic guidance for remaining draft picks.
+
+ANALYSIS METHODOLOGY:
+{chr(10).join(f"{i}. {step}" for i, step in enumerate(methodology_steps, 1))}
+
+STEP-BY-STEP THINKING PROCESS:
+{chr(10).join(f"{i}. {step}" for i, step in enumerate(roster_reasoning, 1))}
+
+CURRENT ROSTER COMPOSITION:
+After {drafted_count} picks ({draft_progress}% complete): {comp_str}
+Remaining picks: {remaining_picks}
+
+ANALYSIS REQUIREMENTS:
+Provide 2-3 sentence analysis focusing on:
+- Most critical positional needs or imbalances
+- Strategic priority for remaining {remaining_picks} picks
+- Specific actionable recommendations for draft strategy adjustment
+
+{PromptBuilder.get_json_instruction()}"""
+        
+        response_text = make_gemini_request(enhanced_prompt, user_key)
         return jsonify({'result': process_ai_response_v2(response_text, 'roster_composition')})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -797,30 +1201,67 @@ def waiver_swap_analysis():
         if not roster or not player_to_add:
             return jsonify({"error": "Roster and player_to_add are required."}), 400
 
-        roster_context = "\n".join([f"({pos}) {get_player_context(name, ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data)}" for pos, name in roster.items() if name])
-        waiver_player_context = get_player_context(player_to_add, ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data)
-
-        prompt = f"""
-{PROMPT_PREAMBLE}
-
-**Task:** You are tasked with evaluating a potential waiver wire transaction. A user wants to pick up a specific player and needs to know if it's a good move and, if so, who to drop from their current roster.
-
-1.  **Analyze the Waiver Candidate:** Evaluate the player to be added based on their current performance, role, and future outlook for the 2025 season.
-2.  **Analyze the User's Roster:** Examine the user's current roster to identify strengths, weaknesses, and potential players who could be dropped. Pay close attention to underperforming players, players with difficult upcoming schedules, or positions where the user has a surplus.
-3.  **Formulate a Recommendation:**
-    *   Provide a clear "verdict" on whether to **ADD** the player or **DO NOT ADD** the player.
-    *   If the verdict is to ADD the player, you MUST recommend a specific player to **DROP**.
-    *   Justify your recommendation with a detailed analysis, comparing the waiver candidate directly to the suggested drop candidate. Consider factors like positional need, bye weeks, short-term vs. long-term value, and overall impact on the team's strength.
-
-**My Current Roster:**
-{roster_context}
-
-**Waiver Wire Player to Consider Adding:**
-{waiver_player_context}
-
-{JSON_OUTPUT_INSTRUCTION}
-"""
-        response_text = make_gemini_request(prompt, user_key)
+        # Phase 0B: Enhanced waiver wire add/drop analysis prompting
+        
+        # Get enhanced context for the waiver candidate
+        waiver_player_data = combined_player_data_cache.get(normalize_player_name(player_to_add), {})
+        waiver_candidate_context = ContextFormatter.format_enhanced_player_context(
+            waiver_player_data, AnalysisType.WAIVER_ANALYSIS
+        )
+        
+        # Build roster context with enhanced formatting
+        roster_analysis = []
+        for pos, name in roster.items():
+            if name:
+                player_data = combined_player_data_cache.get(normalize_player_name(name), {})
+                enhanced_context = ContextFormatter.format_enhanced_player_context(
+                    player_data, AnalysisType.WAIVER_ANALYSIS
+                )
+                roster_analysis.append(f"**{pos.upper()}**: {enhanced_context}")
+        roster_context = "\n\n".join(roster_analysis)
+        
+        # Get waiver decision examples (falls back to player analysis examples)
+        waiver_examples = ExampleLibrary.get_examples_for_analysis_type('waiver_swap_analysis')
+        
+        # Build enhanced prompt with waiver wire methodology
+        enhanced_prompt = PromptBuilder.build_enhanced_prompt(
+            analysis_type="waiver_swap_analysis",
+            context_data=f"CURRENT ROSTER:\n{roster_context}\n\nWAIVER WIRE CANDIDATE:\n{waiver_candidate_context}",
+            specific_examples=waiver_examples,
+            methodology_steps=[
+                "1. WAIVER CANDIDATE VALUE ASSESSMENT",
+                "   • Evaluate current ECR and recent trend momentum",
+                "   • Assess role security and opportunity factors", 
+                "   • Consider injury/bye week timing implications",
+                "   • Determine upside potential vs floor outcomes",
+                "",
+                "2. ROSTER COMPOSITION ANALYSIS",
+                "   • Identify positional strengths and weaknesses",
+                "   • Evaluate depth at each position for drop candidates",
+                "   • Consider bye week management implications",
+                "   • Assess short-term needs vs long-term roster building",
+                "",
+                "3. DROP CANDIDATE EVALUATION",
+                "   • Compare ECR values between waiver add and potential drops",
+                "   • Evaluate declining players or role changes",
+                "   • Consider positional replaceability on waiver wire",
+                "   • Factor in remaining upside vs waiver candidate upside",
+                "",
+                "4. ADD/DROP DECISION FRAMEWORK",
+                "   • Calculate net value improvement from the transaction",
+                "   • Assess roster construction impact and flexibility",
+                "   • Consider waiver priority cost vs expected benefit",
+                "   • Evaluate timing urgency (other managers may target player)",
+                "",
+                "5. FINAL RECOMMENDATION SYNTHESIS",
+                "   • Provide clear ADD or DO NOT ADD verdict with reasoning",
+                "   • If ADD: specify exact player to DROP with justification",
+                "   • Quantify expected improvement and confidence level",
+                "   • Address any close-call factors or alternative scenarios"
+            ]
+        )
+        
+        response_text = make_gemini_request(enhanced_prompt, user_key)
         return jsonify({'result': process_ai_response_v2(response_text, 'waiver_swap')})
     except Exception as e:
         traceback.print_exc()
@@ -832,6 +1273,8 @@ def waiver_wire_analysis():
         user_key = request.headers.get('X-API-Key')
         team_roster = request.json.get('team_roster', []) # List of player names on user's team
         ecr_type_pref = request.json.get('ecr_type_preference', 'overall') # Default to overall
+        
+        # Phase 0B: Enhanced waiver wire analysis prompting
         
         # Determine which static ECR data to use for available players
         if ecr_type_pref == 'overall':
@@ -860,14 +1303,73 @@ def waiver_wire_analysis():
         # Sort available players by ECR
         sorted_available_players = sorted(all_players_data, key=lambda x: x.get('ecr') if x.get('ecr') is not None else 999)[:50] # Top 50 available
 
-        roster_context = "\n".join([get_player_context(player_name, ecr_type_preference=ecr_type_pref, combined_player_data_cache=combined_player_data_cache, player_name_to_id=player_name_to_id, player_data_cache=player_data_cache, static_ecr_overall_data=static_ecr_overall_data, static_ecr_positional_data=static_ecr_positional_data, static_ecr_rookie_data=static_ecr_rookie_data) for player_name in team_roster])
-        available_players_context = "\n".join([
-            f"- {p['name']} ({p['pos']}, {p['team']}) - ECR: {p['ecr'] or 'N/A'}, SD: {p['sd'] or 'N/A'}, Best: {p['best'] or 'N/A'}, Worst: {p['worst'] or 'N/A'}, RankDelta: {p['rank_delta'] or 'N/A'}"
-            for p in sorted_available_players
-        ])
-
-        prompt = f"{PROMPT_PREAMBLE}\n\n**Task:** Analyze my current roster and the top available waiver wire players. Recommend 3-5 players to add, justifying each recommendation based on Yahoo PPR scoring, current performance, and potential upside. Also, suggest 1-2 players to drop if necessary.\n\n**My Current Roster:**\n{roster_context}\n\n**Top Available Waiver Wire Players:**\n{available_players_context}\n\n{JSON_OUTPUT_INSTRUCTION}"
-        response_text = make_gemini_request(prompt, user_key)
+        # Build enhanced context for roster analysis
+        roster_analysis = []
+        for player_name in team_roster:
+            player_data = combined_player_data_cache.get(normalize_player_name(player_name), {})
+            enhanced_context = ContextFormatter.format_enhanced_player_context(
+                player_data, AnalysisType.WAIVER_ANALYSIS
+            )
+            roster_analysis.append(f"- {enhanced_context}")
+        roster_context = "\n".join(roster_analysis)
+        
+        # Build enhanced available players context
+        available_players_analysis = []
+        for p in sorted_available_players:
+            player_data = combined_player_data_cache.get(normalize_player_name(p['name']), {})
+            if player_data:
+                enhanced_context = ContextFormatter.format_enhanced_player_context(
+                    player_data, AnalysisType.WAIVER_ANALYSIS
+                )
+                available_players_analysis.append(f"- {enhanced_context}")
+            else:
+                # Fallback for players not in enhanced data
+                available_players_analysis.append(f"- {p['name']} ({p['pos']}, {p['team']}) - ECR: {p['ecr'] or 'N/A'}")
+        
+        available_players_context = "\n".join(available_players_analysis[:25])  # Limit for prompt length
+        
+        # Get waiver wire examples (falls back to player analysis examples)
+        waiver_examples = ExampleLibrary.get_examples_for_analysis_type('waiver_wire_analysis')
+        
+        # Build enhanced prompt with waiver wire methodology
+        enhanced_prompt = PromptBuilder.build_enhanced_prompt(
+            analysis_type="waiver_wire_analysis",
+            context_data=f"CURRENT ROSTER:\n{roster_context}\n\nTOP AVAILABLE PLAYERS:\n{available_players_context}",
+            specific_examples=waiver_examples,
+            methodology_steps=[
+                "1. ROSTER NEEDS ASSESSMENT",
+                "   • Analyze current roster strengths and weaknesses by position",
+                "   • Identify bye week vulnerabilities and depth concerns",
+                "   • Assess injury risk and backup needs",
+                "   • Consider positional scarcity and streaming requirements",
+                "",
+                "2. AVAILABLE PLAYER EVALUATION", 
+                "   • Rank available players by value and opportunity",
+                "   • Prioritize players with trending upward momentum",
+                "   • Consider role security and target share trends",
+                "   • Factor in schedule strength and matchup advantages",
+                "",
+                "3. WAIVER PRIORITY STRATEGY",
+                "   • Recommend 3-5 players in order of priority",
+                "   • Balance high-upside adds vs immediate-need fills", 
+                "   • Consider waiver position cost vs expected benefit",
+                "   • Account for league competition and likely claims",
+                "",
+                "4. DROP CANDIDATE IDENTIFICATION",
+                "   • Identify 1-2 drop candidates if roster moves needed",
+                "   • Prioritize players with declining roles or value",
+                "   • Consider bye week timing for temporary drops",
+                "   • Avoid dropping players with remaining upside potential",
+                "",
+                "5. RECOMMENDATION SYNTHESIS",
+                "   • Provide clear add/drop recommendations with rationale",
+                "   • Explain the strategic reasoning behind each move",
+                "   • Consider both short-term and long-term roster construction",
+                "   • Address any situational factors or timing considerations"
+            ]
+        )
+        
+        response_text = make_gemini_request(enhanced_prompt, user_key)
         return jsonify({'result': process_ai_response_v2(response_text, 'waiver_wire')})
     except Exception as e:
         traceback.print_exc()
