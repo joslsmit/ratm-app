@@ -1,4 +1,9 @@
-# RATM Draft Kit: Technical Context
+# RATM Draft Kit: Technical Context - GO-FORWARD
+
+> **File Type**: GO-FORWARD  
+> **Review Priority**: High  
+> **Last Updated**: August 9, 2025  
+> **Purpose**: Development environment, configurations, and technical setup details
 
 This document provides detailed technical information about the RATM Draft Kit project, covering development environment setup, key configurations, and specific tool usages.
 

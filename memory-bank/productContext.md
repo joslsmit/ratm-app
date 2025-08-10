@@ -1,4 +1,9 @@
-# RATM Draft Kit: Product Context
+# RATM Draft Kit: Product Context - GO-FORWARD
+
+> **File Type**: GO-FORWARD  
+> **Review Priority**: Medium  
+> **Last Updated**: August 9, 2025  
+> **Purpose**: Product vision, features, and user experience specifications
 
 ## 1. Product Vision & Mission
 The RATM Draft Kit aims to be the indispensable tool for fantasy football managers, transforming complex data and AI insights into actionable advice. Its mission is to empower users to make smarter draft-day and in-season decisions, ultimately leading to more successful fantasy football teams and an enhanced user experience.

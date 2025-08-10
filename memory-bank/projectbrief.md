@@ -1,4 +1,9 @@
-# RATM Draft Kit Project Brief
+# RATM Draft Kit Project Brief - GO-FORWARD
+
+> **File Type**: GO-FORWARD  
+> **Review Priority**: Medium  
+> **Last Updated**: August 9, 2025  
+> **Purpose**: General project overview and technology stack
 
 ## 1. Project Overview
 The RATM Draft Kit is a fantasy football draft assistant designed to provide AI-powered insights, comprehensive player analysis, and various tools to aid users in their draft decisions for the upcoming 2025 NFL season. It caters to fantasy football enthusiasts seeking data-driven advice.

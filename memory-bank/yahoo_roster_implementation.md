@@ -1,4 +1,9 @@
-# Yahoo Fantasy Roster Endpoint Implementation Guide
+# Yahoo Fantasy Roster Endpoint Implementation Guide - GO-FORWARD
+
+> **File Type**: GO-FORWARD  
+> **Review Priority**: High  
+> **Last Updated**: August 9, 2025  
+> **Purpose**: Yahoo API implementation details and patterns
 
 ## Overview
 

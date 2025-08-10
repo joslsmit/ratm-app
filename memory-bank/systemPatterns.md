@@ -1,4 +1,9 @@
-# RATM Draft Kit: System Patterns
+# RATM Draft Kit: System Patterns - GO-FORWARD
+
+> **File Type**: GO-FORWARD  
+> **Review Priority**: Medium  
+> **Last Updated**: August 9, 2025  
+> **Purpose**: Architecture patterns, design patterns, and coding conventions
 
 This document outlines the key architectural patterns, design patterns, and coding conventions employed within the RATM Draft Kit project. Understanding these patterns is crucial for consistent development, maintenance, and debugging.
 
