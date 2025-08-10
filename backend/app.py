@@ -596,17 +596,21 @@ def keeper_evaluation():
         
         # Build enhanced keeper evaluation prompt
         methodology_steps = [
-            'Compare market value (ECR) to keeper cost for each player to calculate surplus value',
+            'Compare market value (ECR) to keeper cost for each player to calculate surplus value in rounds saved',
+            'Assign systematic risk ratings (Low/Medium/High) based on injury history, role security, and team context',
             'Assess age trajectory and multi-year value sustainability for keeper decisions',
-            'Evaluate opportunity cost of keeper slots versus draft flexibility',
-            'Consider bye week overlaps and roster construction implications',
-            'Analyze all potential keepers comparatively to identify best relative values',
-            'Present keepers ordered from best value to worst value with clear reasoning',
-            'Provide individual keep/pass recommendation for each player with supporting rationale'
+            'Evaluate opportunity cost of keeper slots versus draft flexibility and positional scarcity',
+            'Consider bye week overlaps and roster construction implications across all keepers',
+            'Analyze all potential keepers comparatively with direct position group comparisons',
+            'Present results in concise, scannable format: Executive Summary Table + Brief Individual Analysis',
+            'Rank keepers from best to worst value with clear tier separations and value explanations',
+            'Recommend 2-3 optimal keeper combinations for balanced roster construction',
+            'Provide individual keep/pass recommendation for each player with risk-adjusted reasoning',
+            'Include draft strategy guidance: which positions to prioritize in early rounds after keeper selections'
         ]
         
         enhanced_prompt = PromptBuilder.build_enhanced_prompt(
-            task_description='Comprehensive Keeper Evaluation for Fantasy Football - Analyze all potential keepers and rank by value',
+            task_description='Strategic Keeper Analysis with Risk Assessment - Provide concise, actionable keeper recommendations with optimal combinations and draft strategy',
             player_data=context_str,
             methodology_steps=methodology_steps,
             examples=keeper_examples[:1] if keeper_examples else None,
