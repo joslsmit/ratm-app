@@ -557,8 +557,16 @@ def keeper_evaluation():
         keeper_contexts = []
         for k in keepers:
             player_name = k['name']
-            keeper_round = int(k['round']) - 2  # -1 for keeper rule (one round better), -1 for 0-indexing
-            keeper_pick = keeper_round * 12 + 1
+            # Handle keeper cost calculation with Round 1 edge case
+            draft_round = int(k['round'])
+            if draft_round == 1:
+                # Round 1 picks cannot be kept for cheaper, remain Round 1
+                keeper_round = 0  # 0-indexed Round 1
+                keeper_pick = 1
+            else:
+                # Normal case: one round better, adjusted for 0-indexing
+                keeper_round = draft_round - 2  # -1 for keeper rule, -1 for 0-indexing
+                keeper_pick = keeper_round * 12 + 1
             
             # Get player data for enhanced context formatting
             normalized_name = normalize_player_name(player_name)

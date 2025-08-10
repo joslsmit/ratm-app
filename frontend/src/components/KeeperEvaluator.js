@@ -23,14 +23,26 @@ function KeeperEvaluator({
 
   const addKeeper = () => {
     const roundValue = parseInt(keeperRoundInput, 10);
-    if (keeperPlayerName && !isNaN(roundValue) && roundValue > 0) {
-      setKeeperList(prevList => [...prevList, { name: keeperPlayerName, round: roundValue, context: keeperContextInput }]);
-      setKeeperPlayerName('');
-      setKeeperRoundInput('');
-      setKeeperContextInput('');
-    } else {
-      alert('Please enter a valid player name and a positive number for the draft round.');
+    
+    if (!keeperPlayerName) {
+      alert('Please enter a player name.');
+      return;
     }
+    
+    if (isNaN(roundValue) || roundValue < 1) {
+      alert('Please enter a valid draft round (1 or higher).');
+      return;
+    }
+    
+    if (roundValue > 20) {
+      alert('Please enter a reasonable draft round (20 or lower).');
+      return;
+    }
+    
+    setKeeperList(prevList => [...prevList, { name: keeperPlayerName, round: roundValue, context: keeperContextInput }]);
+    setKeeperPlayerName('');
+    setKeeperRoundInput('');
+    setKeeperContextInput('');
   };
 
   const startEditingKeeper = (index) => {
@@ -41,18 +53,25 @@ function KeeperEvaluator({
 
   const saveEditedKeeper = () => {
     const roundValue = parseInt(editRoundInput, 10);
-    if (!isNaN(roundValue) && roundValue > 0) {
-      setKeeperList(prevList => {
-        const updatedList = [...prevList];
-        updatedList[editingKeeperIndex] = { ...updatedList[editingKeeperIndex], round: roundValue, context: editContextInput };
-        return updatedList;
-      });
-      setEditingKeeperIndex(null);
-      setEditRoundInput('');
-      setEditContextInput('');
-    } else {
-      alert('Please enter a valid positive number for the draft round.');
+    
+    if (isNaN(roundValue) || roundValue < 1) {
+      alert('Please enter a valid draft round (1 or higher).');
+      return;
     }
+    
+    if (roundValue > 20) {
+      alert('Please enter a reasonable draft round (20 or lower).');
+      return;
+    }
+    
+    setKeeperList(prevList => {
+      const updatedList = [...prevList];
+      updatedList[editingKeeperIndex] = { ...updatedList[editingKeeperIndex], round: roundValue, context: editContextInput };
+      return updatedList;
+    });
+    setEditingKeeperIndex(null);
+    setEditRoundInput('');
+    setEditContextInput('');
   };
 
   const cancelEditingKeeper = () => {
@@ -91,7 +110,7 @@ function KeeperEvaluator({
     <section id="keeper" className={styles.keeperSection}>
       <div className={styles.toolHeader}>
         <h2>Keeper Evaluator</h2>
-        <p>Analyze multiple keeper options based on cost vs. value.</p>
+        <p>Analyze multiple keeper options based on cost vs. value. Enter the draft round from last year - keeper cost will be one round better (e.g., Round 10 draft → Round 9 keeper cost).</p>
       </div>
       <div className={styles.card}>
         <div className={styles.formGroupInline}>
@@ -108,10 +127,13 @@ function KeeperEvaluator({
           <input
             id="keeper-round"
             type="number"
-            placeholder="Round"
+            placeholder="Draft Round (e.g., 10)"
+            title="Enter the round you drafted this player last year"
             value={keeperRoundInput}
             onChange={(e) => setKeeperRoundInput(e.target.value)}
             className={styles.inputSmall}
+            min="1"
+            max="20"
           />
           <div className={styles.autoComplete_wrapper}>
             <input
@@ -146,10 +168,13 @@ function KeeperEvaluator({
                       <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                         <input
                           type="number"
-                          placeholder="Round"
+                          placeholder="Draft Round (e.g., 10)"
+                          title="Enter the round you drafted this player last year"
                           value={editRoundInput}
                           onChange={(e) => setEditRoundInput(e.target.value)}
                           className={styles.inputSmall}
+                          min="1"
+                          max="20"
                         />
                         <input
                           type="text"
@@ -172,7 +197,13 @@ function KeeperEvaluator({
                     <div>
                       <strong>{keeper.name}</strong>
                       <div className={styles.keeperInfo}>
-                        <span>Cost: Round {keeper.round}</span>
+                        <span>
+                          {keeper.round === 1 ? (
+                            <span style={{ color: 'var(--warning-color)' }}>Cost: Round 1 (cannot be kept cheaper)</span>
+                          ) : (
+                            <span>Cost: Round {keeper.round - 1}</span>
+                          )}
+                        </span>
                         {keeper.context && <span>Context: {keeper.context}</span>}
                       </div>
                       <small>
