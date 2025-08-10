@@ -557,7 +557,7 @@ def keeper_evaluation():
         keeper_contexts = []
         for k in keepers:
             player_name = k['name']
-            keeper_round = int(k['round']) - 1  # Adjust for 0-indexing
+            keeper_round = int(k['round']) - 2  # -1 for keeper rule (one round better), -1 for 0-indexing
             keeper_pick = keeper_round * 12 + 1
             
             # Get player data for enhanced context formatting
@@ -592,11 +592,13 @@ def keeper_evaluation():
             'Assess age trajectory and multi-year value sustainability for keeper decisions',
             'Evaluate opportunity cost of keeper slots versus draft flexibility',
             'Consider bye week overlaps and roster construction implications',
-            'Prioritize keeper recommendations based on total value and strategic fit'
+            'Analyze all potential keepers comparatively to identify best relative values',
+            'Present keepers ordered from best value to worst value with clear reasoning',
+            'Provide individual keep/pass recommendation for each player with supporting rationale'
         ]
         
         enhanced_prompt = PromptBuilder.build_enhanced_prompt(
-            task_description='Comprehensive Keeper Evaluation for Fantasy Football',
+            task_description='Comprehensive Keeper Evaluation for Fantasy Football - Analyze all potential keepers and rank by value',
             player_data=context_str,
             methodology_steps=methodology_steps,
             examples=keeper_examples[:1] if keeper_examples else None,
