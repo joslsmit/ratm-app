@@ -49,7 +49,6 @@ The RATM Draft Kit is a fantasy football draft assistant designed to provide AI-
 The following features are planned for development, leveraging the new Yahoo API integration:
 
 *   **Personalized Roster Analysis:** A new "My Team" view will display a user's Yahoo roster with integrated AI analysis for each player.
-*   **AI-Powered Waiver Wire Assistant:** The existing tool will be enhanced to provide personalized waiver wire recommendations based on a user's specific league and roster needs.
-*   **League-Aware Trade Analyzer:** The trade analyzer will be upgraded to analyze trades within the context of the two teams' actual rosters, pulled from Yahoo.
-*   **"Draft Grade" Generator:** A new tool to provide a comprehensive AI-powered analysis and letter grade of a user's completed draft.
-*   **Personalized "Market Inefficiency" Finder:** This tool will be enhanced to highlight players who are undervalued in a user's specific Yahoo league compared to the app's ECR and AI analysis.
+*   **AI-Powered Waiver Wire Assistant (FIRST PRIORITY):** The existing tool will be enhanced to provide personalized waiver wire recommendations based on a user's specific league and roster needs.
+*   **Personalized "Market Inefficiency" Finder (SECOND PRIORITY):** This tool will be enhanced to highlight players who are undervalued in a user's specific Yahoo league compared to the app's ECR and AI analysis.
+*   **League-Aware Trade Analyzer (Future Consideration):** The trade analyzer will be upgraded to analyze trades within the context of the two teams' actual rosters, pulled from Yahoo.
