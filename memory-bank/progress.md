@@ -150,8 +150,10 @@ Make the RATM Draft Kit app live for friends, affordably and reliably, ensuring 
 *   **Business Impact:** Keeper analysis now provides strategic, accurate recommendations with optimal roster construction guidance
 *   **Files Updated:** `/backend/app.py` (keeper calculation + AI methodology), `/frontend/src/components/KeeperEvaluator.js` (complete UX overhaul)
 
-### Phase 6: AI-Powered Waiver Wire Assistant (Yahoo Integrated)
-*   **Status:** **📋 COMPREHENSIVE IMPLEMENTATION PLAN COMPLETE - Ready for Development**
+## 🎯 NEXT DEVELOPMENT SEQUENCE - PRIORITIZED ROADMAP
+
+### 🥇 IMMEDIATE PRIORITY: Phase 6 - AI-Powered Waiver Wire Assistant (Yahoo Integrated)
+*   **Status:** **⚡ READY FOR IMMEDIATE DEVELOPMENT - Implementation Starting Next**
 *   **Implementation Guide:** Complete step-by-step guide available in `yahoo_waiver_wire_implementation.md`
 *   **Concept:** Provide personalized waiver wire recommendations based on a user's league and roster.
 *   **UX Vision:** The existing "Waiver Wire Assistant" will be enhanced. When a user is logged in with Yahoo, it will show a league selector. The UI will present a list of top free agents and allow the user to select a player from their own roster to drop, triggering a personalized AI analysis.
@@ -171,23 +173,20 @@ Make the RATM Draft Kit app live for friends, affordably and reliably, ensuring 
 *   **Estimated Implementation Time:** 10-16 hours (4-6 backend, 4-6 frontend, 2-4 testing)
 *   **Quality Assurance:** Implementation document audited and corrected for compatibility with existing codebase
 
-### Phase 7: League-Aware Trade Analyzer  
+### 🥈 SECOND PRIORITY: Phase 9 - Personalized "Market Inefficiency" Finder (Yahoo Enhanced)
 *   **Status:** **🚀 READY FOR DEVELOPMENT - Enhanced with World-Class AI**
-*   **Concept:** Analyze trades within the context of the specific league and the rosters of the teams involved.
-*   **UX Vision:** The "Trade Analyzer" will be updated to include dropdowns to select the league and the two teams involved in the trade. The player selection inputs will then be populated with the actual rosters of those teams.
-*   **AI Advantage:** Phase 0B trade analysis provides 5-step evaluation framework with clear winner declarations
-
-### Phase 8: "Draft Grade" Generator
-*   **Status:** **🚀 READY FOR DEVELOPMENT - Enhanced with World-Class AI**  
-*   **Concept:** Provide a comprehensive AI-powered analysis and letter grade of a user's completed draft.
-*   **UX Vision:** A new "Draft Grade" tool will be added. After logging in with Yahoo and selecting a league, the user will get a detailed report card for their draft.
-*   **AI Advantage:** Phase 0B enhanced analysis provides sophisticated draft evaluation with methodology and reasoning
-
-### Phase 9: Personalized "Market Inefficiency" Finder
-*   **Status:** **🚀 READY FOR DEVELOPMENT - Enhanced with World-Class AI**
+*   **Development Timing:** After Waiver Wire Assistant completion
 *   **Concept:** Highlight players who are undervalued in a user's specific Yahoo league compared to the app's ECR and AI analysis.
 *   **UX Vision:** The "Market Inefficiency Finder" will be enhanced with a league selector for logged-in users, showing a tailored list of potential draft-day bargains.
 *   **AI Advantage:** Phase 0B market analysis provides sophisticated inefficiency detection with enhanced methodology
+*   **Business Value:** High impact for draft preparation and identifying league-specific opportunities
+
+### 🔮 FUTURE CONSIDERATION: Phase 7 - League-Aware Trade Analyzer
+*   **Status:** **💤 LOWER PRIORITY - Available for Future Development**
+*   **Development Timing:** After Market Inefficiency Finder, if desired
+*   **Concept:** Analyze trades within the context of the specific league and the rosters of the teams involved.
+*   **UX Vision:** The "Trade Analyzer" will be updated to include dropdowns to select the league and the two teams involved in the trade. The player selection inputs will then be populated with the actual rosters of those teams.
+*   **AI Advantage:** Phase 0B trade analysis provides 5-step evaluation framework with clear winner declarations
 
 ## Development & Testing
 *   **✅ Local Development with mkcert:** Successfully implemented local HTTPS development using `mkcert` instead of `ngrok`. SSL certificates are generated in `backend/certs/` directory. This provides a stable, secure local development environment for Yahoo OAuth testing.
