@@ -2,7 +2,7 @@
 
 > **File Type**: GO-FORWARD  
 > **Review Priority**: Medium  
-> **Last Updated**: August 9, 2025  
+> **Last Updated**: August 18, 2025  
 > **Purpose**: Product vision, features, and user experience specifications
 
 ## 1. Product Vision & Mission
@@ -24,10 +24,11 @@ The application provides a suite of tools categorized for player analysis and te
 *   **Trade Analyzer:** Evaluates proposed trades by analyzing the collective value of assets involved for both teams, providing an AI-driven verdict on fairness and winners.
 *   **Draft Assistant:** Supports users during live drafts by providing real-time pick evaluations, suggesting optimal positions to target based on roster composition, and offering overall roster balance analysis.
 *   **Target List:** Allows users to maintain a personalized list of players they want to target, enabling quick access to their data and analysis.
-*   **Waiver Wire Assistant:** Aids in making informed waiver wire claims by analyzing potential adds and suggesting optimal drops from the current roster.
+*   **Waiver Wire Assistant (Yahoo Enhanced):** ✅ Aids in making informed waiver wire claims with two modes: (1) Traditional mode for manual roster input, and (2) Yahoo mode for authenticated users showing actual league free agents and personalized AI recommendations based on real roster and available players.
 
 ### Utility Features:
 *   **API Key Management:** Users provide their own Google Gemini API key, stored locally in their browser for privacy and security.
+*   **Yahoo API Integration:** ✅ OAuth authentication with Yahoo Fantasy Sports for personalized league data, roster analysis, and waiver wire recommendations.
 *   **Data Refresh:** Backend data (ECR, player values) is periodically refreshed to ensure up-to-date information.
 *   **Theme Toggle:** Users can switch between dark and light themes.
 *   **Application Reset:** Option to clear all local data (API key, saved lists, draft board).

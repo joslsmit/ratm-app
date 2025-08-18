@@ -1904,6 +1904,298 @@ def enrich_roster_players(yahoo_players):
     
     return enriched_players
 
+@app.route('/api/yahoo/waiver_wire')
+def get_yahoo_waiver_wire():
+    """
+    Fetches free agents and waiver wire players from Yahoo API for league-aware waiver recommendations.
+    Expects league_key as query parameter and token in Authorization header.
+    Returns enhanced player data with ECR integration for AI analysis.
+    """
+    try:
+        # Extract league_key parameter (required)
+        league_key = request.args.get('league_key')
+        if not league_key:
+            return jsonify({"error": "league_key parameter is required"}), 400
+            
+        # Extract status parameter (optional, defaults to 'A' for all available)
+        status = request.args.get('status', 'A')  # FA=free agents, W=waivers, A=all available
+        
+        # Extract Authorization header (required)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Valid Authorization header with Bearer token is required"}), 401
+
+        access_token = auth_header.split(' ')[1]
+        
+        # Construct Yahoo API URL following established patterns
+        yahoo_url = f"https://fantasysports.yahooapis.com/fantasy/v2/league/{league_key}/players;status={status}"
+        yahoo_headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json'
+        }
+        
+        # Add format parameter for JSON response
+        yahoo_params = {'format': 'json'}
+        
+        # Make request to Yahoo API with timeout and error handling
+        print(f"DEBUG: Requesting Yahoo waiver wire data from {yahoo_url}")
+        yahoo_response = requests.get(yahoo_url, headers=yahoo_headers, params=yahoo_params, timeout=10)
+        
+        # Handle HTTP errors
+        if yahoo_response.status_code == 401:
+            print("ERROR: Yahoo API authentication failed - token may be expired")
+            return jsonify({"error": "Yahoo authentication failed. Please re-authenticate."}), 401
+        elif yahoo_response.status_code == 403:
+            print("ERROR: Yahoo API access forbidden - insufficient permissions")
+            return jsonify({"error": "Insufficient permissions to access league data."}), 403
+        elif yahoo_response.status_code == 404:
+            print(f"ERROR: Yahoo API league not found: {league_key}")
+            return jsonify({"error": "League not found or not accessible."}), 404
+        elif yahoo_response.status_code != 200:
+            print(f"ERROR: Yahoo API returned status {yahoo_response.status_code}: {yahoo_response.text}")
+            return jsonify({"error": f"Yahoo API error: {yahoo_response.status_code}"}), 500
+
+        # Parse JSON response with defensive error handling
+        try:
+            yahoo_data = yahoo_response.json()
+            print(f"DEBUG: Received Yahoo response with keys: {yahoo_data.keys()}")
+        except ValueError as e:
+            print(f"ERROR: Failed to parse Yahoo API JSON response: {e}")
+            return jsonify({"error": "Invalid response format from Yahoo API"}), 500
+        
+        # Parse using defensive pattern matching existing Yahoo endpoints
+        parsed_players = parse_yahoo_waiver_response(yahoo_data)
+        if not parsed_players:
+            print("ERROR: Failed to parse Yahoo waiver wire response structure")
+            return jsonify({"error": "Unable to parse waiver wire data"}), 500
+
+        # Enrich Yahoo players with local ECR and analysis data
+        enriched_players = []
+        
+        for player in parsed_players:
+            # Normalize player name for local database lookup
+            normalized_name = normalize_player_name(player['name'])
+            
+            # Get enhanced player context using existing function
+            player_context = get_player_context(
+                player['name'],
+                ecr_type_preference='overall',
+                combined_player_data_cache=combined_player_data_cache,
+                player_name_to_id=player_name_to_id,
+                player_data_cache=player_data_cache,
+                static_ecr_overall_data=static_ecr_overall_data,
+                static_ecr_positional_data=static_ecr_positional_data,
+                static_ecr_rookie_data=static_ecr_rookie_data
+            )
+            
+            # Merge Yahoo data with local enrichment
+            enriched_player = {
+                **player,  # Yahoo data (player_key, name, team, positions)
+                'ecr': player_context.get('ecr'),
+                'ecr_rank': player_context.get('ecr_rank'),
+                'sd': player_context.get('sd'),
+                'best_rank': player_context.get('best'),
+                'worst_rank': player_context.get('worst'),
+                'rank_delta': player_context.get('rank_delta'),
+                'bye_week': player_context.get('bye_week'),
+                'is_rookie': player_context.get('is_rookie', False),
+                'injury_status': player_context.get('injury_status'),
+                'analysis_notes': player_context.get('notes', '')
+            }
+            
+            enriched_players.append(enriched_player)
+            
+            # Limit to top 100 available players to prevent overwhelming response
+            if len(enriched_players) >= 100:
+                break
+        
+        print(f"DEBUG: Enriched {len(enriched_players)} players with local data")
+        
+        # Sort players by ECR (best first) with None values last
+        enriched_players.sort(key=lambda x: x['ecr'] if x['ecr'] is not None else 999)
+        
+        # Return successful response
+        return jsonify({
+            'league_key': league_key,
+            'available_players': enriched_players,
+            'total_count': len(enriched_players),
+            'status_filter': status
+        })
+        
+    except requests.exceptions.RequestException as e:
+        print(f"ERROR: Yahoo API request failed: {e}")
+        return jsonify({"error": "Failed to connect to Yahoo API"}), 500
+    except Exception as e:
+        print(f"ERROR: Unexpected error in yahoo waiver wire: {e}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+def parse_yahoo_waiver_response(data):
+    """
+    Parse Yahoo API waiver wire response with defensive JSON parsing.
+    Returns a clean array of available player objects or empty array on failure.
+    Uses simplified approach based on existing Yahoo parsing patterns.
+    """
+    try:
+        # Follow the same pattern as existing parse_yahoo_leagues_response
+        fantasy_content = data.get('fantasy_content', {})
+        league_data = fantasy_content.get('league', [])
+        
+        if not isinstance(league_data, list) or len(league_data) < 2:
+            print("DEBUG: Unexpected league data structure for waiver wire")
+            return []
+        
+        # Get players data from second element (follows existing pattern)
+        players_container = league_data[1].get('players', {})
+        available_players = []
+        
+        if isinstance(players_container, dict):
+            for key, player_container in players_container.items():
+                if not key.isdigit():  # Skip metadata keys like "count"
+                    continue
+                
+                # Extract player data using simplified approach
+                player_info = player_container.get('player', [])
+                if not isinstance(player_info, list) or len(player_info) == 0:
+                    continue
+                
+                # Get basic player data (first element in nested structure)
+                player_data_list = player_info[0]
+                if not isinstance(player_data_list, list) or len(player_data_list) == 0:
+                    continue
+                
+                player_basic = player_data_list[0]
+                
+                # Extract required fields with defaults
+                player_key = player_basic.get('player_key', '')
+                name_data = player_basic.get('name', {})
+                full_name = name_data.get('full', '') if isinstance(name_data, dict) else str(name_data or '')
+                
+                # Only process players with minimum required data
+                if not player_key or not full_name:
+                    continue
+                
+                # Extract additional fields
+                positions = []
+                for pos_data in player_basic.get('eligible_positions', []):
+                    if isinstance(pos_data, dict) and pos_data.get('position'):
+                        positions.append(pos_data['position'])
+                
+                available_players.append({
+                    'player_key': player_key,
+                    'player_id': player_basic.get('player_id', ''),
+                    'name': full_name,
+                    'team': player_basic.get('editorial_team_abbr', ''),
+                    'positions': positions,
+                    'primary_position': positions[0] if positions else 'Unknown'
+                })
+        
+        print(f"DEBUG: Successfully parsed {len(available_players)} available players")
+        return available_players
+        
+    except Exception as e:
+        print(f"ERROR: Failed to parse Yahoo waiver wire response: {e}")
+        traceback.print_exc()
+        return []
+
+@app.route('/api/yahoo_waiver_analysis', methods=['POST'])
+def yahoo_waiver_analysis():
+    """
+    Enhanced waiver wire analysis using actual Yahoo league data.
+    Provides personalized recommendations based on user's roster and league's available players.
+    """
+    try:
+        user_key = request.headers.get('X-API-Key')
+        data = request.json
+        
+        league_key = data.get('league_key')
+        roster = data.get('roster', [])  # List of player objects from Yahoo roster API
+        available_players = data.get('available_players', [])  # List from waiver wire API
+        
+        if not league_key or not available_players:
+            return jsonify({"error": "league_key and available_players are required"}), 400
+        
+        # Build context for current roster
+        roster_context = "**CURRENT ROSTER:**\n"
+        if roster:
+            for player in roster:
+                player_name = player.get('name', '')
+                position = player.get('selected_position', 'FLEX')
+                if player_name:
+                    # Get local player context for roster player
+                    player_context = get_player_context(
+                        player_name,
+                        ecr_type_preference='overall',
+                        combined_player_data_cache=combined_player_data_cache,
+                        player_name_to_id=player_name_to_id,
+                        player_data_cache=player_data_cache,
+                        static_ecr_overall_data=static_ecr_overall_data,
+                        static_ecr_positional_data=static_ecr_positional_data,
+                        static_ecr_rookie_data=static_ecr_rookie_data
+                    )
+                    
+                    ecr_info = f"ECR: {player_context.get('ecr', 'N/A')}" if player_context.get('ecr') else "ECR: N/A"
+                    bye_info = f"Bye: {player_context.get('bye_week', 'N/A')}" if player_context.get('bye_week') else ""
+                    roster_context += f"- **{position}**: {player_name} ({ecr_info}, {bye_info})\n"
+        else:
+            roster_context += "No roster players provided\n"
+        
+        # Build context for available players (top 25 by ECR)
+        available_context = "\n**TOP AVAILABLE PLAYERS:**\n"
+        sorted_available = sorted(available_players, key=lambda x: x.get('ecr') or 999)[:25]
+        
+        for player in sorted_available:
+            name = player.get('name', 'Unknown')
+            position = player.get('primary_position', 'Unknown')
+            team = player.get('team', 'Unknown')
+            ecr = player.get('ecr') or 'N/A'
+            bye_week = player.get('bye_week') or 'N/A'
+            available_context += f"- **{name}** ({position}, {team}): ECR {ecr}, Bye Week {bye_week}\n"
+        
+        # Get waiver wire examples
+        waiver_examples = ExampleLibrary.get_examples_for_analysis_type('waiver_wire_analysis')
+        
+        # Build comprehensive analysis prompt
+        full_context = f"LEAGUE KEY: {league_key}\n\n{roster_context}\n{available_context}"
+        
+        # Enhanced methodology for Yahoo-specific waiver analysis
+        methodology_steps = [
+            "1. ROSTER COMPOSITION ANALYSIS",
+            "   • Evaluate current roster strengths and weaknesses by position",
+            "   • Identify bye week vulnerabilities and depth concerns", 
+            "   • Assess injury risk and backup needs for key players",
+            "   • Consider positional scarcity and streaming requirements",
+            "",
+            "2. AVAILABLE PLAYER EVALUATION",
+            "   • Rank available players by current value and upside potential",
+            "   • Prioritize players with favorable upcoming schedules",
+            "   • Consider role security and target share trends",
+            "   • Evaluate handcuff and lottery ticket opportunities",
+            "",
+            "3. STRATEGIC RECOMMENDATIONS",
+            "   • Identify top 3-5 waiver wire targets with reasoning",
+            "   • Suggest specific drop candidates from current roster",
+            "   • Consider FAAB budget allocation if applicable",
+            "   • Provide timeline for waiver claims (immediate vs speculative)"
+        ]
+        
+        # Build enhanced prompt using existing infrastructure
+        enhanced_prompt = PromptBuilder.build_enhanced_prompt(
+            task_description="Yahoo League Waiver Wire Analysis - Provide personalized waiver wire recommendations based on actual league data",
+            player_data=full_context,
+            methodology_steps=methodology_steps,
+            examples=waiver_examples
+        )
+        
+        # Make AI request and process response
+        response_text = make_gemini_request(enhanced_prompt, user_key)
+        return jsonify({'result': process_ai_response_v2(response_text, 'yahoo_waiver')})
+        
+    except Exception as e:
+        print(f"ERROR: Yahoo waiver analysis failed: {e}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     # This block is for local development only.
     # When deployed on Render with Gunicorn, this block is not executed.

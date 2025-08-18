@@ -218,3 +218,115 @@
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   font-size: 1.1em;
 }
+
+/* Yahoo Mode Styles */
+.yahooModeSection {
+  background-color: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.modeToggle {
+  margin-bottom: 15px;
+}
+
+.modeToggle label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-color);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.modeToggle input[type="checkbox"] {
+  transform: scale(1.2);
+}
+
+.leagueSelector {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.leagueSelector label {
+  color: var(--text-color);
+  font-weight: 500;
+}
+
+.leagueSelector select {
+  padding: 10px;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  background-color: var(--input-background);
+  color: var(--text-color);
+  font-size: 1em;
+}
+
+.loadingText {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.errorText {
+  color: var(--danger-color);
+  font-size: 0.9em;
+  padding: 8px;
+  background-color: rgba(244, 67, 54, 0.1);
+  border-radius: 4px;
+}
+
+.availablePlayersGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  margin: 15px 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.availablePlayerCard {
+  background-color: var(--input-background);
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  padding: 10px;
+  transition: background-color 0.2s ease;
+}
+
+.availablePlayerCard:hover {
+  background-color: var(--table-row-hover-background);
+}
+
+.playerName {
+  font-weight: 500;
+  color: var(--text-color);
+  margin-bottom: 4px;
+}
+
+.playerMeta {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ecrBadge {
+  background-color: var(--primary-color);
+  color: var(--button-text);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.8em;
+}
+
+@media (max-width: 768px) {
+  .availablePlayersGrid {
+    grid-template-columns: 1fr;
+  }
+  
+  .leagueSelector {
+    margin-top: 10px;
+  }
+}

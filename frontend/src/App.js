@@ -70,6 +70,9 @@ function App() {
   const [editingKeeperIndex, setEditingKeeperIndex] = useState(null);
   const [editRoundInput, setEditRoundInput] = useState('');
   const [editContextInput, setEditContextInput] = useState('');
+  
+  // Yahoo integration state
+  const [userLeagues, setUserLeagues] = useState([]);
 
   /**
    * Determines the consensus label and icon for Rookie SD values.
@@ -461,6 +464,96 @@ function App() {
     }
   }, [makeApiRequest, converter, setWaiverSwapResult, setIsWaiverSwapLoading]);
 
+  // Helper function to get team key from leagues data
+  const getTeamKeyForLeague = useCallback((leagueKey) => {
+    const league = userLeagues.find(l => l.league_key === leagueKey);
+    return league ? league.team_key : null;
+  }, [userLeagues]);
+
+  // Yahoo waiver wire analysis handler
+  const handleYahooWaiverAnalysis = useCallback(async (leagueKey, yahooToken) => {
+    if (!leagueKey || !yahooToken) {
+      alert('Yahoo league data is required for analysis.');
+      return;
+    }
+
+    setIsWaiverSwapLoading(true);
+    setWaiverSwapResult('');
+
+    try {
+      // Parse token object and extract access_token
+      const tokenObject = JSON.parse(yahooToken);
+      const authHeader = `Bearer ${tokenObject.access_token}`;
+      
+      // Get team key for the selected league
+      const teamKey = getTeamKeyForLeague(leagueKey);
+      if (!teamKey) {
+        throw new Error('Unable to find team information for selected league.');
+      }
+
+      // Fetch roster data
+      const rosterResponse = await fetch(`${API_BASE_URL}/api/yahoo/roster?team_key=${teamKey}`, {
+        headers: {
+          'Authorization': authHeader,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!rosterResponse.ok) {
+        throw new Error(`Failed to fetch roster: ${rosterResponse.status}`);
+      }
+
+      const rosterData = await rosterResponse.json();
+
+      // Fetch available players data
+      const waiverResponse = await fetch(`${API_BASE_URL}/api/yahoo/waiver_wire?league_key=${leagueKey}&status=A`, {
+        headers: {
+          'Authorization': authHeader,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!waiverResponse.ok) {
+        throw new Error(`Failed to fetch waiver wire: ${waiverResponse.status}`);
+      }
+
+      const waiverData = await waiverResponse.json();
+
+      // Call the Yahoo waiver analysis endpoint
+      const analysisData = {
+        league_key: leagueKey,
+        roster: rosterData.roster || [],
+        available_players: waiverData.available_players || []
+      };
+
+      const data = await makeApiRequest('/yahoo_waiver_analysis', analysisData);
+      if (data && data.result) {
+        setWaiverSwapResult(converter.makeHtml(data.result));
+      } else {
+        setWaiverSwapResult('<p style="color: var(--text-muted);">The Analyst returned an empty response.</p>');
+      }
+
+    } catch (error) {
+      console.error('Yahoo waiver analysis error:', error);
+      
+      // Handle specific error cases
+      if (error.message.includes('401') || error.message.includes('authentication')) {
+        setWaiverSwapResult('<p style="color: var(--danger-color);">Yahoo authentication expired. Please re-authenticate with Yahoo.</p>');
+        // Remove expired token
+        localStorage.removeItem('yahoo_token');
+      } else {
+        setWaiverSwapResult(`<p style="color: var(--danger-color);">An error occurred: ${error.message}</p>`);
+      }
+    } finally {
+      setIsWaiverSwapLoading(false);
+    }
+  }, [makeApiRequest, setWaiverSwapResult, setIsWaiverSwapLoading, converter, API_BASE_URL, getTeamKeyForLeague]);
+
+  // Handler for when leagues data is updated from WaiverWireAssistant
+  const handleLeaguesUpdate = useCallback((leagues) => {
+    setUserLeagues(leagues);
+  }, []);
+
   // --- Effect Hooks for Initialization and Side Effects ---
 
   // Load target list from local storage on initial mount
@@ -732,6 +825,8 @@ function App() {
             <WaiverWireAssistant
               allPlayers={allPlayers}
               onAnalyze={handleWaiverSwapAnalysis}
+              onAnalyzeYahoo={handleYahooWaiverAnalysis}
+              onLeaguesUpdate={handleLeaguesUpdate}
               analysisResult={waiverSwapResult}
               isLoading={isWaiverSwapLoading}
             />

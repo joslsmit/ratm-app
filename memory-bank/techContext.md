@@ -95,3 +95,16 @@ This document provides detailed technical information about the RATM Draft Kit p
     *   Ensure correct branch is checked out.
     *   Check `git status` for untracked/uncommitted changes.
     *   Verify remote tracking branches are set up correctly (`git branch -vv`).
+
+## 6. Testing Infrastructure (Updated August 18, 2025)
+
+### A. Backend Test Suite
+*   **Location:** `backend/tests/` directory with organized test scripts and documentation
+*   **Test Scripts:**
+    *   `test_yahoo_waiver_endpoints.py` - Primary endpoint validation with HTTPS support
+    *   `test_yahoo_waiver_validation.py` - Parameter validation focused tests
+    *   `test_complete_implementation.py` - Comprehensive implementation overview
+    *   `test_yahoo_waiver_complete.py` - Enhanced analysis endpoint testing
+    *   `README.md` - Complete testing documentation and usage instructions
+*   **Usage:** Run from `backend/tests/` with activated virtual environment
+*   **Purpose:** Validate Yahoo waiver wire implementation structure and error handling
