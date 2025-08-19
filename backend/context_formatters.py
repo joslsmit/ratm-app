@@ -204,11 +204,15 @@ class ContextFormatter:
     
     @staticmethod
     def _format_for_waiver_analysis(player_data: Dict, base_context: str, additional_context: Optional[Dict]) -> str:
-        """Format context specifically for waiver wire decisions."""
+        """
+        REVOLUTIONARY waiver analysis context with multi-factor integration.
         
-        context = f"{base_context}\n\n**WAIVER WIRE EVALUATION:**"
+        Enhancement: Combines tier classification + projections + matchups + ownership + age
+        """
         
-        # Enhanced ECR and positional ranking
+        context = f"{base_context}\n\n**COMPREHENSIVE WAIVER WIRE EVALUATION:**"
+        
+        # EXISTING: Enhanced ECR and positional ranking (keep existing logic)
         ecr_overall = player_data.get('ecr_overall')
         ecr_positional = player_data.get('ecr_positional')
         position = player_data.get('position', 'N/A')
@@ -216,66 +220,111 @@ class ContextFormatter:
         if ecr_overall:
             context += f"\n- Overall ECR: {ecr_overall:.1f}"
             
-            # Add positional rank with tier context
             if ecr_positional:
                 context += f"\n- Positional Rank: {position}#{int(ecr_positional)}"
                 
-                # Add tier classification for better AI understanding
-                if position == 'QB':
-                    if ecr_positional <= 12:
-                        tier = "QB1 (Elite/Starter)"
-                    elif ecr_positional <= 24:
-                        tier = "QB2 (Backup/Streaming)"
-                    else:
-                        tier = "QB3+ (Deep League Only)"
-                elif position in ['RB', 'WR']:
-                    if ecr_positional <= 24:
-                        tier = f"{position}1 (Elite)"
-                    elif ecr_positional <= 48:
-                        tier = f"{position}2 (Solid)"
-                    else:
-                        tier = f"{position}3+ (Depth)"
-                elif position == 'TE':
-                    if ecr_positional <= 12:
-                        tier = "TE1 (Elite)"
-                    else:
-                        tier = "TE2+ (Streaming)"
-                else:
-                    tier = "Standard"
-                    
-                context += f" → {tier}"
+                # Enhanced tier classification (existing logic)
+                tier_info = ContextFormatter._get_tier_classification(position, ecr_positional)
+                context += f" → {tier_info}"
+        
+        # NEW: WEEKLY PROJECTION ANALYSIS
+        projected_points = player_data.get('projected_points')
+        start_sit_grade = player_data.get('start_sit_grade')
+        
+        if projected_points or start_sit_grade:
+            context += f"\n\n**WEEKLY PROJECTION ANALYSIS:**"
             
-            # Waiver value assessment with enhanced tiers
-            if ecr_overall < 50:
-                value_tier = "⭐ High-Value Pickup"
-            elif ecr_overall < 100:
-                value_tier = "✅ Solid Addition"
-            elif ecr_overall < 150:
-                value_tier = "📊 Depth/Streaming Option"
-            else:
-                value_tier = "🔍 Deep League Only"
-            context += f"\n- Value Assessment: {value_tier}"
+            if projected_points:
+                projection_tier = ContextFormatter._get_projection_tier(projected_points, position)
+                context += f"\n- Weekly Projection: {projected_points} points ({projection_tier})"
+            
+            if start_sit_grade:
+                grade_confidence = player_data.get('grade_confidence_score', 0)
+                confidence_desc = ContextFormatter._get_confidence_description(grade_confidence)
+                context += f"\n- Expert Grade: {start_sit_grade} ({confidence_desc})"
         
-        # Recent trend for waiver timing
-        rank_delta = player_data.get('rank_delta_overall')
-        if rank_delta:
-            if rank_delta < -5:
-                trend_note = "🔥 Rising Fast - High Priority"
-            elif rank_delta < -2:
-                trend_note = "📈 Trending Up"
-            elif rank_delta > 5:
-                trend_note = "📉 Falling - Proceed with Caution"
-            elif rank_delta > 2:
-                trend_note = "⚠️ Trending Down"
-            else:
-                trend_note = "➡️ Stable"
-            context += f"\n- Trend Status: {trend_note} ({rank_delta:+.1f} spots)"
+        # NEW: MATCHUP ANALYSIS
+        opponent = player_data.get('opponent')
+        matchup_difficulty = player_data.get('matchup_difficulty')
+        home_away = player_data.get('home_away')
         
-        # Opportunity assessment for rookies/young players
-        is_rookie = player_data.get('is_rookie')
-        years_exp = player_data.get('years_exp')
-        if is_rookie or (years_exp and years_exp < 3):
-            context += f"\n- Opportunity Factor: High upside potential for young player"
+        if opponent or matchup_difficulty:
+            context += f"\n\n**MATCHUP ANALYSIS:**"
+            
+            if opponent and home_away:
+                location_icon = "🏠" if home_away == "Home" else "✈️" if home_away == "Away" else "🏟️"
+                context += f"\n- This Week: {location_icon} {home_away} vs. {opponent}"
+            
+            if matchup_difficulty:
+                difficulty_icon = ContextFormatter._get_difficulty_icon(matchup_difficulty)
+                context += f"\n- Matchup Difficulty: {difficulty_icon} {matchup_difficulty}"
+                
+                # Add matchup-specific advice
+                matchup_advice = ContextFormatter._get_matchup_advice(matchup_difficulty, position)
+                if matchup_advice:
+                    context += f"\n- Matchup Impact: {matchup_advice}"
+        
+        # NEW: OWNERSHIP ARBITRAGE ANALYSIS
+        weekly_ownership = player_data.get('weekly_ownership')
+        value_opportunity_score = player_data.get('value_opportunity_score')
+        
+        if weekly_ownership is not None or value_opportunity_score:
+            context += f"\n\n**MARKET OPPORTUNITY ANALYSIS:**"
+            
+            if weekly_ownership is not None:
+                ownership_tier = ContextFormatter._get_ownership_tier(weekly_ownership)
+                context += f"\n- Current Ownership: {weekly_ownership}% ({ownership_tier})"
+            
+            if value_opportunity_score:
+                opportunity_rating = ContextFormatter._get_opportunity_rating(value_opportunity_score)
+                context += f"\n- Value Opportunity: {opportunity_rating}"
+                
+                # Identify arbitrage opportunities
+                if weekly_ownership is not None and projected_points:
+                    arbitrage_alert = ContextFormatter._identify_arbitrage_opportunity(
+                        weekly_ownership, projected_points, start_sit_grade
+                    )
+                    if arbitrage_alert:
+                        context += f"\n- 🚨 **ARBITRAGE ALERT**: {arbitrage_alert}"
+        
+        # NEW: AGE AND DEVELOPMENT ANALYSIS
+        age = player_data.get('age')
+        age_category = player_data.get('age_category')
+        draft_year = player_data.get('draft_year')
+        
+        if age or age_category:
+            context += f"\n\n**ROSTER BUILDING CONTEXT:**"
+            
+            if age and age_category:
+                context += f"\n- Age Factor: {age} years old ({age_category})"
+            
+            if draft_year:
+                experience_level = ContextFormatter._calculate_experience_level(draft_year)
+                context += f"\n- Experience: {experience_level}"
+            
+            # Add age-specific strategic advice
+            age_advice = ContextFormatter._get_age_strategic_advice(age_category, position)
+            if age_advice:
+                context += f"\n- Strategic Context: {age_advice}"
+        
+        # NEW: COMPREHENSIVE OUTLOOK
+        projection_confidence = player_data.get('projection_confidence')
+        from utils import get_weekly_outlook
+        weekly_outlook = get_weekly_outlook(player_data)
+        
+        if projection_confidence or weekly_outlook:
+            context += f"\n\n**OUTLOOK ASSESSMENT:**"
+            
+            if projection_confidence:
+                context += f"\n- Projection Reliability: {projection_confidence}"
+            
+            if weekly_outlook:
+                context += f"\n- Short-term Outlook: {weekly_outlook}"
+            
+            # Final recommendation context
+            recommendation_context = ContextFormatter._generate_recommendation_context(player_data)
+            if recommendation_context:
+                context += f"\n- **KEY FACTORS**: {recommendation_context}"
         
         return context
     
@@ -476,6 +525,236 @@ class ContextFormatter:
             formatted_players.append(f"PLAYER {i}:\n{player_context}")
         
         return "\n\n".join(formatted_players)
+
+    # --- Enhanced Waiver Analysis Helper Methods ---
+    
+    @staticmethod
+    def _get_tier_classification(position: str, ecr_positional: float) -> str:
+        """Get tier classification for position and rank."""
+        if position == 'QB':
+            if ecr_positional <= 12:
+                return "QB1 (Elite/Starter)"
+            elif ecr_positional <= 24:
+                return "QB2 (Backup/Streaming)"
+            else:
+                return "QB3+ (Deep League Only)"
+        elif position in ['RB', 'WR']:
+            if ecr_positional <= 24:
+                return f"{position}1 (Elite)"
+            elif ecr_positional <= 48:
+                return f"{position}2 (Solid)"
+            else:
+                return f"{position}3+ (Depth)"
+        elif position == 'TE':
+            if ecr_positional <= 12:
+                return "TE1 (Elite)"
+            else:
+                return "TE2+ (Streaming)"
+        else:
+            return "Standard"
+    
+    @staticmethod
+    def _get_projection_tier(projected_points: float, position: str) -> str:
+        """Get projection tier description."""
+        try:
+            points = float(projected_points)
+            if position == 'QB':
+                if points >= 22:
+                    return "Elite QB1 Week"
+                elif points >= 18:
+                    return "Solid QB1 Performance"
+                elif points >= 15:
+                    return "QB2 Production"
+                else:
+                    return "Streaming Option"
+            elif position == 'RB':
+                if points >= 20:
+                    return "RB1 Ceiling Week"
+                elif points >= 15:
+                    return "Solid RB2 Floor"
+                elif points >= 10:
+                    return "Flex-Worthy"
+                else:
+                    return "Depth Option"
+            elif position == 'WR':
+                if points >= 18:
+                    return "WR1 Potential"
+                elif points >= 14:
+                    return "WR2 Production"
+                elif points >= 10:
+                    return "Flex-Worthy"
+                else:
+                    return "Deep League"
+            elif position == 'TE':
+                if points >= 15:
+                    return "TE1 Ceiling"
+                elif points >= 10:
+                    return "TE1 Floor"
+                elif points >= 7:
+                    return "Streaming"
+                else:
+                    return "Deep League"
+            else:
+                return "Standard"
+        except (ValueError, TypeError):
+            return "Standard"
+    
+    @staticmethod
+    def _get_confidence_description(confidence_score: int) -> str:
+        """Get confidence description from score."""
+        if confidence_score >= 90:
+            return "Very High Expert Confidence"
+        elif confidence_score >= 80:
+            return "High Expert Confidence"
+        elif confidence_score >= 70:
+            return "Moderate Expert Confidence"
+        elif confidence_score >= 60:
+            return "Standard Expert Confidence"
+        else:
+            return "Low Expert Confidence"
+    
+    @staticmethod
+    def _get_difficulty_icon(difficulty: str) -> str:
+        """Get icon for matchup difficulty."""
+        if difficulty == 'Easy':
+            return "🟢"
+        elif difficulty == 'Tough':
+            return "🔴"
+        elif difficulty == 'Moderate':
+            return "🟡"
+        else:
+            return "⚪"
+    
+    @staticmethod
+    def _get_matchup_advice(difficulty: str, position: str) -> str:
+        """Get matchup-specific advice."""
+        if difficulty == 'Easy':
+            return f"Favorable spot for {position} production"
+        elif difficulty == 'Tough':
+            return f"Challenging matchup may limit {position} ceiling"
+        elif difficulty == 'Moderate':
+            return "Neutral matchup - rely on talent/usage"
+        else:
+            return ""
+    
+    @staticmethod
+    def _get_ownership_tier(ownership_pct: float) -> str:
+        """Get ownership tier description."""
+        try:
+            pct = float(ownership_pct)
+            if pct < 10:
+                return "Ultra-Low Ownership"
+            elif pct < 25:
+                return "Low Ownership"
+            elif pct < 50:
+                return "Moderate Ownership"
+            elif pct < 75:
+                return "High Ownership"
+            else:
+                return "Widely Owned"
+        except (ValueError, TypeError):
+            return "Unknown"
+    
+    @staticmethod
+    def _get_opportunity_rating(score: float) -> str:
+        """Get opportunity rating from value score."""
+        try:
+            value_score = float(score)
+            if value_score >= 25:
+                return "🎯 Exceptional Value Opportunity"
+            elif value_score >= 20:
+                return "💎 High Value Opportunity"
+            elif value_score >= 15:
+                return "✅ Good Value Opportunity"
+            elif value_score >= 10:
+                return "📊 Standard Value"
+            else:
+                return "⚪ Limited Value"
+        except (ValueError, TypeError):
+            return "⚪ Limited Value"
+    
+    @staticmethod
+    def _identify_arbitrage_opportunity(ownership_pct: float, projected_points: float, grade: str) -> str:
+        """Identify specific arbitrage opportunities."""
+        try:
+            ownership = float(ownership_pct)
+            points = float(projected_points)
+            
+            # High projection + low ownership = arbitrage
+            if ownership < 10 and points >= 17:
+                return f"{points} projected points with only {ownership}% ownership"
+            elif ownership < 25 and points >= 15 and grade in ['A+', 'A']:
+                return f"Grade {grade} player with {ownership}% ownership"
+            elif ownership < 15 and points >= 12:
+                return f"Undervalued at {ownership}% ownership given {points} point projection"
+        except (ValueError, TypeError):
+            pass
+        return ""
+    
+    @staticmethod
+    def _calculate_experience_level(draft_year: int) -> str:
+        """Calculate experience level from draft year."""
+        try:
+            current_year = 2025  # Current season
+            years_exp = current_year - int(draft_year)
+            
+            if years_exp == 1:
+                return "Rookie Season"
+            elif years_exp == 2:
+                return "Second-Year Player"
+            elif years_exp <= 4:
+                return f"Young Veteran ({years_exp} years)"
+            elif years_exp <= 8:
+                return f"Experienced Veteran ({years_exp} years)"
+            else:
+                return f"Long-Term Veteran ({years_exp} years)"
+        except (ValueError, TypeError):
+            return "Unknown"
+    
+    @staticmethod
+    def _get_age_strategic_advice(age_category: str, position: str) -> str:
+        """Get strategic advice based on age category."""
+        if not age_category:
+            return ""
+        
+        if "Prime Ascending" in age_category:
+            return f"Ideal time to acquire {position} - peak years approaching"
+        elif "Peak Window" in age_category:
+            return f"Maximum value window for {position} production"
+        elif "Decline Phase" in age_category and position == 'RB':
+            return "Proceed with caution - RB aging curve concerns"
+        elif "Veteran" in age_category:
+            return "Experience advantage may offset physical decline"
+        else:
+            return ""
+    
+    @staticmethod
+    def _generate_recommendation_context(player_data: Dict) -> str:
+        """Generate key factors for recommendation."""
+        factors = []
+        
+        # High value opportunities
+        value_score = player_data.get('value_opportunity_score', 0)
+        if value_score and value_score >= 20:
+            factors.append("High value opportunity")
+        
+        # Favorable matchups
+        difficulty = player_data.get('matchup_difficulty')
+        if difficulty == 'Easy':
+            factors.append("Favorable matchup")
+        
+        # Low ownership with production
+        ownership = player_data.get('weekly_ownership')
+        projected = player_data.get('projected_points')
+        if ownership and projected and ownership < 25 and projected >= 15:
+            factors.append("Low ownership + high projection")
+        
+        # Age considerations
+        age_category = player_data.get('age_category')
+        if age_category and "Prime" in age_category:
+            factors.append("Prime age window")
+        
+        return ", ".join(factors) if factors else "Standard evaluation factors"
 
 
 # Test function to validate context formatters

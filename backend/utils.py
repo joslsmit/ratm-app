@@ -238,3 +238,244 @@ def process_ai_response_v2(response_text, endpoint_name="unknown"):
         with open('ai_response.log', 'a') as f:
             f.write(f"{datetime.now()} - Enhanced processing error ({endpoint_name}): {str(e)}\n\n")
         return process_ai_response(response_text)
+
+
+# --- Enhanced Waiver Wire Analysis Utility Functions ---
+
+def calculate_matchup_difficulty(opponent_team, position):
+    """
+    Calculate matchup difficulty rating based on opponent defensive strength.
+    
+    Args:
+        opponent_team: Three-letter team code (e.g., 'BAL', 'CLE')
+        position: Player position (QB, RB, WR, TE)
+    
+    Returns:
+        String: 'Easy', 'Moderate', 'Tough', or 'Unknown'
+    """
+    
+    # Defensive strength rankings by position (2025 season data)
+    # These would be updated with current season defensive rankings
+    defensive_rankings = {
+        'QB': {
+            'Easy': ['JAC', 'CAR', 'NE', 'NYG', 'LV', 'WAS', 'CHI', 'ARI'],
+            'Tough': ['BAL', 'PIT', 'BUF', 'DEN', 'SF', 'DAL', 'NYJ', 'MIA']
+        },
+        'RB': {
+            'Easy': ['DET', 'NO', 'IND', 'WAS', 'CAR', 'ARI', 'LAC', 'ATL'], 
+            'Tough': ['BAL', 'SF', 'BUF', 'PIT', 'PHI', 'KC', 'LV', 'CHI']
+        },
+        'WR': {
+            'Easy': ['ARI', 'WAS', 'JAC', 'CAR', 'LV', 'LAC', 'IND', 'ATL'],
+            'Tough': ['BAL', 'BUF', 'SF', 'DAL', 'DEN', 'NYJ', 'PIT', 'MIA']
+        },
+        'TE': {
+            'Easy': ['CAR', 'WAS', 'IND', 'JAC', 'ARI', 'ATL', 'LV', 'CHI'],
+            'Tough': ['SF', 'BAL', 'BUF', 'PIT', 'DEN', 'NYJ', 'MIA', 'DAL']
+        }
+    }
+    
+    if not opponent_team or position not in defensive_rankings:
+        return 'Unknown'
+    
+    position_rankings = defensive_rankings.get(position, {})
+    
+    if opponent_team in position_rankings.get('Easy', []):
+        return 'Easy'
+    elif opponent_team in position_rankings.get('Tough', []):
+        return 'Tough'
+    else:
+        return 'Moderate'
+
+def calculate_value_opportunity_score(projected_points, ownership_pct, confidence_score):
+    """
+    Calculate ownership arbitrage opportunity score.
+    
+    Purpose: Identify players with high projections but low ownership
+    
+    Args:
+        projected_points: Weekly projected fantasy points
+        ownership_pct: Platform ownership percentage (0-100)
+        confidence_score: Start/sit grade confidence (30-95)
+    
+    Returns:
+        Float: Opportunity score (higher = better value opportunity)
+    """
+    
+    if not all([projected_points, ownership_pct is not None, confidence_score]):
+        return 0.0
+    
+    try:
+        # Base value from projected points
+        base_value = float(projected_points)
+        
+        # Ownership factor (lower ownership = higher opportunity)
+        # Scale: 0-25% ownership gets bonus, >75% gets penalty
+        if ownership_pct < 25:
+            ownership_multiplier = 1.5  # High opportunity
+        elif ownership_pct > 75:
+            ownership_multiplier = 0.7  # Low opportunity
+        else:
+            ownership_multiplier = 1.0  # Neutral
+        
+        # Confidence factor from expert grades
+        confidence_multiplier = confidence_score / 100.0
+        
+        # Calculate final opportunity score
+        opportunity_score = base_value * ownership_multiplier * confidence_multiplier
+        
+        return round(opportunity_score, 2)
+        
+    except (ValueError, TypeError):
+        return 0.0
+
+def calculate_age_category(age, position):
+    """
+    Calculate age-based player category for roster decisions.
+    
+    Args:
+        age: Player age in years
+        position: Player position
+        
+    Returns:
+        String: Age category description
+    """
+    
+    if not age:
+        return 'Unknown'
+    
+    try:
+        age_float = float(age)
+        
+        # Position-specific age curves
+        if position in ['RB']:
+            if age_float < 24:
+                return 'Prime Ascending (Peak Years Ahead)'
+            elif age_float < 27:
+                return 'Peak Window (Maximum Value)'
+            elif age_float < 30:
+                return 'Decline Phase (Use Caution)'
+            else:
+                return 'High Risk (Age-Related Decline)'
+                
+        elif position in ['QB']:
+            if age_float < 27:
+                return 'Development Phase (Ascending)'
+            elif age_float < 35:
+                return 'Prime Years (Peak Performance)'
+            else:
+                return 'Veteran (Experience vs. Decline)'
+                
+        elif position in ['WR', 'TE']:
+            if age_float < 25:
+                return 'Early Career (Development)'
+            elif age_float < 30:
+                return 'Prime Years (Peak Performance)'
+            elif age_float < 33:
+                return 'Veteran (Experience Advantage)'
+            else:
+                return 'Late Career (Decline Risk)'
+        else:
+            # Generic age categories
+            if age_float < 25:
+                return 'Young Player'
+            elif age_float < 30:
+                return 'Prime Years'
+            else:
+                return 'Veteran'
+                
+    except (ValueError, TypeError):
+        return 'Unknown'
+
+def calculate_projection_confidence(start_sit_grade, ecr_overall, weekly_ecr):
+    """
+    Calculate overall projection confidence based on multiple factors.
+    
+    Args:
+        start_sit_grade: Letter grade (A+, A, B, etc.)
+        ecr_overall: Season-long ECR ranking
+        weekly_ecr: Weekly ECR ranking
+        
+    Returns:
+        String: Confidence level description
+    """
+    
+    confidence_factors = []
+    
+    # Grade-based confidence
+    if start_sit_grade:
+        if start_sit_grade in ['A+', 'A']:
+            confidence_factors.append('High')
+        elif start_sit_grade in ['A-', 'B+', 'B']:
+            confidence_factors.append('Medium')
+        else:
+            confidence_factors.append('Low')
+    
+    # ECR consistency check
+    if ecr_overall and weekly_ecr:
+        try:
+            ecr_diff = abs(float(ecr_overall) - float(weekly_ecr))
+            if ecr_diff < 5:
+                confidence_factors.append('Consistent')
+            elif ecr_diff > 15:
+                confidence_factors.append('Volatile')
+        except (ValueError, TypeError):
+            pass
+    
+    # Determine overall confidence
+    if 'High' in confidence_factors and 'Consistent' in confidence_factors:
+        return 'Very High Confidence'
+    elif 'High' in confidence_factors:
+        return 'High Confidence'
+    elif 'Medium' in confidence_factors:
+        return 'Moderate Confidence'
+    elif 'Volatile' in confidence_factors:
+        return 'Low Confidence (Volatile)'
+    else:
+        return 'Standard Confidence'
+
+def get_weekly_outlook(player_data, weeks_ahead=4):
+    """
+    Generate short-term outlook based on projections and schedule.
+    
+    Args:
+        player_data: Enhanced player data dictionary
+        weeks_ahead: Number of weeks to analyze
+        
+    Returns:
+        String: Outlook description
+    """
+    
+    outlook_factors = []
+    
+    # Projected points assessment
+    projected_points = player_data.get('projected_points')
+    if projected_points:
+        if projected_points >= 20:
+            outlook_factors.append('High Scoring Potential')
+        elif projected_points >= 15:
+            outlook_factors.append('Solid Production Expected')
+        else:
+            outlook_factors.append('Limited Upside')
+    
+    # Matchup assessment
+    matchup_difficulty = player_data.get('matchup_difficulty')
+    if matchup_difficulty == 'Easy':
+        outlook_factors.append('Favorable Matchup')
+    elif matchup_difficulty == 'Tough':
+        outlook_factors.append('Challenging Matchup')
+    
+    # Confidence assessment
+    grade_confidence = player_data.get('grade_confidence_score', 0)
+    if grade_confidence >= 85:
+        outlook_factors.append('Expert Confidence')
+    
+    # Combine factors into outlook
+    if 'High Scoring Potential' in outlook_factors and 'Favorable Matchup' in outlook_factors:
+        return 'Excellent Short-term Outlook'
+    elif 'Solid Production Expected' in outlook_factors:
+        return 'Favorable Short-term Outlook'
+    elif 'Challenging Matchup' in outlook_factors:
+        return 'Mixed Short-term Outlook'
+    else:
+        return 'Standard Short-term Outlook'

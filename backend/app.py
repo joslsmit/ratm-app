@@ -47,7 +47,7 @@ model = genai.GenerativeModel('gemini-2.5-flash-lite-preview-06-17')
 
 
 # --- Data Caching ---
-player_data_cache, player_name_to_id, static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data, player_values_cache, pick_values_cache, combined_player_data_cache = None, None, {}, {}, {}, None, None, None
+player_data_cache, player_name_to_id, static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data, player_values_cache, pick_values_cache, weekly_projections_cache, combined_player_data_cache = None, None, {}, {}, {}, None, None, {}, None
 
 # --- Data Loading & Helper Functions ---
 def load_values_from_csv(file_path):
@@ -158,6 +158,96 @@ def load_ecr_data_from_csv(file_path):
         traceback.print_exc()
         return None
 
+def load_weekly_projections_data(file_path):
+    """
+    Load and process weekly fantasy projections data.
+    
+    Purpose: Integrate projected points, grades, matchups, and ownership
+    Returns: weekly_projections_cache dictionary keyed by normalized names
+    """
+    
+    try:
+        df = pd.read_csv(file_path)
+        print(f"Loading weekly projections from {file_path}: {len(df)} players")
+        
+        # Defensive NaN handling
+        df = df.where(pd.notna(df), None)
+        
+        # Dynamic column detection
+        player_col = next((col for col in ['player_name', 'player', 'full_name'] 
+                          if col in df.columns), None)
+        
+        if not player_col:
+            print(f"❌ ERROR: Could not find player name column in {file_path}")
+            return {}
+        
+        projections_cache = {}
+        
+        for index, row in df.iterrows():
+            player_name = row.get(player_col)
+            if not player_name or str(player_name).strip() == '':
+                continue
+                
+            normalized_key = normalize_player_name(str(player_name))
+            if not normalized_key:
+                continue
+            
+            # Parse matchup data
+            opponent_info = parse_matchup_string(row.get('player_opponent', ''))
+            
+            # Convert grades to confidence scores
+            grade_score = convert_start_sit_grade(row.get('start_sit_grade', 'C'))
+            
+            projections_cache[normalized_key] = {
+                'projected_points': clean_numeric_value(row.get('r2p_pts')),
+                'start_sit_grade': row.get('start_sit_grade', 'C'),
+                'grade_confidence_score': grade_score,
+                'opponent': opponent_info['opponent'],
+                'home_away': opponent_info['home_away'],
+                'weekly_ownership': clean_numeric_value(row.get('player_owned_avg')),
+                'weekly_pos_rank': row.get('pos_rank', ''),
+                'weekly_ecr': clean_numeric_value(row.get('ecr')),
+                'projection_date': row.get('scrape_date')
+            }
+        
+        print(f"✅ Successfully loaded weekly projections for {len(projections_cache)} players")
+        return projections_cache
+        
+    except Exception as e:
+        print(f"❌ ERROR loading weekly projections: {e}")
+        traceback.print_exc()
+        return {}
+
+def parse_matchup_string(matchup_str):
+    """Parse matchup strings like 'vs. CLE' or 'at PIT'"""
+    if not matchup_str:
+        return {'opponent': 'N/A', 'home_away': 'Unknown'}
+    
+    matchup_str = str(matchup_str).strip()
+    if matchup_str.startswith('vs.'):
+        opponent = matchup_str.split('vs. ')[1] if 'vs. ' in matchup_str else matchup_str[3:].strip()
+        return {'opponent': opponent, 'home_away': 'Home'}
+    elif matchup_str.startswith('at '):
+        opponent = matchup_str.split('at ')[1] if 'at ' in matchup_str else matchup_str[3:].strip()
+        return {'opponent': opponent, 'home_away': 'Away'}
+    else:
+        return {'opponent': matchup_str, 'home_away': 'Neutral'}
+
+def convert_start_sit_grade(grade):
+    """Convert letter grades to numeric confidence scores"""
+    if not grade:
+        return 60  # Default C grade
+    
+    grade = str(grade).strip().upper()
+    grade_mapping = {
+        'A+': 95, 'A': 90, 'A-': 85,
+        'B+': 80, 'B': 75, 'B-': 70,
+        'C+': 65, 'C': 60, 'C-': 55,
+        'D+': 50, 'D': 45, 'D-': 40,
+        'F': 30
+    }
+    return grade_mapping.get(grade, 60)  # Default to C grade
+
 def get_all_players():
     global player_data_cache, player_name_to_id
     if player_data_cache is not None: return
@@ -176,79 +266,73 @@ def get_all_players():
         traceback.print_exc()
         player_data_cache, player_name_to_id = {}, {}
 
-def create_combined_player_data_cache():
-    global combined_player_data_cache, static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data
-    if not static_ecr_overall_data and not static_ecr_positional_data and not static_ecr_rookie_data:
-        print("❌ Cannot create combined player data cache: No ECR data is loaded.")
-        return
-
-    temp_combined_data = {}
-    
-    # Combine data from all ECR sources, prioritizing overall for base ECR if multiple exist
-    all_ecr_keys = set(static_ecr_overall_data.keys()) | set(static_ecr_positional_data.keys()) | set(static_ecr_rookie_data.keys())
-
-    for name_key in all_ecr_keys:
-        overall_data = static_ecr_overall_data.get(name_key, {})
-        positional_data = static_ecr_positional_data.get(name_key, {})
-        rookie_data = static_ecr_rookie_data.get(name_key, {})
-
-        # Prioritize overall ECR for the main 'ecr' field, but include both
-        # Use overall_data for general player info if available, otherwise positional or rookie
-        primary_data_source = overall_data or positional_data or rookie_data
-
-        # Ensure bye_week is an integer or None
-        bye_week_val = primary_data_source.get('bye')
-        if bye_week_val is not None:
-            try:
-                bye_week_val = int(bye_week_val)
-            except (ValueError, TypeError):
-                bye_week_val = None # Set to None if conversion fails
-
 def clean_numeric_value(value):
     if isinstance(value, float) and pd.isna(value):
         return None
     return value
 
-def create_combined_player_data_cache():
-    global combined_player_data_cache, static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data
-    if not static_ecr_overall_data and not static_ecr_positional_data and not static_ecr_rookie_data:
-        print("❌ Cannot create combined player data cache: No ECR data is loaded.")
+def create_enhanced_combined_player_data_cache():
+    """
+    Enhanced version integrating ECR + Weekly Projections + Player Values
+    
+    Purpose: Create unified player data cache with all available metrics
+    Dependencies: static_ecr_data, weekly_projections_cache, player_values_cache
+    """
+    
+    global combined_player_data_cache, static_ecr_overall_data, static_ecr_positional_data
+    global static_ecr_rookie_data, weekly_projections_cache, player_values_cache
+    
+    # Validation checks
+    if not any([static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data]):
+        print("❌ Cannot create cache: No ECR data loaded")
         return
-
+    
     temp_combined_data = {}
     
-    # Combine data from all ECR sources, prioritizing overall for base ECR if multiple exist
-    all_ecr_keys = set(static_ecr_overall_data.keys()) | set(static_ecr_positional_data.keys()) | set(static_ecr_rookie_data.keys())
-
-    for name_key in all_ecr_keys:
+    # Get all unique player keys from all data sources
+    all_player_keys = (set(static_ecr_overall_data.keys()) | 
+                      set(static_ecr_positional_data.keys()) | 
+                      set(static_ecr_rookie_data.keys()) |
+                      set(weekly_projections_cache.keys()) |
+                      set(player_values_cache.keys() if player_values_cache else []))
+    
+    for name_key in all_player_keys:
+        # Existing ECR data integration (unchanged)
         overall_data = static_ecr_overall_data.get(name_key, {})
         positional_data = static_ecr_positional_data.get(name_key, {})
         rookie_data = static_ecr_rookie_data.get(name_key, {})
-
-        # Prioritize overall ECR for the main 'ecr' field, but include both
+        
         # Use overall_data for general player info if available, otherwise positional or rookie
         primary_data_source = overall_data or positional_data or rookie_data
-
+        
         # Ensure bye_week is an integer or None
         bye_week_val = primary_data_source.get('bye')
         if bye_week_val is not None:
             try:
                 bye_week_val = int(bye_week_val)
             except (ValueError, TypeError):
-                bye_week_val = None # Set to None if conversion fails
-
+                bye_week_val = None
+        
         # Get Sleeper data for years_exp
         sleeper_player_id = player_name_to_id.get(name_key)
         sleeper_info = player_data_cache.get(sleeper_player_id, {}) if sleeper_player_id else {}
         
-        # Determine the display name: prioritize original_name from ECR, then Sleeper's full_name, then normalized name
+        # Determine display name
         display_name = primary_data_source.get('original_name') or \
                        sleeper_info.get('full_name') or \
                        primary_data_source.get('name', name_key.title())
-
+        
+        # NEW: Weekly projections integration
+        weekly_data = weekly_projections_cache.get(name_key, {})
+        
+        # NEW: Player values integration  
+        values_data = player_values_cache.get(name_key, {}) if player_values_cache else {}
+        
+        # Enhanced player data structure
         temp_combined_data[name_key] = {
-            'name': primary_data_source.get('name', name_key.title()), # Keep this for internal consistency if needed
-            'display_name': display_name, # New field for user-facing display
+            # Existing ECR fields (unchanged)
+            'name': primary_data_source.get('name', name_key.title()),
+            'display_name': display_name,
             'team': primary_data_source.get('team', sleeper_info.get('team', 'N/A')),
             'position': primary_data_source.get('pos', sleeper_info.get('position', 'N/A')),
             'bye_week': bye_week_val,
@@ -268,11 +352,68 @@ def create_combined_player_data_cache():
             'best_rookie': clean_numeric_value(rookie_data.get('best')),
             'worst_rookie': clean_numeric_value(rookie_data.get('worst')),
             'rank_delta_rookie': clean_numeric_value(rookie_data.get('rank_delta')),
-            'is_rookie': name_key in static_ecr_rookie_data # New field: True if player is in rookie ECR data
+            'is_rookie': name_key in static_ecr_rookie_data,
+            
+            # NEW: Weekly projection fields
+            'projected_points': weekly_data.get('projected_points'),
+            'start_sit_grade': weekly_data.get('start_sit_grade'),
+            'grade_confidence_score': weekly_data.get('grade_confidence_score'),
+            'opponent': weekly_data.get('opponent'),
+            'home_away': weekly_data.get('home_away'),
+            'weekly_ownership': weekly_data.get('weekly_ownership'),
+            'weekly_pos_rank': weekly_data.get('weekly_pos_rank'),
+            'weekly_ecr': weekly_data.get('weekly_ecr'),
+            
+            # NEW: Player value fields
+            'age': values_data.get('age'),
+            'draft_year': values_data.get('draft_year'),
+            'value_1qb': clean_numeric_value(values_data.get('value_1qb')),
+            'value_2qb': clean_numeric_value(values_data.get('value_2qb')),
+            
+            # NEW: Calculated enhancement fields (to be post-processed)
+            'matchup_difficulty': None,
+            'value_opportunity_score': None,
+            'age_category': None,
+            'projection_confidence': None,
         }
     
+    # Post-process calculated fields using utility functions
+    from utils import calculate_matchup_difficulty, calculate_value_opportunity_score, calculate_age_category, calculate_projection_confidence
+    
+    for name_key, player_data in temp_combined_data.items():
+        # Calculate matchup difficulty
+        player_data['matchup_difficulty'] = calculate_matchup_difficulty(
+            player_data.get('opponent'), 
+            player_data.get('position')
+        )
+        
+        # Calculate value opportunity score
+        player_data['value_opportunity_score'] = calculate_value_opportunity_score(
+            player_data.get('projected_points'),
+            player_data.get('weekly_ownership'),
+            player_data.get('grade_confidence_score')
+        )
+        
+        # Calculate age category
+        player_data['age_category'] = calculate_age_category(
+            player_data.get('age'),
+            player_data.get('position')
+        )
+        
+        # Calculate projection confidence
+        player_data['projection_confidence'] = calculate_projection_confidence(
+            player_data.get('start_sit_grade'),
+            player_data.get('ecr_overall'),
+            player_data.get('weekly_ecr')
+        )
+    
     combined_player_data_cache = temp_combined_data
-    print(f"✅ Successfully created combined_player_data_cache with {len(combined_player_data_cache)} players.")
+    print(f"✅ Enhanced cache created with {len(combined_player_data_cache)} players")
+
+# Maintain backward compatibility
+def create_combined_player_data_cache():
+    """Backward compatibility wrapper for enhanced cache creation."""
+    create_enhanced_combined_player_data_cache()
 
 PROMPT_PREAMBLE = """You are 'The Analyst' - an expert fantasy football advisor specializing in data-driven analysis for the 2025 NFL season.
 
@@ -322,7 +463,7 @@ CRITICAL JSON REQUIREMENTS:
 # --- Data Loading and Initialization ---
 def load_all_data():
     """Load all necessary data into memory."""
-    global player_data_cache, player_name_to_id, static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data, player_values_cache, pick_values_cache, combined_player_data_cache
+    global player_data_cache, player_name_to_id, static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data, player_values_cache, pick_values_cache, weekly_projections_cache, combined_player_data_cache
     
     try:
         import_data()  # Initial data import
@@ -335,6 +476,10 @@ def load_all_data():
         
         player_values_cache = load_values_from_csv(os.path.join(basedir, 'values-players.csv'))
         pick_values_cache = load_values_from_csv(os.path.join(basedir, 'values-picks.csv'))
+        
+        # Load weekly projections data
+        weekly_projections_path = os.path.join(basedir, 'fp_latest_weekly.csv')
+        weekly_projections_cache = load_weekly_projections_data(weekly_projections_path)
 
         # Create the combined player data cache at startup
         create_combined_player_data_cache()
@@ -343,6 +488,7 @@ def load_all_data():
         print(f"Static Overall ECR data size: {len(static_ecr_overall_data) if static_ecr_overall_data else 0}")
         print(f"Static Positional ECR data size: {len(static_ecr_positional_data) if static_ecr_positional_data else 0}")
         print(f"Static Rookie ECR data size: {len(static_ecr_rookie_data) if static_ecr_rookie_data else 0}")
+        print(f"Weekly projections cache size: {len(weekly_projections_cache) if weekly_projections_cache else 0}")
 
     except Exception as e:
         print(f"❌ FATAL ERROR during application startup data loading: {e}")
@@ -2420,25 +2566,49 @@ def yahoo_waiver_analysis():
         # Build comprehensive analysis prompt
         full_context = f"LEAGUE KEY: {league_key}\n\n{roster_context}\n{available_context}"
         
-        # Enhanced methodology for Yahoo-specific waiver analysis
+        # REVOLUTIONARY 7-Step Multi-Factor Decision Framework 
         methodology_steps = [
             "1. ROSTER COMPOSITION ANALYSIS",
-            "   • Evaluate current roster strengths and weaknesses by position",
-            "   • Identify bye week vulnerabilities and depth concerns", 
-            "   • Assess injury risk and backup needs for key players",
-            "   • Consider positional scarcity and streaming requirements",
+            "   • Current strengths/weaknesses by position and tier",
+            "   • Bye week vulnerabilities and streaming needs",
+            "   • Injury risk assessment and handcuff requirements",
+            "   • Positional depth charts and scarcity considerations",
             "",
-            "2. AVAILABLE PLAYER EVALUATION",
-            "   • Rank available players by current value and upside potential",
-            "   • Prioritize players with favorable upcoming schedules",
-            "   • Consider role security and target share trends",
-            "   • Evaluate handcuff and lottery ticket opportunities",
+            "2. WEEKLY PROJECTION EVALUATION", 
+            "   • Analyze projected fantasy points vs. positional thresholds",
+            "   • Evaluate expert start/sit grades and confidence levels",
+            "   • Identify projection tiers (QB1/QB2, RB1/RB2, etc.)",
+            "   • Cross-reference with ECR for validation and discrepancies",
             "",
-            "3. STRATEGIC RECOMMENDATIONS",
-            "   • Identify top 3-5 waiver wire targets with reasoning",
-            "   • Suggest specific drop candidates from current roster",
-            "   • Consider FAAB budget allocation if applicable",
-            "   • Provide timeline for waiver claims (immediate vs speculative)"
+            "3. MATCHUP DIFFICULTY ANALYSIS",
+            "   • Assess opponent defensive strength vs. player position",
+            "   • Consider home/away advantages and travel factors", 
+            "   • Evaluate historical performance in similar matchups",
+            "   • Factor in game script and pace-of-play implications",
+            "",
+            "4. OWNERSHIP ARBITRAGE ASSESSMENT",
+            "   • Identify low-ownership players with high projections",
+            "   • Calculate value opportunity scores for market inefficiencies",
+            "   • Highlight players owned by <25% with 15+ point projections",
+            "   • Assess risk/reward ratio for contrarian plays",
+            "",
+            "5. PLAYER AGE AND DEVELOPMENT ANALYSIS",
+            "   • Evaluate age-adjusted expectations by position",
+            "   • Consider career trajectory and peak performance windows",
+            "   • Assess rookie development curves and breakout potential",
+            "   • Factor in injury history and durability concerns",
+            "",
+            "6. COMPREHENSIVE OUTLOOK INTEGRATION",
+            "   • Synthesize all factors into unified player evaluations",
+            "   • Generate confidence-weighted recommendations",
+            "   • Identify both immediate and long-term value opportunities",
+            "   • Balance upside potential with floor considerations",
+            "",
+            "7. STRATEGIC DECISION FRAMEWORK",
+            "   • Prioritize top 5-7 targets with specific reasoning",
+            "   • Recommend drop candidates based on opportunity cost",
+            "   • Provide FAAB bidding guidance and priority levels",
+            "   • Suggest claim timing (immediate vs. speculative holds)"
         ]
         
         # Build enhanced prompt using existing infrastructure
