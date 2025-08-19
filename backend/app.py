@@ -1239,36 +1239,41 @@ def waiver_swap_analysis():
         
         # Build enhanced prompt with waiver wire methodology
         enhanced_prompt = PromptBuilder.build_enhanced_prompt(
-            analysis_type="waiver_swap_analysis",
-            context_data=f"CURRENT ROSTER:\n{roster_context}\n\nWAIVER WIRE CANDIDATE:\n{waiver_candidate_context}",
-            specific_examples=waiver_examples,
+            task_description="Tier-Based Waiver Swap Analysis - CRITICAL: Use tier classifications (QB1 vs QB2, RB1 vs RB2, etc.) to evaluate upgrades. QB1 players should almost always be prioritized over QB2 players.",
+            player_data=f"CURRENT ROSTER:\n{roster_context}\n\nWAIVER WIRE CANDIDATE:\n{waiver_candidate_context}",
+            examples=waiver_examples,
             methodology_steps=[
-                "1. WAIVER CANDIDATE VALUE ASSESSMENT",
-                "   • Evaluate current ECR and recent trend momentum",
-                "   • Assess role security and opportunity factors", 
-                "   • Consider injury/bye week timing implications",
-                "   • Determine upside potential vs floor outcomes",
+                "1. TIER-BASED VALUE ASSESSMENT",
+                "   • CRITICAL: Identify player tiers (QB1 vs QB2, RB1 vs RB2, etc.)",
+                "   • QB1 (top 12) >> QB2 (13-24) is almost always an upgrade worth making",
+                "   • Elite players (top 5 at position) should almost always be added",
+                "   • Evaluate ECR and positional ranking with clear tier context",
+                "   • Consider recent trend momentum and role security",
                 "",
-                "2. ROSTER COMPOSITION ANALYSIS",
-                "   • Identify positional strengths and weaknesses",
-                "   • Evaluate depth at each position for drop candidates",
-                "   • Consider bye week management implications",
-                "   • Assess short-term needs vs long-term roster building",
+                "2. POSITIONAL UPGRADE ANALYSIS",
+                "   • Compare current roster player tier vs waiver candidate tier",
+                "   • RULE: Moving from QB2 to QB1 is a high-priority upgrade",
+                "   • RULE: Any tier upgrade (QB2→QB1, RB2→RB1) is valuable",
+                "   • Consider positional scarcity (QB depth vs RB/WR depth)",
+                "   • Assess starter vs bench player impact on weekly lineup",
                 "",
-                "3. DROP CANDIDATE EVALUATION",
-                "   • Compare ECR values between waiver add and potential drops",
-                "   • Evaluate declining players or role changes",
-                "   • Consider positional replaceability on waiver wire",
-                "   • Factor in remaining upside vs waiver candidate upside",
+                "3. ROSTER COMPOSITION IMPACT",
+                "   • Identify which current player would be replaced/dropped",
+                "   • Compare tiers: is this a clear upgrade, lateral move, or downgrade?",
+                "   • Consider bye week management and roster flexibility",
+                "   • Evaluate bench depth at position after potential move",
                 "",
-                "4. ADD/DROP DECISION FRAMEWORK",
-                "   • Calculate net value improvement from the transaction",
-                "   • Assess roster construction impact and flexibility",
-                "   • Consider waiver priority cost vs expected benefit",
-                "   • Evaluate timing urgency (other managers may target player)",
+                "4. TIER-BASED DECISION FRAMEWORK",
+                "   • ADD if upgrading tiers (QB2→QB1 = clear add)",
+                "   • ADD if acquiring elite player (top 5 at position)",
+                "   • CONSIDER if lateral move within same tier",
+                "   • DO NOT ADD if downgrading tiers",
+                "   • Factor timing urgency for elite/tier-upgrade opportunities",
                 "",
-                "5. FINAL RECOMMENDATION SYNTHESIS",
-                "   • Provide clear ADD or DO NOT ADD verdict with reasoning",
+                "5. CLEAR RECOMMENDATION WITH TIER LOGIC",
+                "   • State explicit ADD/DO NOT ADD with tier-based reasoning",
+                "   • Example: 'ADD - Clear upgrade from QB2 to elite QB1'",
+                "   • Include confidence level: High (tier upgrades), Medium (lateral), Low (downgrades)",
                 "   • If ADD: specify exact player to DROP with justification",
                 "   • Quantify expected improvement and confidence level",
                 "   • Address any close-call factors or alternative scenarios"
@@ -1347,31 +1352,33 @@ def waiver_wire_analysis():
         
         # Build enhanced prompt with waiver wire methodology
         enhanced_prompt = PromptBuilder.build_enhanced_prompt(
-            analysis_type="waiver_wire_analysis",
-            context_data=f"CURRENT ROSTER:\n{roster_context}\n\nTOP AVAILABLE PLAYERS:\n{available_players_context}",
-            specific_examples=waiver_examples,
+            task_description="Tier-Based Waiver Wire Analysis - CRITICAL: Prioritize tier upgrades (QB2→QB1, RB2→RB1) and elite players (top 5 at position). Use clear tier classifications to guide recommendations.",
+            player_data=f"CURRENT ROSTER:\n{roster_context}\n\nTOP AVAILABLE PLAYERS:\n{available_players_context}",
+            examples=waiver_examples,
             methodology_steps=[
-                "1. ROSTER NEEDS ASSESSMENT",
-                "   • Analyze current roster strengths and weaknesses by position",
-                "   • Identify bye week vulnerabilities and depth concerns",
-                "   • Assess injury risk and backup needs",
+                "1. TIER-BASED ROSTER ASSESSMENT",
+                "   • Identify current roster tiers: QB1/QB2, RB1/RB2/RB3, WR1/WR2/WR3, TE1/TE2",
+                "   • Highlight obvious upgrade opportunities (QB2→QB1, RB3→RB2, etc.)",
+                "   • Assess bye week vulnerabilities within tier context",
                 "   • Consider positional scarcity and streaming requirements",
                 "",
-                "2. AVAILABLE PLAYER EVALUATION", 
-                "   • Rank available players by value and opportunity",
-                "   • Prioritize players with trending upward momentum",
-                "   • Consider role security and target share trends",
+                "2. TIER-BASED AVAILABLE PLAYER EVALUATION", 
+                "   • Categorize available players by tier (QB1, RB1, etc.)",
+                "   • PRIORITIZE: Elite players (top 5 at position) = highest priority",
+                "   • PRIORITIZE: Tier upgrades (adding QB1 when you have QB2)",
+                "   • Consider trending players and role security within tiers",
                 "   • Factor in schedule strength and matchup advantages",
                 "",
-                "3. WAIVER PRIORITY STRATEGY",
-                "   • Recommend 3-5 players in order of priority",
-                "   • Balance high-upside adds vs immediate-need fills", 
-                "   • Consider waiver position cost vs expected benefit",
-                "   • Account for league competition and likely claims",
+                "3. TIER-UPGRADE PRIORITY STRATEGY",
+                "   • TOP PRIORITY: Elite players (QB1, top 5 RB/WR, TE1)",
+                "   • HIGH PRIORITY: Clear tier upgrades (QB2→QB1, RB2→RB1)",
+                "   • MEDIUM PRIORITY: Same-tier improvements or depth adds",
+                "   • Balance immediate tier upgrades vs future potential",
+                "   • Account for league competition for elite/tier-upgrade players",
                 "",
-                "4. DROP CANDIDATE IDENTIFICATION",
-                "   • Identify 1-2 drop candidates if roster moves needed",
-                "   • Prioritize players with declining roles or value",
+                "4. TIER-AWARE DROP CANDIDATE IDENTIFICATION",
+                "   • Identify drop candidates from lowest tiers first",
+                "   • Prioritize players with declining roles or tier downgrades",
                 "   • Consider bye week timing for temporary drops",
                 "   • Avoid dropping players with remaining upside potential",
                 "",
@@ -2126,9 +2133,17 @@ def parse_yahoo_league_context(settings_data, players_data, teams_data):
                 'season': basic_info.get('season', '2025')
             }
             
-            # Detailed settings (second element) 
-            settings_detail = league_data[1].get('settings', {}) if len(league_data) > 1 else {}
-            roster_positions = settings_detail.get('roster_positions', {})
+            # Detailed settings (second element) - handle both dict and list cases
+            settings_detail = {}
+            if len(league_data) > 1:
+                league_element = league_data[1]
+                if isinstance(league_element, dict):
+                    settings_detail = league_element.get('settings', {})
+                elif isinstance(league_element, list) and len(league_element) > 0:
+                    # Sometimes Yahoo returns settings as a list
+                    settings_detail = league_element[0].get('settings', {}) if isinstance(league_element[0], dict) else {}
+            
+            roster_positions = settings_detail.get('roster_positions', {}) if isinstance(settings_detail, dict) else {}
             
             if isinstance(roster_positions, dict):
                 positions_array = []
@@ -2148,7 +2163,14 @@ def parse_yahoo_league_context(settings_data, players_data, teams_data):
         players_league_data = players_content.get('league', [])
         
         if isinstance(players_league_data, list) and len(players_league_data) >= 2:
-            players_container = players_league_data[1].get('players', {})
+            # Handle both dict and list cases for players data
+            players_element = players_league_data[1]
+            players_container = {}
+            if isinstance(players_element, dict):
+                players_container = players_element.get('players', {})
+            elif isinstance(players_element, list) and len(players_element) > 0:
+                # Sometimes Yahoo returns players data as a list
+                players_container = players_element[0].get('players', {}) if isinstance(players_element[0], dict) else {}
             ownership_data = []
             available_count = 0
             owned_count = 0

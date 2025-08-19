@@ -208,21 +208,53 @@ class ContextFormatter:
         
         context = f"{base_context}\n\n**WAIVER WIRE EVALUATION:**"
         
-        # Current value vs waiver cost
+        # Enhanced ECR and positional ranking
         ecr_overall = player_data.get('ecr_overall')
+        ecr_positional = player_data.get('ecr_positional')
+        position = player_data.get('position', 'N/A')
+        
         if ecr_overall:
-            context += f"\n- Current ECR: {ecr_overall:.1f}"
+            context += f"\n- Overall ECR: {ecr_overall:.1f}"
             
-            # Waiver value assessment
+            # Add positional rank with tier context
+            if ecr_positional:
+                context += f"\n- Positional Rank: {position}#{int(ecr_positional)}"
+                
+                # Add tier classification for better AI understanding
+                if position == 'QB':
+                    if ecr_positional <= 12:
+                        tier = "QB1 (Elite/Starter)"
+                    elif ecr_positional <= 24:
+                        tier = "QB2 (Backup/Streaming)"
+                    else:
+                        tier = "QB3+ (Deep League Only)"
+                elif position in ['RB', 'WR']:
+                    if ecr_positional <= 24:
+                        tier = f"{position}1 (Elite)"
+                    elif ecr_positional <= 48:
+                        tier = f"{position}2 (Solid)"
+                    else:
+                        tier = f"{position}3+ (Depth)"
+                elif position == 'TE':
+                    if ecr_positional <= 12:
+                        tier = "TE1 (Elite)"
+                    else:
+                        tier = "TE2+ (Streaming)"
+                else:
+                    tier = "Standard"
+                    
+                context += f" → {tier}"
+            
+            # Waiver value assessment with enhanced tiers
             if ecr_overall < 50:
-                value_tier = "High-Value Pickup"
+                value_tier = "⭐ High-Value Pickup"
             elif ecr_overall < 100:
-                value_tier = "Solid Addition"
+                value_tier = "✅ Solid Addition"
             elif ecr_overall < 150:
-                value_tier = "Depth/Streaming Option"
+                value_tier = "📊 Depth/Streaming Option"
             else:
-                value_tier = "Deep League Only"
-            context += f" ({value_tier})"
+                value_tier = "🔍 Deep League Only"
+            context += f"\n- Value Assessment: {value_tier}"
         
         # Recent trend for waiver timing
         rank_delta = player_data.get('rank_delta_overall')
