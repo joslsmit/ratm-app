@@ -2,7 +2,7 @@
 
 > **File Type**: GO-FORWARD  
 > **Review Priority**: Medium  
-> **Last Updated**: August 18, 2025  
+> **Last Updated**: August 19, 2025  
 > **Purpose**: General project overview and technology stack
 
 ## 1. Project Overview
@@ -50,5 +50,5 @@ The following features are planned for development, leveraging the new Yahoo API
 
 *   **✅ Personalized Roster Analysis (COMPLETED):** "My Team" view displays a user's Yahoo roster with integrated AI analysis for each player.
 *   **✅ AI-Powered Waiver Wire Assistant (COMPLETED):** Enhanced waiver tool provides personalized recommendations based on user's specific league and roster needs with Yahoo mode toggle and available players grid.
-*   **Personalized "Market Inefficiency" Finder (NEXT PRIORITY):** This tool will be enhanced to highlight players who are undervalued in a user's specific Yahoo league compared to the app's ECR and AI analysis.
+*   **✅ Yahoo-Enhanced Market Inefficiency Finder (COMPLETED):** This tool highlights players who are undervalued in a user's specific Yahoo league compared to the app's ECR and AI analysis, with league-specific scoring and ownership context.
 *   **League-Aware Trade Analyzer (Future Consideration):** The trade analyzer will be upgraded to analyze trades within the context of the two teams' actual rosters, pulled from Yahoo.

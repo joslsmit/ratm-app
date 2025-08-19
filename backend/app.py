@@ -2098,6 +2098,246 @@ def parse_yahoo_waiver_response(data):
         traceback.print_exc()
         return []
 
+def parse_yahoo_league_context(settings_data, players_data, teams_data):
+    """
+    Parse Yahoo API responses for comprehensive league context.
+    Returns structured league data for market inefficiency analysis or None on failure.
+    """
+    try:
+        league_context = {
+            'league_settings': {},
+            'player_ownership': [],
+            'team_structure': {},
+            'availability_stats': {}
+        }
+        
+        # Parse league settings
+        settings_content = settings_data.get('fantasy_content', {})
+        league_data = settings_content.get('league', [])
+        
+        if isinstance(league_data, list) and len(league_data) >= 2:
+            # Basic league info (first element)
+            basic_info = league_data[0] if isinstance(league_data[0], dict) else {}
+            league_context['league_settings'] = {
+                'league_key': basic_info.get('league_key', ''),
+                'name': basic_info.get('name', ''),
+                'num_teams': basic_info.get('num_teams', 0),
+                'scoring_type': basic_info.get('scoring_type', 'head'),
+                'season': basic_info.get('season', '2025')
+            }
+            
+            # Detailed settings (second element) 
+            settings_detail = league_data[1].get('settings', {}) if len(league_data) > 1 else {}
+            roster_positions = settings_detail.get('roster_positions', {})
+            
+            if isinstance(roster_positions, dict):
+                positions_array = []
+                for key, position_data in roster_positions.items():
+                    if key.isdigit() and isinstance(position_data, dict):
+                        pos_info = position_data.get('roster_position', {})
+                        positions_array.append({
+                            'position': pos_info.get('position', ''),
+                            'position_type': pos_info.get('position_type', ''),
+                            'count': pos_info.get('count', 0)
+                        })
+                
+                league_context['league_settings']['roster_positions'] = positions_array
+        
+        # Parse player ownership data
+        players_content = players_data.get('fantasy_content', {})
+        players_league_data = players_content.get('league', [])
+        
+        if isinstance(players_league_data, list) and len(players_league_data) >= 2:
+            players_container = players_league_data[1].get('players', {})
+            ownership_data = []
+            available_count = 0
+            owned_count = 0
+            
+            if isinstance(players_container, dict):
+                for key, player_container in players_container.items():
+                    if not key.isdigit():
+                        continue
+                    
+                    player_info = player_container.get('player', [])
+                    if not isinstance(player_info, list) or len(player_info) == 0:
+                        continue
+                    
+                    # Extract basic player data
+                    player_data_list = player_info[0]
+                    if not isinstance(player_data_list, list) or len(player_data_list) == 0:
+                        continue
+                    
+                    player_basic = player_data_list[0]
+                    name_data = player_basic.get('name', {})
+                    full_name = name_data.get('full', '') if isinstance(name_data, dict) else str(name_data or '')
+                    
+                    if not full_name:
+                        continue
+                    
+                    # Extract ownership information (check ownership structure in player data)
+                    ownership_info = None
+                    if len(player_info) > 1 and isinstance(player_info[1], dict):
+                        ownership_info = player_info[1].get('ownership', {})
+                    
+                    ownership_status = 'available'  # Default
+                    owner_team_key = None
+                    
+                    if ownership_info and isinstance(ownership_info, dict):
+                        ownership_type = ownership_info.get('ownership_type', '')
+                        if ownership_type == 'team':
+                            ownership_status = 'owned'
+                            owner_team_key = ownership_info.get('owner_team_key', '')
+                            owned_count += 1
+                        else:
+                            available_count += 1
+                    else:
+                        available_count += 1
+                    
+                    # Extract positions
+                    positions = []
+                    for pos_data in player_basic.get('eligible_positions', []):
+                        if isinstance(pos_data, dict) and pos_data.get('position'):
+                            positions.append(pos_data['position'])
+                    
+                    ownership_data.append({
+                        'player_key': player_basic.get('player_key', ''),
+                        'player_id': player_basic.get('player_id', ''),
+                        'name': full_name,
+                        'team': player_basic.get('editorial_team_abbr', ''),
+                        'positions': positions,
+                        'primary_position': positions[0] if positions else 'Unknown',
+                        'ownership_status': ownership_status,
+                        'owner_team_key': owner_team_key
+                    })
+            
+            league_context['player_ownership'] = ownership_data
+            league_context['availability_stats'] = {
+                'total_players': len(ownership_data),
+                'available_players': available_count,
+                'owned_players': owned_count,
+                'ownership_percentage': (owned_count / len(ownership_data) * 100) if ownership_data else 0
+            }
+        
+        # Parse team structure for competitive analysis
+        teams_content = teams_data.get('fantasy_content', {})
+        teams_league_data = teams_content.get('league', [])
+        
+        if isinstance(teams_league_data, list) and len(teams_league_data) >= 2:
+            teams_container = teams_league_data[1].get('teams', {})
+            team_info = []
+            
+            if isinstance(teams_container, dict):
+                for key, team_container in teams_container.items():
+                    if not key.isdigit():
+                        continue
+                    
+                    team_data = team_container.get('team', [[]])[0]
+                    if isinstance(team_data, list) and len(team_data) > 0:
+                        team_basic = team_data[0] if isinstance(team_data[0], dict) else {}
+                        team_info.append({
+                            'team_key': team_basic.get('team_key', ''),
+                            'team_name': team_basic.get('name', ''),
+                            'manager_name': team_basic.get('managers', [{}])[0].get('manager', {}).get('nickname', '') if team_basic.get('managers') else ''
+                        })
+            
+            league_context['team_structure'] = {
+                'teams': team_info,
+                'total_teams': len(team_info)
+            }
+        
+        print(f"DEBUG: Successfully parsed league context with {len(league_context['player_ownership'])} players")
+        return league_context
+        
+    except Exception as e:
+        print(f"ERROR: Failed to parse Yahoo league context: {e}")
+        traceback.print_exc()
+        return None
+
+@app.route('/api/yahoo/league_context')
+def get_yahoo_league_context():
+    """
+    Fetches comprehensive league context for market inefficiency analysis.
+    Expects league_key as query parameter and token in Authorization header.
+    Returns league settings, player ownership, and roster structure for AI analysis.
+    """
+    try:
+        # Extract league_key parameter (required)
+        league_key = request.args.get('league_key')
+        if not league_key:
+            return jsonify({"error": "league_key parameter is required"}), 400
+            
+        # Extract Authorization header (required)
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Valid Authorization header with Bearer token is required"}), 401
+            
+        access_token = auth_header.split(' ')[1]
+        
+        # Build Yahoo API URLs for comprehensive league context
+        league_settings_url = f"https://fantasysports.yahooapis.com/fantasy/v2/league/{league_key}/settings"
+        league_players_url = f"https://fantasysports.yahooapis.com/fantasy/v2/league/{league_key}/players;status=ALL"
+        league_teams_url = f"https://fantasysports.yahooapis.com/fantasy/v2/league/{league_key}/teams"
+        
+        yahoo_headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json'
+        }
+        yahoo_params = {'format': 'json'}
+        
+        print(f"DEBUG: Fetching league context for {league_key}")
+        
+        # Make parallel API requests for efficiency
+        settings_response = requests.get(league_settings_url, headers=yahoo_headers, params=yahoo_params, timeout=10)
+        players_response = requests.get(league_players_url, headers=yahoo_headers, params=yahoo_params, timeout=10)
+        teams_response = requests.get(league_teams_url, headers=yahoo_headers, params=yahoo_params, timeout=10)
+        
+        # Handle HTTP errors with specific messaging
+        responses = [
+            (settings_response, "league settings"),
+            (players_response, "player data"),
+            (teams_response, "team data")
+        ]
+        
+        for response, data_type in responses:
+            if response.status_code == 401:
+                print(f"ERROR: Yahoo API authentication failed for {data_type}")
+                return jsonify({"error": "Yahoo authentication failed. Please re-authenticate."}), 401
+            elif response.status_code == 403:
+                print(f"ERROR: Yahoo API access forbidden for {data_type}")
+                return jsonify({"error": f"Insufficient permissions to access {data_type}."}), 403
+            elif response.status_code == 404:
+                print(f"ERROR: Yahoo API not found for {data_type}: {league_key}")
+                return jsonify({"error": f"League not found or {data_type} not accessible."}), 404
+            elif response.status_code != 200:
+                print(f"ERROR: Yahoo API returned status {response.status_code} for {data_type}: {response.text}")
+                return jsonify({"error": f"Yahoo API error fetching {data_type}: {response.status_code}"}), 500
+        
+        # Parse JSON responses with defensive error handling
+        try:
+            settings_data = settings_response.json()
+            players_data = players_response.json()
+            teams_data = teams_response.json()
+            print(f"DEBUG: Received Yahoo responses with keys: settings={settings_data.keys()}, players={players_data.keys()}, teams={teams_data.keys()}")
+        except ValueError as e:
+            print(f"ERROR: Failed to parse Yahoo API JSON responses: {e}")
+            return jsonify({"error": "Invalid response format from Yahoo API"}), 500
+        
+        # Parse using defensive pattern matching existing Yahoo endpoints
+        league_context = parse_yahoo_league_context(settings_data, players_data, teams_data)
+        if league_context is None:
+            print("ERROR: Failed to parse Yahoo league context response structure")
+            return jsonify({"error": "Unable to parse league context data"}), 500
+            
+        return jsonify(league_context)
+        
+    except requests.exceptions.RequestException as e:
+        print(f"ERROR: Yahoo API request failed: {e}")
+        return jsonify({"error": "Failed to connect to Yahoo API"}), 500
+    except Exception as e:
+        print(f"ERROR: Unexpected error in yahoo league context: {e}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/yahoo_waiver_analysis', methods=['POST'])
 def yahoo_waiver_analysis():
     """
@@ -2195,6 +2435,244 @@ def yahoo_waiver_analysis():
         print(f"ERROR: Yahoo waiver analysis failed: {e}")
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/yahoo/league_inefficiencies', methods=['POST'])
+def yahoo_league_inefficiencies():
+    """
+    Enhanced market inefficiency analysis using actual Yahoo league context.
+    Provides league-specific sleeper and bust identification based on ownership patterns,
+    league settings, and competitive landscape analysis.
+    """
+    try:
+        user_key = request.headers.get('X-API-Key')
+        data = request.json
+        
+        league_key = data.get('league_key')
+        position = data.get('position', 'all')
+        league_context = data.get('league_context', {})
+        
+        if not league_key or not league_context:
+            return jsonify({"error": "league_key and league_context are required"}), 400
+        
+        # Extract league-specific data
+        league_settings = league_context.get('league_settings', {})
+        player_ownership = league_context.get('player_ownership', [])
+        availability_stats = league_context.get('availability_stats', {})
+        team_structure = league_context.get('team_structure', {})
+        
+        # Build league-aware candidate analysis
+        league_candidates = []
+        
+        # Focus on available players for deeper inefficiency analysis
+        available_players = [p for p in player_ownership if p['ownership_status'] == 'available']
+        
+        for player in available_players:
+            if position != 'all' and player['primary_position'] != position:
+                continue
+            
+            # Normalize player name for local database lookup
+            normalized_name = normalize_player_name(player['name'])
+            
+            # Get enhanced player context using existing function
+            player_context = get_player_context(
+                player['name'],
+                ecr_type_preference='overall',
+                combined_player_data_cache=combined_player_data_cache,
+                player_name_to_id=player_name_to_id,
+                player_data_cache=player_data_cache,
+                static_ecr_overall_data=static_ecr_overall_data,
+                static_ecr_positional_data=static_ecr_positional_data,
+                static_ecr_rookie_data=static_ecr_rookie_data
+            )
+            
+            # Skip players without sufficient data
+            if not player_context.get('ecr'):
+                continue
+            
+            # Calculate league-specific inefficiency metrics
+            league_specific_context = calculate_league_inefficiency_metrics(
+                player_context, league_settings, availability_stats, team_structure
+            )
+            
+            # Merge Yahoo data with local enrichment and league context
+            enhanced_player = {
+                **player,  # Yahoo ownership data
+                **player_context,  # Local ECR and analysis data
+                **league_specific_context  # League-specific metrics
+            }
+            
+            league_candidates.append(enhanced_player)
+        
+        # Sort by league-adjusted inefficiency score (descending for sleepers)
+        league_candidates.sort(key=lambda x: x.get('league_inefficiency_score', 0), reverse=True)
+        
+        # Limit candidates for AI analysis (top 50 most interesting)
+        analysis_candidates = league_candidates[:50]
+        
+        # Build league context summary for AI
+        league_summary = build_league_context_summary(league_settings, availability_stats, team_structure)
+        
+        # Build candidates context for AI analysis
+        candidates_context = build_candidates_context_for_ai(analysis_candidates)
+        
+        # Get market inefficiency examples
+        market_examples = ExampleLibrary.get_examples_for_analysis_type('yahoo_market_inefficiency')
+        
+        # Build enhanced prompt with Yahoo league-specific methodology
+        enhanced_prompt = PromptBuilder.build_enhanced_prompt(
+            task_description="Yahoo League Market Inefficiency Analysis - Identify league-specific sleeper and bust opportunities based on ownership patterns and league context",
+            player_data=f"LEAGUE CONTEXT:\n{league_summary}\n\nAVAILABLE PLAYERS ANALYSIS:\n{candidates_context}",
+            methodology_steps=[
+                "1. LEAGUE-SPECIFIC OPPORTUNITY ASSESSMENT",
+                "   • Evaluate player availability vs. general market ECR rankings",
+                "   • Consider league size impact on player scarcity and value",
+                "   • Assess roster construction needs based on league settings",
+                "   • Factor in competitive landscape and manager sophistication",
+                "",
+                "2. OWNERSHIP PATTERN ANALYSIS",
+                "   • Identify high-ECR players surprisingly available in league",
+                "   • Evaluate position scarcity based on roster requirements",
+                "   • Consider bench depth needs and streaming opportunities",
+                "   • Assess handcuff availability and injury insurance options",
+                "",
+                "3. LEAGUE-ADJUSTED VALUE IDENTIFICATION",
+                "   • Compare player ECR to typical ownership patterns in similar leagues",
+                "   • Identify players with upside potential overlooked by league",
+                "   • Evaluate schedule-based advantages and matchup benefits",
+                "   • Consider league-specific scoring system impact on player value",
+                "",
+                "4. STRATEGIC ACQUISITION RECOMMENDATIONS",
+                "   • Prioritize sleepers with highest league-specific upside",
+                "   • Identify potential busts being overvalued by league managers",
+                "   • Recommend specific acquisition strategies (waivers, trades, FA)",
+                "   • Consider timing and competition for targeted players"
+            ],
+            examples=market_examples
+        )
+        
+        # Make AI request and process response
+        response_text = make_gemini_request(enhanced_prompt, user_key)
+        processed_response = process_ai_response_v2(response_text, 'yahoo_league_market')
+        
+        # Structure response with league context
+        return jsonify({
+            'result': processed_response,
+            'league_key': league_key,
+            'league_context_summary': {
+                'league_name': league_settings.get('name', ''),
+                'total_teams': league_settings.get('num_teams', 0),
+                'available_players': availability_stats.get('available_players', 0),
+                'ownership_percentage': availability_stats.get('ownership_percentage', 0)
+            },
+            'candidates_analyzed': len(analysis_candidates),
+            'total_available': len(available_players)
+        })
+        
+    except Exception as e:
+        print(f"ERROR: Yahoo league inefficiency analysis failed: {e}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+def calculate_league_inefficiency_metrics(player_context, league_settings, availability_stats, team_structure):
+    """
+    Calculate league-specific inefficiency metrics for a player.
+    Returns dictionary with league-adjusted scores and contextual data.
+    """
+    try:
+        ecr = player_context.get('ecr', 999)
+        sd = player_context.get('sd', 0)
+        num_teams = league_settings.get('num_teams', 12)
+        ownership_pct = availability_stats.get('ownership_percentage', 0)
+        
+        # League-adjusted value score (lower ECR = higher value, adjusted for league size)
+        base_value_score = max(0, (200 - ecr) / 200) * 100
+        
+        # League size adjustment (smaller leagues = higher value threshold)
+        league_size_multiplier = max(0.8, 1.2 - (num_teams - 10) * 0.05)
+        
+        # Standard deviation bonus (higher disagreement = more opportunity)
+        sd_bonus = min(sd * 10, 25) if sd else 0
+        
+        # Availability bonus (being available in high-ownership league = inefficiency)
+        availability_bonus = (ownership_pct / 100) * 20
+        
+        # Calculate final league inefficiency score
+        league_inefficiency_score = (base_value_score * league_size_multiplier) + sd_bonus + availability_bonus
+        
+        return {
+            'league_inefficiency_score': round(league_inefficiency_score, 2),
+            'league_size_factor': round(league_size_multiplier, 2),
+            'standard_deviation_bonus': round(sd_bonus, 2),
+            'availability_bonus': round(availability_bonus, 2),
+            'league_context_notes': f"Available in {num_teams}-team league with {ownership_pct:.1f}% overall ownership"
+        }
+        
+    except Exception as e:
+        print(f"ERROR: Failed to calculate league inefficiency metrics: {e}")
+        return {
+            'league_inefficiency_score': 0,
+            'league_size_factor': 1.0,
+            'standard_deviation_bonus': 0,
+            'availability_bonus': 0,
+            'league_context_notes': 'Unable to calculate league-specific metrics'
+        }
+
+def build_league_context_summary(league_settings, availability_stats, team_structure):
+    """Build formatted league context for AI analysis."""
+    try:
+        league_name = league_settings.get('name', 'Unknown League')
+        num_teams = league_settings.get('num_teams', 0)
+        total_players = availability_stats.get('total_players', 0)
+        available_players = availability_stats.get('available_players', 0)
+        ownership_pct = availability_stats.get('ownership_percentage', 0)
+        
+        # Build roster positions summary
+        roster_positions = league_settings.get('roster_positions', [])
+        positions_summary = []
+        for pos_info in roster_positions:
+            position = pos_info.get('position', '')
+            count = pos_info.get('count', 0)
+            if position and count > 0:
+                positions_summary.append(f"{count} {position}")
+        
+        roster_structure = " + ".join(positions_summary) if positions_summary else "Standard roster"
+        
+        return f"""
+League: {league_name}
+Teams: {num_teams}
+Roster Structure: {roster_structure}
+Player Pool: {total_players} total players
+Availability: {available_players} available ({100-ownership_pct:.1f}% available)
+Competitive Level: {'High' if ownership_pct > 85 else 'Medium' if ownership_pct > 70 else 'Low'} (based on {ownership_pct:.1f}% ownership rate)
+"""
+    except Exception as e:
+        return f"League context unavailable: {e}"
+
+def build_candidates_context_for_ai(candidates):
+    """Build formatted candidates list for AI analysis."""
+    try:
+        if not candidates:
+            return "No qualified candidates found for analysis."
+        
+        analysis_lines = []
+        for player in candidates[:25]:  # Top 25 for prompt efficiency
+            name = player.get('name', 'Unknown')
+            position = player.get('primary_position', 'Unknown')
+            team = player.get('team', 'Unknown')
+            ecr = player.get('ecr', 'N/A')
+            sd = player.get('sd', 'N/A')
+            inefficiency_score = player.get('league_inefficiency_score', 0)
+            league_notes = player.get('league_context_notes', '')
+            
+            analysis_lines.append(
+                f"- **{name}** ({position}, {team}): ECR {ecr}, SD {sd}, "
+                f"League Score: {inefficiency_score:.1f} ({league_notes})"
+            )
+        
+        return "\n".join(analysis_lines)
+        
+    except Exception as e:
+        return f"Candidates analysis unavailable: {e}"
 
 if __name__ == '__main__':
     # This block is for local development only.

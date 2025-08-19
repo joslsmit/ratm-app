@@ -2,7 +2,7 @@
 
 > **File Type**: GO-FORWARD  
 > **Review Priority**: Medium  
-> **Last Updated**: August 18, 2025  
+> **Last Updated**: August 19, 2025  
 > **Purpose**: Product vision, features, and user experience specifications
 
 ## 1. Product Vision & Mission
@@ -16,7 +16,7 @@ The application provides a suite of tools categorized for player analysis and te
 *   **Player Dossier:** Provides in-depth analysis for individual players, including their Expert Consensus Rankings (ECR), Standard Deviation (SD) in rankings, best/worst ranks, and AI-generated insights (depth chart role, value analysis, risk factors, outlook, and final verdict). Features player lookup with autocomplete.
 *   **Rookie Rankings:** Offers ranked lists of rookies, sortable by position, with AI-generated analysis.
 *   **Positional Tiers:** Groups players into tiers by position (e.g., QB, RB, WR, TE) based on ECR, providing a visual and analytical understanding of player value within their position.
-*   **Market Inefficiency Finder:** Identifies potential "sleepers" and "busts" by comparing player rankings and other data points, highlighting players whose perceived value might differ from their actual potential.
+*   **Market Inefficiency Finder (Yahoo Enhanced):** ✅ Identifies potential "sleepers" and "busts" with two modes: (1) Traditional mode for general market analysis, and (2) Yahoo mode for authenticated users providing league-specific inefficiency analysis based on actual ownership patterns and league characteristics.
 *   **Trending Players:** Displays players currently being added or dropped most frequently on Sleeper.app, providing real-time market sentiment.
 
 ### Team Management Tools:
@@ -25,6 +25,7 @@ The application provides a suite of tools categorized for player analysis and te
 *   **Draft Assistant:** Supports users during live drafts by providing real-time pick evaluations, suggesting optimal positions to target based on roster composition, and offering overall roster balance analysis.
 *   **Target List:** Allows users to maintain a personalized list of players they want to target, enabling quick access to their data and analysis.
 *   **Waiver Wire Assistant (Yahoo Enhanced):** ✅ Aids in making informed waiver wire claims with two modes: (1) Traditional mode for manual roster input, and (2) Yahoo mode for authenticated users showing actual league free agents and personalized AI recommendations based on real roster and available players.
+*   **Market Inefficiency Finder (Yahoo Enhanced):** ✅ Identifies undervalued and overvalued players with two modes: (1) Traditional mode for general market analysis, and (2) Yahoo mode for league-specific analysis incorporating ownership patterns, league size, competitive level, and personalized player recommendations.
 
 ### Utility Features:
 *   **API Key Management:** Users provide their own Google Gemini API key, stored locally in their browser for privacy and security.
