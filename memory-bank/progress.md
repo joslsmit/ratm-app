@@ -7,6 +7,9 @@
 
 This document tracks the progress of the RATM Draft Kit project against the defined deployment and integration plan.
 
+## 📁 Memory Bank Organization
+**Historical Records**: Completed implementation guides, phase logs, and AI enhancement documentation are archived in the `memory-bank/records/` subdirectory for reference. Active files remain at the root level for easy access.
+
 ## Overall Deployment Goal
 Make the RATM Draft Kit app live for friends, affordably and reliably, ensuring it's always online to handle Yahoo API connections and preparing for future development.
 
