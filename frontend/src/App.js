@@ -55,7 +55,7 @@ function App() {
     setShowApiKeyModal
   } = useContext(AppContext);
 
-  const { makeApiRequest } = useApi();
+  const { makeApiRequest, get } = useApi();
 
   const [navSections, setNavSections] = useState({
     playerAnalysis: false,
@@ -364,6 +364,152 @@ function App() {
       if (loader) loader.style.display = 'none';
     }
   }, [makeApiRequest, setMarketInefficiencies]);
+
+  // Helper function to get player data from static sources
+  const getPlayerDataFromStatic = useCallback((playerName) => {
+    try {
+      // Use existing staticPlayerData or search functions
+      const normalizedName = playerName.toLowerCase();
+      const foundPlayer = Object.keys(staticPlayerData).find(key => 
+        key.toLowerCase().includes(normalizedName) || 
+        normalizedName.includes(key.toLowerCase())
+      );
+      
+      if (foundPlayer) {
+        const data = staticPlayerData[foundPlayer];
+        return {
+          ecr: data.ecr,
+          sd: data.sd,
+          best: data.best,
+          worst: data.worst,
+          rank_delta: data.rank_delta,
+          is_rookie: data.is_rookie || false,
+          position: data.position,
+          team: data.team
+        };
+      }
+      
+      return {};
+    } catch (error) {
+      console.error('Error getting static player data:', error);
+      return {};
+    }
+  }, [staticPlayerData]);
+
+  // Add helper function to parse AI response
+  const parseMarketInefficiencyResponse = useCallback((aiResponse) => {
+    try {
+      // The AI response should be markdown text containing structured analysis
+      // Parse for sleepers and busts sections
+      const sleepers = [];
+      const busts = [];
+      
+      // Split response into sections
+      const sections = aiResponse.split(/#{1,3}\s*(sleepers?|busts?|undervalued|overvalued)/i);
+      
+      for (let i = 1; i < sections.length; i += 2) {
+        const sectionType = sections[i].toLowerCase();
+        const sectionContent = sections[i + 1] || '';
+        
+        // Parse player entries from section content
+        const playerMatches = sectionContent.match(/\*\*([^*]+)\*\*[^:]*:([^]*?)(?=\*\*|\n\n|$)/g);
+        
+        if (playerMatches) {
+          const players = playerMatches.map(match => {
+            const nameMatch = match.match(/\*\*([^*]+)\*\*/);
+            const justificationMatch = match.match(/:\s*([^]*?)(?=\*\*|\n\n|$)/);
+            
+            const name = nameMatch ? nameMatch[1].trim() : '';
+            const justification = justificationMatch ? justificationMatch[1].trim() : '';
+            
+            // Extract player data from existing static data if available
+            const playerData = getPlayerDataFromStatic(name);
+            
+            return {
+              name: name,
+              justification: justification,
+              confidence: 'medium', // Default confidence
+              ...playerData
+            };
+          });
+          
+          if (sectionType.includes('sleeper') || sectionType.includes('undervalued')) {
+            sleepers.push(...players);
+          } else if (sectionType.includes('bust') || sectionType.includes('overvalued')) {
+            busts.push(...players);
+          }
+        }
+      }
+      
+      return { sleepers, busts };
+      
+    } catch (error) {
+      console.error('Error parsing market inefficiency response:', error);
+      return { 
+        sleepers: [], 
+        busts: [],
+        error: 'Unable to parse analysis results.' 
+      };
+    }
+  }, [getPlayerDataFromStatic]);
+
+  // Yahoo market inefficiency analysis handler
+  const handleYahooMarketInefficiencies = useCallback(async (leagueKey, position, token) => {
+    const loader = document.getElementById('market-loader');
+    if (loader) loader.style.display = 'block';
+    setMarketInefficiencies({ sleepers: [], busts: [] });
+    
+    try {
+      // Parse token object and extract access_token
+      const tokenObject = JSON.parse(token);
+      const authHeader = `Bearer ${tokenObject.access_token}`;
+      
+      // First, fetch comprehensive league context
+      const leagueContext = await get(`/yahoo/league_context?league_key=${leagueKey}`, {
+        headers: {
+          'Authorization': authHeader
+        }
+      });
+      
+      // Call enhanced Yahoo league inefficiency analysis endpoint
+      const analysisData = await makeApiRequest('/yahoo/league_inefficiencies', {
+        league_key: leagueKey,
+        position: position,
+        league_context: leagueContext
+      });
+      
+      if (analysisData && analysisData.result) {
+        // Parse AI response for sleepers and busts
+        const parsedResults = parseMarketInefficiencyResponse(analysisData.result);
+        setMarketInefficiencies(parsedResults);
+      } else {
+        setMarketInefficiencies({ 
+          sleepers: [], 
+          busts: [],
+          error: 'The Analyst returned an empty response.' 
+        });
+      }
+    } catch (error) {
+      console.error('Yahoo market inefficiency analysis failed:', error);
+      // Handle 401 token expiration following existing patterns
+      if (error.response && error.response.status === 401) {
+        setMarketInefficiencies({ 
+          sleepers: [], 
+          busts: [],
+          error: 'Yahoo authentication expired. Please re-authenticate with Yahoo.' 
+        });
+        localStorage.removeItem('yahoo_token');
+      } else {
+        setMarketInefficiencies({ 
+          sleepers: [], 
+          busts: [],
+          error: `Analysis failed: ${error.message}` 
+        });
+      }
+    } finally {
+      if (loader) loader.style.display = 'none';
+    }
+  }, [get, makeApiRequest, setMarketInefficiencies, parseMarketInefficiencyResponse]);
 
   const generateRookieRankings = useCallback(async () => {
     const loader = document.getElementById('rookie-loader');
@@ -771,8 +917,11 @@ function App() {
             <MarketInefficiencyFinder
               marketInefficiencies={marketInefficiencies}
               findMarketInefficiencies={findMarketInefficiencies}
+              onFindYahooInefficiencies={handleYahooMarketInefficiencies}
+              onLeaguesUpdate={setUserLeagues}
               handleAddToTargets={handleAddToTargets}
               getOverallSdLabel={getOverallSdLabel}
+              isLoading={false}
             />
           )}
 

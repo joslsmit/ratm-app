@@ -6,6 +6,7 @@ const YahooLeagues = () => {
     const [leagues, setLeagues] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [yahooToken, setYahooToken] = useState(null);
     const { get } = useApi();
 
     // This single, consolidated useEffect handles the entire authentication and data fetching flow.

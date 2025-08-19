@@ -178,3 +178,149 @@
 .addTargetBtnSmall:hover {
   background-color: rgba(0, 123, 255, 0.2);
 }
+
+/* Yahoo Mode Integration Styles */
+.yahooModeSection {
+  background-color: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.modeToggle {
+  margin-bottom: 15px;
+}
+
+.modeToggle label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-color);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.modeToggle input[type="checkbox"] {
+  transform: scale(1.2);
+}
+
+.leagueSelector {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.leagueSelector label {
+  color: var(--text-color);
+  font-weight: 500;
+}
+
+.leagueSelector select {
+  padding: 10px;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  background-color: var(--input-background);
+  color: var(--text-color);
+  font-size: 1em;
+}
+
+.loadingText {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.errorText {
+  color: var(--danger-color);
+  font-size: 0.9em;
+  padding: 8px;
+  background-color: rgba(244, 67, 54, 0.1);
+  border-radius: 4px;
+}
+
+.selectionPrompt {
+  color: var(--text-muted);
+  font-style: italic;
+  margin-top: 10px;
+  margin-bottom: 0;
+}
+
+.leagueContextBanner {
+  width: 100%;
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+  color: var(--button-text);
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.leagueContextBanner h3 {
+  margin: 0 0 5px 0;
+  font-size: 1.3em;
+}
+
+.leagueContextBanner p {
+  margin: 0;
+  opacity: 0.9;
+  font-size: 0.95em;
+}
+
+.leagueScore {
+  background-color: var(--primary-color);
+  color: var(--button-text);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.8em;
+  font-weight: bold;
+}
+
+.leagueContext {
+  background-color: rgba(0, 123, 255, 0.1);
+  border-left: 3px solid var(--primary-color);
+  padding: 8px 12px;
+  margin-top: 10px;
+  border-radius: 0 4px 4px 0;
+}
+
+.leagueContext small {
+  color: var(--text-muted);
+  font-size: 0.85em;
+}
+
+/* Enhanced mobile responsiveness */
+@media (max-width: 768px) {
+  .yahooModeSection {
+    margin-bottom: 15px;
+    padding: 12px;
+  }
+  
+  .leagueSelector {
+    margin-top: 10px;
+  }
+  
+  .leagueContextBanner {
+    padding: 12px;
+    margin-bottom: 15px;
+  }
+  
+  .leagueContextBanner h3 {
+    font-size: 1.1em;
+  }
+  
+  .leagueContext {
+    padding: 6px 10px;
+    margin-top: 8px;
+  }
+}
+
+/* Enhanced theme compatibility */
+@media (prefers-color-scheme: dark) {
+  .leagueContext {
+    background-color: rgba(0, 123, 255, 0.15);
+  }
+  
+  .errorText {
+    background-color: rgba(244, 67, 54, 0.15);
+  }
+}
