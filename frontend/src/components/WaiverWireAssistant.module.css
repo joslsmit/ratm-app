@@ -91,6 +91,42 @@
   font-weight: 500;
 }
 
+.positionDescription {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  font-weight: 400;
+  font-style: italic;
+}
+
+.rosterHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 15px;
+}
+
+.clearAllButton {
+  background-color: var(--danger-color);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.9em;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.clearAllButton:hover {
+  background-color: var(--danger-color-dark, #c53030);
+  transform: translateY(-1px);
+}
+
+.clearAllButton:active {
+  transform: translateY(0);
+}
+
 .rosterInputGroup div {
   display: flex;
   align-items: center;

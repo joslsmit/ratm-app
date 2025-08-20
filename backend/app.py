@@ -65,11 +65,16 @@ def load_values_from_csv(file_path):
         values_dict = {}
         for index, row in df.iterrows():
             player_name = row[player_col]
-            player_data = row.to_dict()
-            for key, value in player_data.items():
-                if pd.isna(value):
-                    player_data[key] = None
-            values_dict[player_name] = player_data
+            if player_name:  # Ensure player name exists
+                # Normalize player name for consistent keying across all data sources
+                normalized_name = normalize_player_name(player_name)
+                player_data = row.to_dict()
+                for key, value in player_data.items():
+                    if pd.isna(value):
+                        player_data[key] = None
+                # Store original name for display purposes
+                player_data['original_name'] = player_name
+                values_dict[normalized_name] = player_data
 
         print(f"✅ Successfully loaded {len(values_dict)} values from {file_path}.")
         return values_dict
@@ -502,6 +507,63 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(func=import_data, trigger="interval", hours=24)
 scheduler.start()
 
+
+# --- Position Validation Helpers ---
+def is_valid_player_for_position(player_data, position_slot):
+    """
+    Validate if a player can be placed in a specific roster position.
+    Handles flexible positions like W/T and W/R/T.
+    
+    Args:
+        player_data: Player data dictionary from combined_player_data_cache
+        position_slot: Position slot like 'QB', 'W/T', 'W/R/T', etc.
+    
+    Returns:
+        bool: True if valid placement, False otherwise
+    """
+    if not player_data or not position_slot:
+        return True  # Allow empty positions
+    
+    player_position = player_data.get('position', '').upper()
+    position_slot_upper = position_slot.upper()
+    
+    # Handle flexible positions
+    if position_slot_upper == 'W/T':
+        return player_position in ['WR', 'TE']
+    elif position_slot_upper == 'W/R/T':
+        return player_position in ['WR', 'RB', 'TE']
+    elif position_slot_upper.startswith('IR'):
+        return True  # IR can hold any position
+    elif position_slot_upper.startswith('BN'):
+        return True  # Bench can hold any position
+    else:
+        # Standard positions (QB, RB1, WR1, etc.)
+        expected_pos = position_slot_upper.rstrip('123456789')  # Remove numbers
+        return player_position == expected_pos or expected_pos == 'DEF' and player_position == 'DST'
+
+def get_position_flexibility_info(position_slot):
+    """
+    Get information about position flexibility for user guidance.
+    
+    Args:
+        position_slot: Position slot like 'W/T', 'W/R/T', etc.
+    
+    Returns:
+        dict: Position flexibility information
+    """
+    position_upper = position_slot.upper()
+    
+    if position_upper == 'W/T':
+        return {'allowed_positions': ['WR', 'TE'], 'description': 'Wide Receiver or Tight End'}
+    elif position_upper == 'W/R/T':
+        return {'allowed_positions': ['WR', 'RB', 'TE'], 'description': 'Wide Receiver, Running Back, or Tight End'}
+    elif position_upper.startswith('IR'):
+        return {'allowed_positions': ['QB', 'WR', 'RB', 'TE', 'K', 'DST'], 'description': 'Injury Reserve (any position)'}
+    elif position_upper.startswith('BN'):
+        return {'allowed_positions': ['QB', 'WR', 'RB', 'TE', 'K', 'DST'], 'description': 'Bench (any position)'}
+    else:
+        expected_pos = position_upper.rstrip('123456789')
+        return {'allowed_positions': [expected_pos], 'description': f'{expected_pos} only'}
 
 # --- API Endpoints ---
 @app.route('/api/player_dossier', methods=['POST'])
@@ -1369,16 +1431,39 @@ def waiver_swap_analysis():
             waiver_player_data, AnalysisType.WAIVER_ANALYSIS
         )
         
-        # Build roster context with enhanced formatting
+        # Build roster context with enhanced formatting and position validation
         roster_analysis = []
+        position_warnings = []
+        
         for pos, name in roster.items():
             if name:
                 player_data = combined_player_data_cache.get(normalize_player_name(name), {})
+                
+                # Validate position compatibility
+                if not is_valid_player_for_position(player_data, pos):
+                    player_pos = player_data.get('position', 'Unknown')
+                    flex_info = get_position_flexibility_info(pos)
+                    allowed_positions = ', '.join(flex_info['allowed_positions'])
+                    position_warnings.append(
+                        f"⚠️ {name} ({player_pos}) may not be valid for {pos} position (allows: {allowed_positions})"
+                    )
+                
                 enhanced_context = ContextFormatter.format_enhanced_player_context(
                     player_data, AnalysisType.WAIVER_ANALYSIS
                 )
+                
+                # Add position flexibility info for flex positions
+                flex_info = get_position_flexibility_info(pos)
+                if len(flex_info['allowed_positions']) > 1:
+                    enhanced_context += f"\n- Position Slot: {pos} ({flex_info['description']})"
+                
                 roster_analysis.append(f"**{pos.upper()}**: {enhanced_context}")
+        
         roster_context = "\n\n".join(roster_analysis)
+        
+        # Add position warnings to context if any
+        if position_warnings:
+            roster_context += "\n\n**POSITION COMPATIBILITY NOTES:**\n" + "\n".join(position_warnings)
         
         # Get waiver decision examples (falls back to player analysis examples)
         waiver_examples = ExampleLibrary.get_examples_for_analysis_type('waiver_swap_analysis')
@@ -1427,7 +1512,13 @@ def waiver_swap_analysis():
         )
         
         response_text = make_gemini_request(enhanced_prompt, user_key)
-        return jsonify({'result': process_ai_response_v2(response_text, 'waiver_swap')})
+        result = process_ai_response_v2(response_text, 'waiver_swap')
+        
+        # Include position warnings in response if any
+        if position_warnings:
+            result += "\n\n---\n**Position Compatibility Warnings:**\n" + "\n".join(position_warnings)
+        
+        return jsonify({'result': result})
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500

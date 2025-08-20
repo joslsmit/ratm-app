@@ -1,10 +1,9 @@
-import React, { useEffect, useState, useCallback, useContext } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import autoComplete from '@tarekraafat/autocomplete.js';
 import styles from './WaiverWireAssistant.module.css';
-import { AppContext } from '../context/AppContext';
 import { useApi } from '../hooks/useApi';
 
-const RosterInput = ({ id, label, allPlayers }) => {
+const RosterInput = ({ id, label, allPlayers, description = null, onPlayerChange }) => {
   useEffect(() => {
     let autocompleteInstance;
     if (allPlayers.length > 0) {
@@ -17,7 +16,14 @@ const RosterInput = ({ id, label, allPlayers }) => {
           input: {
             selection: (event) => {
               const selection = event.detail.selection.value;
-              document.querySelector(`#${id}`).value = selection;
+              const input = document.querySelector(`#${id}`);
+              if (input) {
+                input.value = selection;
+              }
+              // Notify parent of autocomplete selection
+              if (onPlayerChange) {
+                onPlayerChange(label, selection);
+              }
             },
           },
         },
@@ -29,21 +35,38 @@ const RosterInput = ({ id, label, allPlayers }) => {
         autocompleteInstance.unInit && autocompleteInstance.unInit();
       }
     };
-  }, [allPlayers, id, label]);
+  }, [allPlayers, id, label, onPlayerChange]);
 
   const handleClearInput = () => {
     const input = document.querySelector(`#${id}`);
     if (input) {
       input.value = '';
+      // Notify parent of change
+      if (onPlayerChange) {
+        onPlayerChange(label, '');
+      }
+    }
+  };
+  
+  const handleInputChange = (e) => {
+    if (onPlayerChange) {
+      onPlayerChange(label, e.target.value);
     }
   };
 
   return (
     <div className={styles.rosterInputGroup}>
-      <label htmlFor={id}>{label}</label>
+      <label htmlFor={id}>
+        {label}
+        {description && <span className={styles.positionDescription}> ({description})</span>}
+      </label>
       <div>
         <div className={styles.autoCompleteWrapper}>
-          <input id={id} type="text" />
+          <input 
+            id={id} 
+            type="text" 
+            onChange={handleInputChange}
+          />
         </div>
         <button 
           onClick={handleClearInput} 
@@ -68,17 +91,42 @@ const WaiverWireAssistant = ({
   analysisResult, 
   isLoading 
 }) => {
-  const { API_BASE_URL } = useContext(AppContext);
+  // API_BASE_URL is provided by useApi hook context
   const { get } = useApi();
   
   const rosterPositions = {
-    Starters: ['QB', 'WR1', 'WR2', 'RB1', 'RB2', 'TE', 'W-T', 'W-R-T', 'K', 'DEF'],
+    Starters: ['QB', 'WR1', 'WR2', 'RB1', 'RB2', 'W/T', 'W/R/T', 'DEF'],
     'Bench & IR': ['BN1', 'BN2', 'BN3', 'BN4', 'BN5', 'BN6', 'IR1', 'IR2'],
   };
+
+  // Position descriptions for user clarity
+  const positionDescriptions = {
+    'W/T': 'Wide Receiver or Tight End',
+    'W/R/T': 'Wide Receiver, Running Back, or Tight End',
+    'IR1': 'Injury Reserve (optional)',
+    'IR2': 'Injury Reserve (optional)'
+  };
+
+  // Position validation helper (for future use)
+  // const getValidPositions = (positionSlot) => {
+  //   switch (positionSlot) {
+  //     case 'W/T': return ['WR', 'TE'];
+  //     case 'W/R/T': return ['WR', 'RB', 'TE'];
+  //     case 'IR1':
+  //     case 'IR2': return ['QB', 'WR', 'RB', 'TE', 'DEF']; // IR can hold any position
+  //     default: return null; // Standard positions don't need validation
+  //   }
+  // };
 
   // Traditional waiver wire state
   const [playerToAdd, setPlayerToAdd] = useState('');
   const [activeTab, setActiveTab] = useState('Starters');
+  
+  // Roster persistence state (used internally for change detection)
+  const [, setRosterData] = useState({});
+  
+  // Get all roster positions for easy iteration
+  const allRosterPositions = Object.values(rosterPositions).flat();
   
   // Yahoo integration state
   const [isYahooUser, setIsYahooUser] = useState(false);
@@ -90,6 +138,117 @@ const WaiverWireAssistant = ({
   const [useYahooMode, setUseYahooMode] = useState(false);
 
   const sanitizeId = (label) => label.replace(/\//g, '-');
+  
+  // Roster persistence functions (inspired by Draft Assistant pattern)
+  const loadWaiverRoster = useCallback(() => {
+    const savedRoster = localStorage.getItem('waiverWireRoster');
+    if (savedRoster) {
+      try {
+        return JSON.parse(savedRoster);
+      } catch (error) {
+        console.error('Error parsing saved roster:', error);
+        return {};
+      }
+    }
+    return {};
+  }, []);
+  
+  const saveWaiverRoster = useCallback(() => {
+    const newRoster = {};
+    let changesDetected = false;
+    
+    // Get current saved roster to compare for changes
+    const currentSavedRoster = loadWaiverRoster();
+    
+    // Collect current values from all roster input fields
+    allRosterPositions.forEach(pos => {
+      const sanitizedId = sanitizeId(pos);
+      const input = document.getElementById(`roster-input-${sanitizedId}`);
+      const playerName = input ? input.value.trim() : '';
+      newRoster[pos] = playerName;
+      
+      // Check if value changed from saved version
+      if (playerName !== (currentSavedRoster[pos] || '')) {
+        changesDetected = true;
+      }
+    });
+    
+    // Only write to localStorage if there were actual changes
+    if (changesDetected) {
+      localStorage.setItem('waiverWireRoster', JSON.stringify(newRoster));
+      console.log('Roster saved to localStorage');
+    }
+    
+    // Don't update React state here to avoid re-renders that cause focus loss
+    // setRosterData is only used for initial load, not for ongoing saves
+    
+  }, [allRosterPositions, loadWaiverRoster]);
+  
+  const updateRosterField = useCallback((position, playerName) => {
+    // Only update localStorage in traditional mode
+    if (useYahooMode) return;
+    
+    // Update the specific input field
+    const sanitizedId = sanitizeId(position);
+    const input = document.getElementById(`roster-input-${sanitizedId}`);
+    if (input) {
+      input.value = playerName;
+    }
+    
+    // Save the entire roster (with change detection)
+    saveWaiverRoster(); // Save immediately, no delay needed
+  }, [saveWaiverRoster, useYahooMode]);
+  
+  const clearWaiverRoster = useCallback(() => {
+    // Only allow clearing in traditional mode
+    if (useYahooMode) {
+      console.log('Cannot clear roster in Yahoo mode - roster is managed by Yahoo');
+      return;
+    }
+    
+    // Clear all input fields
+    allRosterPositions.forEach(pos => {
+      const sanitizedId = sanitizeId(pos);
+      const input = document.getElementById(`roster-input-${sanitizedId}`);
+      if (input) {
+        input.value = '';
+      }
+    });
+    
+    // Clear localStorage and state
+    localStorage.removeItem('waiverWireRoster');
+    // Only update React state when we actually need to clear the UI
+    setRosterData({});
+    
+    console.log('Waiver wire roster cleared');
+  }, [allRosterPositions, useYahooMode]);
+  
+  // Load roster data on component mount (only in traditional mode)
+  useEffect(() => {
+    // Skip localStorage loading in Yahoo mode
+    if (useYahooMode) return;
+    
+    const savedRoster = loadWaiverRoster();
+    setRosterData(savedRoster);
+    
+    // Small delay to ensure DOM elements are rendered before populating
+    const populateFields = () => {
+      Object.entries(savedRoster).forEach(([position, playerName]) => {
+        if (playerName) {
+          const sanitizedId = sanitizeId(position);
+          const input = document.getElementById(`roster-input-${sanitizedId}`);
+          if (input) {
+            input.value = playerName;
+          }
+        }
+      });
+    };
+    
+    // Populate immediately and also after a short delay to handle async rendering
+    populateFields();
+    setTimeout(populateFields, 100);
+    
+  }, [loadWaiverRoster, useYahooMode]); // Also depend on useYahooMode
 
   // Yahoo authentication detection and leagues fetching
   const fetchUserLeagues = async (token) => {
@@ -154,7 +313,8 @@ const WaiverWireAssistant = ({
     };
     
     checkYahooAuth();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount
 
   // Fetch available players for selected league
   const fetchAvailablePlayers = async (leagueKey) => {
@@ -225,14 +385,18 @@ const WaiverWireAssistant = ({
       onAnalyzeYahoo(selectedLeague, token);
     } else {
       // Traditional mode: use manual roster input
+      // First save any pending changes, then use saved roster data
+      saveWaiverRoster();
+      const currentRoster = loadWaiverRoster();
+      
+      // Filter out empty positions for cleaner API call
       const roster = {};
-      Object.values(rosterPositions).flat().forEach(pos => {
-        const sanitizedId = sanitizeId(pos);
-        const input = document.getElementById(`roster-input-${sanitizedId}`);
-        if (input && input.value) {
-          roster[pos] = input.value;
+      Object.entries(currentRoster).forEach(([pos, playerName]) => {
+        if (playerName && playerName.trim()) {
+          roster[pos] = playerName.trim();
         }
       });
+      
       onAnalyze(roster, playerToAdd);
     }
   };
@@ -249,6 +413,10 @@ const WaiverWireAssistant = ({
                 input: {
                     selection: (event) => {
                         const selection = event.detail.selection.value;
+                        const input = document.querySelector('#player-to-add');
+                        if (input) {
+                            input.value = selection;
+                        }
                         setPlayerToAdd(selection);
                     },
                 },
@@ -314,10 +482,23 @@ const WaiverWireAssistant = ({
       )}
       
       <div className={styles.singleColumnLayout}>
-        <div className={styles.rosterSection}>
+        {/* Only show manual roster input in traditional mode */}
+        {!useYahooMode && (
+          <div className={styles.rosterSection}>
           <div className={styles.card}>
-            <h3>Your Roster</h3>
-            <p style={{ color: 'var(--text-muted)', marginBottom: '10px' }}>Use the tabs below to input your current roster for each position.</p>
+            <div className={styles.rosterHeader}>
+              <div>
+                <h3>Your Roster</h3>
+                <p style={{ color: 'var(--text-muted)', marginBottom: '10px' }}>Use the tabs below to input your current roster for each position.</p>
+              </div>
+              <button 
+                onClick={clearWaiverRoster}
+                className={styles.clearAllButton}
+                title="Clear all roster positions"
+              >
+                Clear All
+              </button>
+            </div>
             <div className={styles.tabNavigation}>
               {Object.keys(rosterPositions).map(tab => (
                 <button
@@ -339,14 +520,25 @@ const WaiverWireAssistant = ({
                   <div className={styles.waiverGrid}>
                     {positions.map((pos) => {
                       const sanitizedId = sanitizeId(pos);
-                      return <RosterInput key={pos} id={`roster-input-${sanitizedId}`} label={pos} allPlayers={allPlayers} />;
+                      const description = positionDescriptions[pos] || null;
+                      return (
+                        <RosterInput 
+                          key={pos} 
+                          id={`roster-input-${sanitizedId}`} 
+                          label={pos} 
+                          allPlayers={allPlayers}
+                          description={description}
+                          onPlayerChange={updateRosterField}
+                        />
+                      );
                     })}
                   </div>
                 </div>
               ))}
             </div>
           </div>
-        </div>
+          </div>
+        )}
         <div className={styles.waiverPlayerSection}>
           <div className={styles.card}>
             {useYahooMode && selectedLeague ? (
@@ -354,7 +546,7 @@ const WaiverWireAssistant = ({
                 <h3>Available Players in Your League</h3>
                 <p>Based on your {userLeagues.find(l => l.league_key === selectedLeague)?.league_name} league</p>
                 <div className={styles.availablePlayersGrid}>
-                  {yahooAvailablePlayers.slice(0, 20).map((player, index) => (
+                  {yahooAvailablePlayers.slice(0, 20).map((player) => (
                     <div key={player.player_key} className={styles.availablePlayerCard}>
                       <div className={styles.playerName}>{player.name}</div>
                       <div className={styles.playerMeta}>
@@ -377,7 +569,13 @@ const WaiverWireAssistant = ({
                 <h3>Player to Consider Adding</h3>
                 <div className={styles.formGroupInline}>
                     <div className={styles.autoCompleteWrapper}>
-                        <input id="player-to-add" type="text" value={playerToAdd} onChange={(e) => setPlayerToAdd(e.target.value)} />
+                        <input 
+                          id="player-to-add" 
+                          type="text" 
+                          defaultValue={playerToAdd}
+                          onChange={(e) => setPlayerToAdd(e.target.value)}
+                          placeholder="Enter player to add..."
+                        />
                     </div>
                     <button onClick={handleAnalyzeClick} className={styles.actionButton} disabled={isLoading}>
                     {isLoading ? 'Analyzing...' : 'Analyze Swap'}
