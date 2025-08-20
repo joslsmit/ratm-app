@@ -2,8 +2,9 @@
 
 > **Priority**: CRITICAL - BLOCKING ISSUE  
 > **Created**: August 19, 2025  
-> **Status**: READY FOR IMPLEMENTATION  
-> **Estimated Effort**: 2-3 hours of focused development + testing  
+> **Status**: ACTIVE IMPLEMENTATION PLAN  
+> **Estimated Effort**: 4-5 hours focused development + 2-3 hours testing  
+> **Cross-Reference**: See `activeContext.md` Priority #2 for project context  
 
 ## 🚨 PROBLEM ANALYSIS
 
@@ -428,3 +429,16 @@ This plan provides a complete roadmap for fixing the critical waiver wire bench 
 **Business Value**: High (fixes blocking issue affecting core feature usability)
 
 **Ready for implementation when prioritized.**
+
+## 🔗 CROSS-REFERENCES
+
+**Primary Context**: `activeContext.md` - Priority #2 Critical Issue  
+**Project Status**: `progress.md` - Highest Priority Blocking Issue  
+**Related Files**: 
+- `frontend/src/components/WaiverWireAssistant.js` - Current implementation
+- `backend/app.py` - `waiver_swap_analysis()` function (line ~1414)
+- `backend/test_roster_structure.py` - Existing test foundation
+
+**Implementation Trigger**: When ready to address Priority #2 in development sequence
+**Dependencies**: None (enhancement to existing functionality)
+**Follow-up**: Move to `memory-bank/records/` after successful implementation
