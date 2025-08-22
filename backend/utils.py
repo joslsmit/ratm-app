@@ -467,7 +467,7 @@ def get_weekly_outlook(player_data, weeks_ahead=4):
     
     # Confidence assessment
     grade_confidence = player_data.get('grade_confidence_score', 0)
-    if grade_confidence >= 85:
+    if grade_confidence is not None and grade_confidence >= 85:
         outlook_factors.append('Expert Confidence')
     
     # Combine factors into outlook

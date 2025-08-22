@@ -86,6 +86,7 @@ const RosterInput = ({ id, label, allPlayers, description = null, onPlayerChange
 const WaiverWireAssistant = ({ 
   allPlayers, 
   onAnalyze, 
+  onAnalyzeEnhanced = null, // Optional: New prop for enhanced analysis with complete roster data
   onAnalyzeYahoo = null, // Optional: New prop for Yahoo analysis
   onLeaguesUpdate = null, // Optional: New prop to pass leagues to parent
   analysisResult, 
@@ -389,15 +390,35 @@ const WaiverWireAssistant = ({
       saveWaiverRoster();
       const currentRoster = loadWaiverRoster();
       
-      // Filter out empty positions for cleaner API call
-      const roster = {};
-      Object.entries(currentRoster).forEach(([pos, playerName]) => {
+      // Enhanced: Send complete roster context including empty positions
+      const filledPositions = {};
+      const emptyPositions = [];
+      
+      allRosterPositions.forEach(pos => {
+        const playerName = currentRoster[pos];
         if (playerName && playerName.trim()) {
-          roster[pos] = playerName.trim();
+          filledPositions[pos] = playerName.trim();
+        } else {
+          emptyPositions.push(pos);
         }
       });
       
-      onAnalyze(roster, playerToAdd);
+      const enhancedRosterData = {
+        filled_positions: filledPositions,
+        empty_positions: emptyPositions,
+        all_positions: allRosterPositions,
+        total_roster_spots: allRosterPositions.length,
+        bench_spots: allRosterPositions.filter(pos => pos.startsWith('BN')),
+        starter_spots: allRosterPositions.filter(pos => !pos.startsWith('BN') && !pos.startsWith('IR'))
+      };
+      
+      // Try enhanced analysis first, fallback to traditional if needed
+      if (onAnalyzeEnhanced) {
+        onAnalyzeEnhanced(enhancedRosterData, playerToAdd, filledPositions);
+      } else {
+        // Fallback to traditional analysis
+        onAnalyze(filledPositions, playerToAdd);
+      }
     }
   };
   

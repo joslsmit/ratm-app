@@ -610,6 +610,71 @@ function App() {
     }
   }, [makeApiRequest, converter, setWaiverSwapResult, setIsWaiverSwapLoading]);
 
+  // Enhanced waiver swap analysis with complete roster data including empty positions  
+  const handleWaiverSwapAnalysisEnhanced = useCallback(async (rosterData, playerToAdd, filledPositions) => {
+    // Validate input data
+    if (!rosterData || (!rosterData.filled_positions && !filledPositions) || !playerToAdd) {
+      alert('Please fill out your roster and specify a player to add.');
+      return;
+    }
+    
+    setIsWaiverSwapLoading(true);
+    setWaiverSwapResult('');
+    
+    try {
+      console.log('Enhanced Analysis - Roster Data:', {
+        filled: Object.keys(rosterData.filled_positions || filledPositions).length,
+        empty: rosterData.empty_positions?.length || 0,
+        total: rosterData.total_roster_spots || 0
+      });
+      
+      // Try enhanced endpoint first
+      const enhancedData = await makeApiRequest('/waiver_swap_analysis_enhanced', {
+        roster_data: rosterData,
+        player_to_add: playerToAdd
+      });
+      
+      if (enhancedData && enhancedData.result) {
+        // Enhanced response may include additional data
+        let resultHtml = converter.makeHtml(enhancedData.result);
+        
+        // Add enhanced features indicators if available
+        if (enhancedData.enhanced) {
+          resultHtml += '<div style="margin-top: 15px; padding: 10px; background: var(--success-bg); border-radius: 8px; border-left: 4px solid var(--success-color);"><strong>✨ Enhanced Analysis:</strong> Complete roster analysis including bench depth and drop recommendations.</div>';
+        }
+        
+        setWaiverSwapResult(resultHtml);
+      } else {
+        setWaiverSwapResult('<p style="color: var(--text-muted);">The Enhanced Analyst returned an empty response.</p>');
+      }
+      
+    } catch (error) {
+      console.warn('Enhanced analysis failed, trying fallback:', error);
+      
+      // Fallback to traditional analysis
+      try {
+        const fallbackData = await makeApiRequest('/waiver_swap_analysis', { 
+          roster: filledPositions || rosterData.filled_positions, 
+          player_to_add: playerToAdd 
+        });
+        
+        if (fallbackData && fallbackData.result) {
+          let resultHtml = converter.makeHtml(fallbackData.result);
+          resultHtml += '<div style="margin-top: 15px; padding: 10px; background: var(--warning-bg); border-radius: 8px; border-left: 4px solid var(--warning-color);"><strong>⚠️ Fallback Analysis:</strong> Enhanced analysis unavailable, using traditional analysis.</div>';
+          setWaiverSwapResult(resultHtml);
+        } else {
+          setWaiverSwapResult('<p style="color: var(--text-muted);">Both enhanced and traditional analysis returned empty responses.</p>');
+        }
+        
+      } catch (fallbackError) {
+        console.error('Both enhanced and fallback analysis failed:', fallbackError);
+        setWaiverSwapResult(`<p style="color: var(--danger-color);">Analysis failed: ${error.message}</p>`);
+      }
+    } finally {
+      setIsWaiverSwapLoading(false);
+    }
+  }, [makeApiRequest, converter, setWaiverSwapResult, setIsWaiverSwapLoading]);
+
   // Helper function to get team key from leagues data
   const getTeamKeyForLeague = useCallback((leagueKey) => {
     const league = userLeagues.find(l => l.league_key === leagueKey);
@@ -974,6 +1039,7 @@ function App() {
             <WaiverWireAssistant
               allPlayers={allPlayers}
               onAnalyze={handleWaiverSwapAnalysis}
+              onAnalyzeEnhanced={handleWaiverSwapAnalysisEnhanced}
               onAnalyzeYahoo={handleYahooWaiverAnalysis}
               onLeaguesUpdate={handleLeaguesUpdate}
               analysisResult={waiverSwapResult}

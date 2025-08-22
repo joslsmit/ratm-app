@@ -1411,6 +1411,417 @@ def trending_players():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+# ============================================================================
+# WAIVER WIRE BENCH ANALYSIS ENHANCEMENT - Helper Functions
+# ============================================================================
+
+def build_complete_roster_context(filled_positions, empty_positions, waiver_candidate_data):
+    """
+    Build comprehensive roster context including bench depth analysis.
+    
+    Args:
+        filled_positions: dict - {position: player_name}
+        empty_positions: list - [position, position, ...]
+        waiver_candidate_data: dict - player data for waiver candidate
+        
+    Returns:
+        dict: {
+            'roster_context': str,  # Full roster description
+            'bench_analysis': str,  # Bench depth analysis
+            'drop_candidates': list,  # Potential players to drop
+            'positional_needs': str,  # Position-specific analysis
+            'empty_spots': list     # Available roster spots
+        }
+    """
+    try:
+        roster_context_parts = []
+        bench_players = []
+        starter_players = []
+        drop_candidates = []
+        
+        # Standard roster positions for validation
+        STANDARD_ROSTER_POSITIONS = ['QB', 'WR1', 'WR2', 'RB1', 'RB2', 'W/T', 'W/R/T', 'DEF', 
+                                   'BN1', 'BN2', 'BN3', 'BN4', 'BN5', 'BN6', 'IR1', 'IR2']
+        
+        # Categorize positions
+        bench_positions = [pos for pos in STANDARD_ROSTER_POSITIONS if pos.startswith('BN')]
+        starter_positions = [pos for pos in STANDARD_ROSTER_POSITIONS if not pos.startswith('BN') and not pos.startswith('IR')]
+        ir_positions = [pos for pos in STANDARD_ROSTER_POSITIONS if pos.startswith('IR')]
+        
+        # Build context for filled positions
+        for pos, player_name in filled_positions.items():
+            if not player_name.strip():
+                continue
+                
+            player_data = combined_player_data_cache.get(normalize_player_name(player_name), {})
+            enhanced_context = ContextFormatter.format_enhanced_player_context(
+                player_data, AnalysisType.WAIVER_ANALYSIS
+            )
+            
+            # Categorize players
+            if pos in bench_positions:
+                bench_players.append({
+                    'position': pos,
+                    'name': player_name,
+                    'context': enhanced_context,
+                    'data': player_data
+                })
+            elif pos in starter_positions:
+                starter_players.append({
+                    'position': pos,
+                    'name': player_name, 
+                    'context': enhanced_context,
+                    'data': player_data
+                })
+            
+            roster_context_parts.append(f"**{pos.upper()}**: {enhanced_context}")
+        
+        # Add empty positions to context
+        empty_starters = [pos for pos in empty_positions if pos in starter_positions]
+        empty_bench = [pos for pos in empty_positions if pos in bench_positions]
+        empty_ir = [pos for pos in empty_positions if pos in ir_positions]
+        
+        for pos in empty_starters:
+            roster_context_parts.append(f"**{pos.upper()}**: [EMPTY STARTER SPOT]")
+        
+        for pos in empty_bench:
+            roster_context_parts.append(f"**{pos.upper()}**: [EMPTY BENCH SPOT]")
+            
+        for pos in empty_ir:
+            roster_context_parts.append(f"**{pos.upper()}**: [EMPTY IR SPOT]")
+        
+        # Build comprehensive context strings
+        roster_context = "\n\n".join(roster_context_parts)
+        
+        # Analyze bench depth
+        bench_analysis_parts = []
+        if bench_players:
+            bench_analysis_parts.append(f"BENCH PLAYERS ({len(bench_players)} filled):")
+            for player in bench_players:
+                tier_info = get_player_tier_info(player['data'])
+                bench_analysis_parts.append(f"  • {player['name']} ({player['position']}) - {tier_info}")
+        
+        if empty_bench:
+            bench_analysis_parts.append(f"EMPTY BENCH SPOTS ({len(empty_bench)}): {', '.join(empty_bench)}")
+        
+        bench_analysis = "\n".join(bench_analysis_parts) if bench_analysis_parts else "No bench analysis available"
+        
+        # Rank drop candidates (bench players first, then worst starters)
+        drop_candidates = rank_drop_candidates(filled_positions, waiver_candidate_data)
+        
+        # Analyze positional needs
+        positional_needs = analyze_positional_needs(starter_players, bench_players, waiver_candidate_data)
+        
+        return {
+            'roster_context': roster_context,
+            'bench_analysis': bench_analysis,
+            'drop_candidates': drop_candidates,
+            'positional_needs': positional_needs,
+            'empty_spots': empty_positions,
+            'bench_spots_available': len(empty_bench),
+            'starter_spots_available': len(empty_starters)
+        }
+        
+    except Exception as e:
+        print(f"ERROR in build_complete_roster_context: {e}")
+        # Return minimal context if error occurs
+        return {
+            'roster_context': "\n\n".join([f"**{pos.upper()}**: {name}" for pos, name in filled_positions.items()]),
+            'bench_analysis': "Bench analysis unavailable due to error",
+            'drop_candidates': [],
+            'positional_needs': "Positional analysis unavailable",
+            'empty_spots': empty_positions,
+            'bench_spots_available': 0,
+            'starter_spots_available': 0
+        }
+
+def get_player_tier_info(player_data):
+    """Get tier information for a player (QB1, RB2, etc.)."""
+    try:
+        position = player_data.get('position', 'UNK')
+        
+        # Try multiple ECR field names (ecr_overall is primary field in combined cache)
+        ecr = (player_data.get('ecr_overall') or 
+               player_data.get('ecr') or 
+               player_data.get('ecr_positional') or 
+               player_data.get('weekly_ecr'))
+        
+        if not ecr:
+            return f"{position}? (No ECR)"
+        
+        ecr_val = float(ecr)
+        
+        # Position tier thresholds
+        tier_thresholds = {
+            'QB': [12, 24],  # QB1 (1-12), QB2 (13-24), QB3+ (25+)
+            'RB': [24, 36],  # RB1 (1-24), RB2 (25-36), RB3+ (37+)
+            'WR': [36, 48],  # WR1 (1-36), WR2 (37-48), WR3+ (49+)
+            'TE': [12, 24],  # TE1 (1-12), TE2 (13-24), TE3+ (25+)
+            'DST': [12, 24], # DST1 (1-12), DST2 (13-24), DST3+ (25+)
+        }
+        
+        thresholds = tier_thresholds.get(position, [24, 36])  # Default thresholds
+        
+        if ecr_val <= thresholds[0]:
+            tier = f"{position}1"
+        elif ecr_val <= thresholds[1]:
+            tier = f"{position}2"
+        else:
+            tier = f"{position}3+"
+            
+        return f"{tier}, ECR: {ecr_val}"
+        
+    except Exception as e:
+        return f"{player_data.get('position', 'UNK')}? (Error: {e})"
+
+def rank_drop_candidates(filled_positions, waiver_candidate_data):
+    """
+    Rank all rostered players by drop priority.
+    
+    Ranking Factors:
+    1. Position type priority (bench > flex > starter)
+    2. Player tier level (QB2 > QB1, RB3 > RB1)
+    3. Positional depth (deep position > shallow position)
+    4. Age and injury considerations
+    5. Bye week conflicts
+    
+    Returns:
+        list: [(player_name, position, drop_score, reasoning), ...]
+    """
+    try:
+        candidates = []
+        
+        # Standard position categories
+        bench_positions = ['BN1', 'BN2', 'BN3', 'BN4', 'BN5', 'BN6']
+        flex_positions = ['W/T', 'W/R/T']
+        core_starters = ['QB', 'WR1', 'WR2', 'RB1', 'RB2', 'DEF']
+        
+        for pos, player_name in filled_positions.items():
+            if not player_name.strip():
+                continue
+                
+            player_data = combined_player_data_cache.get(normalize_player_name(player_name), {})
+            drop_score = calculate_drop_priority_score(pos, player_data, waiver_candidate_data)
+            reasoning = get_drop_reasoning(pos, player_data, drop_score)
+            
+            candidates.append({
+                'name': player_name,
+                'position': pos,
+                'drop_score': drop_score,
+                'reasoning': reasoning,
+                'tier_info': get_player_tier_info(player_data)
+            })
+        
+        # Sort by drop score (higher = more droppable)
+        candidates.sort(key=lambda x: x['drop_score'], reverse=True)
+        
+        return candidates[:5]  # Return top 5 drop candidates
+        
+    except Exception as e:
+        print(f"ERROR in rank_drop_candidates: {e}")
+        return []
+
+def calculate_drop_priority_score(position, player_data, waiver_candidate_data):
+    """Calculate numerical drop priority score (higher = more droppable)."""
+    try:
+        score = 0
+        
+        # Position type scoring (bench > flex > starter)
+        if position.startswith('BN'):
+            score += 100  # Bench players are most droppable
+        elif position in ['W/T', 'W/R/T']:
+            score += 50   # Flex players moderately droppable
+        elif position in ['IR1', 'IR2']:
+            score += 25   # IR players only if healthy
+        else:
+            score += 10   # Core starters least droppable
+        
+        # ECR-based scoring (higher ECR = more droppable)
+        ecr = player_data.get('ecr')
+        if ecr:
+            try:
+                ecr_val = float(ecr)
+                if ecr_val > 100:
+                    score += 50  # Very droppable
+                elif ecr_val > 60:
+                    score += 30  # Moderately droppable
+                elif ecr_val > 36:
+                    score += 15  # Somewhat droppable
+                # Players with ECR < 36 get no penalty (elite players)
+            except:
+                score += 20  # Unknown ECR adds moderate penalty
+        else:
+            score += 20  # No ECR data adds moderate penalty
+        
+        # Position scarcity considerations
+        player_pos = player_data.get('position', '')
+        if player_pos in ['QB', 'TE', 'DST']:
+            score += 10  # These positions have less depth, more droppable
+        elif player_pos in ['RB', 'WR']:
+            score += 5   # Skill positions have more depth
+        
+        return score
+        
+    except Exception as e:
+        print(f"ERROR calculating drop score: {e}")
+        return 50  # Default moderate score
+
+def get_drop_reasoning(position, player_data, drop_score):
+    """Generate human-readable reasoning for drop candidate."""
+    try:
+        reasons = []
+        
+        if position.startswith('BN'):
+            reasons.append("bench player")
+        elif position in ['W/T', 'W/R/T']:
+            reasons.append("flex position")
+            
+        ecr = player_data.get('ecr')
+        if ecr:
+            try:
+                ecr_val = float(ecr)
+                if ecr_val > 100:
+                    reasons.append("very low ECR")
+                elif ecr_val > 60:
+                    reasons.append("low ECR")
+            except:
+                pass
+        
+        tier_info = get_player_tier_info(player_data)
+        if any(x in tier_info for x in ['3+', '?']):
+            reasons.append("lower tier")
+            
+        if not reasons:
+            reasons.append("available for drop")
+            
+        return ", ".join(reasons)
+        
+    except Exception as e:
+        return "drop candidate"
+
+def analyze_positional_needs(starter_players, bench_players, waiver_candidate_data):
+    """Analyze positional depth and needs."""
+    try:
+        position_counts = {}
+        
+        # Count players by position
+        all_players = starter_players + bench_players
+        for player in all_players:
+            pos = player['data'].get('position', 'UNK')
+            position_counts[pos] = position_counts.get(pos, 0) + 1
+        
+        # Analyze depth
+        waiver_pos = waiver_candidate_data.get('position', 'UNK')
+        current_depth = position_counts.get(waiver_pos, 0)
+        
+        analysis_parts = []
+        analysis_parts.append(f"ADDING: {waiver_pos} (current depth: {current_depth})")
+        
+        if current_depth == 0:
+            analysis_parts.append(f"  • Adding {waiver_pos} fills positional need")
+        elif current_depth == 1:
+            analysis_parts.append(f"  • Adding {waiver_pos} provides depth")
+        else:
+            analysis_parts.append(f"  • Adding {waiver_pos} increases depth (consider drops)")
+        
+        # Position depth summary
+        depth_summary = []
+        for pos, count in sorted(position_counts.items()):
+            if count == 1:
+                depth_summary.append(f"{pos}: shallow")
+            elif count >= 3:
+                depth_summary.append(f"{pos}: deep")
+            else:
+                depth_summary.append(f"{pos}: adequate")
+        
+        analysis_parts.append("DEPTH: " + ", ".join(depth_summary))
+        
+        return "\n".join(analysis_parts)
+        
+    except Exception as e:
+        return f"Positional analysis error: {e}"
+
+def parse_drop_recommendation(ai_response):
+    """
+    Parse AI response to extract structured drop recommendations.
+    
+    Patterns to detect:
+    - "ADD: [Player], DROP: [Player]"
+    - "ADD: [Player], OPEN SPOT: [Position]" 
+    - "DO NOT ADD: [Reason]"
+    
+    Returns:
+        dict: {
+            'action': 'add' | 'reject',
+            'add_player': str,
+            'drop_player': str | None,
+            'open_spot': str | None,
+            'reasoning': str,
+            'confidence': str
+        }
+    """
+    try:
+        if not ai_response:
+            return None
+            
+        response_text = ai_response.lower()
+        
+        # Check for rejection patterns
+        if any(phrase in response_text for phrase in ['do not add', 'don\'t add', 'avoid adding', 'pass on']):
+            return {
+                'action': 'reject',
+                'add_player': None,
+                'drop_player': None,
+                'open_spot': None,
+                'reasoning': 'AI recommends not adding this player',
+                'confidence': 'medium'
+            }
+        
+        # Look for ADD patterns
+        import re
+        
+        # Pattern: ADD: [Player], DROP: [Player]
+        add_drop_pattern = r'add[:\s]+([^,]+),?\s*drop[:\s]+([^,\n]+)'
+        match = re.search(add_drop_pattern, response_text, re.IGNORECASE)
+        
+        if match:
+            return {
+                'action': 'add',
+                'add_player': match.group(1).strip(),
+                'drop_player': match.group(2).strip(),
+                'open_spot': None,
+                'reasoning': 'Upgrade opportunity identified',
+                'confidence': 'high'
+            }
+        
+        # Pattern: ADD: [Player], OPEN SPOT
+        add_open_pattern = r'add[:\s]+([^,]+),?\s*open\s+spot'
+        match = re.search(add_open_pattern, response_text, re.IGNORECASE)
+        
+        if match:
+            return {
+                'action': 'add',
+                'add_player': match.group(1).strip(),
+                'drop_player': None,
+                'open_spot': 'available',
+                'reasoning': 'Open roster spot available',
+                'confidence': 'high'
+            }
+        
+        # Default to add if no clear pattern found
+        return {
+            'action': 'add',
+            'add_player': 'player',
+            'drop_player': None,
+            'open_spot': None,
+            'reasoning': 'Analysis provided',
+            'confidence': 'low'
+        }
+        
+    except Exception as e:
+        print(f"ERROR parsing drop recommendation: {e}")
+        return None
+
 @app.route('/api/waiver_swap_analysis', methods=['POST'])
 def waiver_swap_analysis():
     try:
@@ -1522,6 +1933,200 @@ def waiver_swap_analysis():
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/waiver_swap_analysis_enhanced', methods=['POST'])
+def waiver_swap_analysis_enhanced():
+    """
+    Enhanced waiver swap analysis with comprehensive bench analysis.
+    Accepts complete roster data including empty positions.
+    """
+    try:
+        user_key = request.headers.get('X-API-Key')
+        data = request.json
+        
+        # Enhanced data structure - accepts both formats for compatibility
+        roster_data = data.get('roster_data', {})
+        filled_positions = roster_data.get('filled_positions', data.get('roster', {}))
+        empty_positions = roster_data.get('empty_positions', [])
+        player_to_add = data.get('player_to_add')
+        ecr_type_pref = data.get('ecr_type_preference', 'overall')
+
+        if not filled_positions and not empty_positions:
+            # Fallback to traditional format
+            roster = data.get('roster', {})
+            if not roster:
+                return jsonify({"error": "Roster data is required."}), 400
+            filled_positions = roster
+            empty_positions = []
+            
+        if not player_to_add:
+            return jsonify({"error": "player_to_add is required."}), 400
+
+        print(f"DEBUG: Enhanced waiver analysis for {player_to_add}")
+        print(f"DEBUG: Filled positions: {len(filled_positions)}, Empty positions: {len(empty_positions)}")
+
+        # Get enhanced context for the waiver candidate
+        waiver_player_data = combined_player_data_cache.get(normalize_player_name(player_to_add), {})
+        waiver_candidate_context = ContextFormatter.format_enhanced_player_context(
+            waiver_player_data, AnalysisType.WAIVER_ANALYSIS
+        )
+        
+        # Build comprehensive roster context using helper functions
+        roster_analysis = build_complete_roster_context(
+            filled_positions, empty_positions, waiver_player_data
+        )
+        
+        # Build position warnings if any
+        position_warnings = []
+        for pos, name in filled_positions.items():
+            if name and name.strip():
+                player_data = combined_player_data_cache.get(normalize_player_name(name), {})
+                if not is_valid_player_for_position(player_data, pos):
+                    player_pos = player_data.get('position', 'Unknown')
+                    flex_info = get_position_flexibility_info(pos)
+                    allowed_positions = ', '.join(flex_info['allowed_positions'])
+                    position_warnings.append(
+                        f"⚠️ {name} ({player_pos}) may not be valid for {pos} position (allows: {allowed_positions})"
+                    )
+        
+        # Get waiver decision examples
+        waiver_examples = ExampleLibrary.get_examples_for_analysis_type('waiver_swap_analysis')
+        
+        # Build enhanced prompt with comprehensive bench analysis methodology
+        enhanced_prompt = PromptBuilder.build_enhanced_prompt(
+            task_description="Balanced Waiver Analysis with EMPTY SPOT PRIORITY - CRITICAL: Provide helpful analysis in 6-8 sentences. If ANY bench spots are empty, use them instead of dropping players.",
+            player_data=f"🚨 EMPTY BENCH SPOTS AVAILABLE: {roster_analysis['bench_spots_available']} spots\n\n{'⚠️ CRITICAL: USE EMPTY SPOTS FIRST - DO NOT DROP ANYONE!' if roster_analysis['bench_spots_available'] > 0 else 'ℹ️ Roster completely full - analyze drop candidates'}\n\nCURRENT ROSTER:\n{roster_analysis['roster_context']}\n\nBENCH ANALYSIS:\n{roster_analysis['bench_analysis']}\n\nPOSITIONAL NEEDS:\n{roster_analysis['positional_needs']}\n\nWAIVER WIRE CANDIDATE:\n{waiver_candidate_context}",
+            examples=waiver_examples,
+            methodology_steps=[
+                "1. TIER-BASED VALUE ASSESSMENT",
+                "   • CRITICAL: Identify player tiers (QB1 vs QB2, RB1 vs RB2, etc.)",
+                "   • QB1 (top 12) >> QB2 (13-24) is almost always an upgrade worth making",
+                "   • Elite players (top 5 at position) should almost always be added",
+                "   • Evaluate ECR and positional ranking with clear tier context",
+                "   • Consider recent trend momentum and role security",
+                "",
+                "2. POSITIONAL UPGRADE ANALYSIS",
+                "   • Compare current roster player tier vs waiver candidate tier",
+                "   • RULE: Moving from QB2 to QB1 is a high-priority upgrade",
+                "   • RULE: Any tier upgrade (QB2→QB1, RB2→RB1) is valuable",
+                "   • Consider positional scarcity (QB depth vs RB/WR depth)",
+                "   • Assess starter vs bench player impact on weekly lineup",
+                "",
+                "3. ROSTER COMPOSITION IMPACT",
+                "   • Identify which current player would be replaced/dropped",
+                "   • Compare tiers: is this a clear upgrade, lateral move, or downgrade?",
+                "   • Consider bye week management and roster flexibility",
+                "   • Evaluate bench depth at position after potential move",
+                "",
+                "4. TIER-BASED DECISION FRAMEWORK",
+                "   • ADD if upgrading tiers (QB2→QB1 = clear add)",
+                "   • ADD if acquiring elite player (top 5 at position)",
+                "   • CONSIDER if lateral move within same tier",
+                "   • DO NOT ADD if downgrading tiers",
+                "   • Factor timing urgency for elite/tier-upgrade opportunities",
+                "",
+                "5. CLEAR RECOMMENDATION WITH TIER LOGIC",
+                "   • State explicit ADD/DO NOT ADD with tier-based reasoning",
+                "   • Example: 'ADD - Clear upgrade from QB2 to elite QB1'",
+                "   • Include confidence level: High (tier upgrades), Medium (lateral), Low (downgrades)",
+                "   • If ADD: specify exact player to DROP with justification",
+                "   • Quantify expected improvement and confidence level",
+                "   • Address any close-call factors or alternative scenarios",
+                "",
+                "6. EMPTY BENCH SPOT PRIORITY CHECK - **CRITICAL FIRST STEP**",
+                "   • **MANDATORY**: Check if any bench spots (BN1-BN6) are empty",
+                "   • **IF EMPTY SPOTS EXIST**: Use empty spot, DO NOT consider any drops",
+                "   • **RULE**: Empty spots always take priority over any drop decision",
+                "   • **FORMAT**: 'RECOMMENDATION: ADD [Player], OPEN SPOT: [Position], REASON: Empty bench spot available'",
+                "   • **STOP HERE** if empty spots available - do not analyze drops",
+                "",
+                "7. COMPREHENSIVE ROSTER ANALYSIS (Only if NO empty spots)",
+                "   • SCAN ALL POSITIONS: Analyze starters, flex, and bench players",
+                "   • BENCH DEPTH ASSESSMENT: Identify weakest bench players by tier",
+                "   • POSITIONAL FLEXIBILITY: Consider W/T and W/R/T slot optimization",
+                "   • **ONLY PROCEED** if all 16 roster spots are completely filled",
+                "",
+                "8. SYSTEMATIC DROP CANDIDATE EVALUATION (Only if roster completely full)", 
+                "   • BENCH FIRST RULE: Always consider bench players before starters",
+                "   • CROSS-POSITION DROPS: Drop weak bench RB for strong waiver WR",
+                "   • TIER-BASED RANKING: Drop QB3 before QB2, RB4 before RB2",
+                "   • DEPTH CONSIDERATION: Keep shallow positions, drop deep positions",
+                "",
+                "9. BALANCED OUTPUT FORMAT - **HELPFUL BUT NOT VERBOSE**",
+                "   • **AIM FOR 6-8 SENTENCES TOTAL** - Informative but concise",
+                "   • **CLEAR RECOMMENDATION FIRST**: Start with bold recommendation",
+                "   • **PLAYER COMPARISON**: 2-3 sentences comparing waiver candidate vs current players",
+                "   • **REASONING**: 2-3 sentences explaining the decision with tier/ECR context",
+                "   • **NO REPETITION**: Avoid repeating the same points multiple times",
+                "",
+                "10. STRUCTURED RECOMMENDATION OUTPUT",
+                "   • **PRIMARY FORMAT** (if empty spots): '✅ **RECOMMENDATION: ADD [Player] to OPEN BENCH SPOT ([BN#])**'",
+                "   • **SECONDARY FORMAT** (if full roster): '✅ **RECOMMENDATION: ADD [Player], DROP [Player]**'", 
+                "   • **REJECTION FORMAT**: '❌ **RECOMMENDATION: DO NOT ADD [Player]**'",
+                "   • **FOLLOW WITH**: Brief 1-2 sentence explanation only",
+                "   • **CRITICAL**: Be concise, actionable, and avoid verbose analysis"
+            ]
+        )
+        
+        # Make AI request
+        response_text = make_gemini_request(enhanced_prompt, user_key)
+        result = process_ai_response_v2(response_text, 'waiver_swap_enhanced')
+        
+        # Include position warnings in response if any
+        if position_warnings:
+            result += "\n\n---\n**Position Compatibility Warnings:**\n" + "\n".join(position_warnings)
+        
+        # Phase D: Smart Drop Summary Logic
+        bench_spots = roster_analysis['bench_spots_available']
+        drop_candidates = roster_analysis['drop_candidates']
+        
+        # Only show additional context when truly needed
+        if bench_spots > 0:
+            # Scenario: Empty spots available
+            # AI should handle this, but add reminder if AI missed it
+            if 'open' not in result.lower() and 'empty' not in result.lower() and 'spot' not in result.lower():
+                result += f"\n\n💡 **Note**: {bench_spots} open bench spots available - consider using instead of dropping players."
+        
+        elif bench_spots == 0 and drop_candidates:
+            # Scenario: Roster completely full, may need drop guidance
+            ai_mentioned_drops = any(word in result.lower() for word in ['drop', 'release', 'cut'])
+            
+            if not ai_mentioned_drops:
+                # AI didn't suggest specific drops, provide helpful summary
+                top_drops = drop_candidates[:2]  # Show top 2 only
+                drop_names = [f"{c['name']} ({c['tier_info'].split(',')[0]})" for c in top_drops]
+                result += f"\n\n**💡 Consider dropping:** {' or '.join(drop_names)}"
+            
+            # If roster is full but AI still said to use open spot, that's an error - correct it
+            if any(phrase in result.lower() for phrase in ['open spot', 'empty spot', 'bench spot']):
+                result += f"\n\n**⚠️ Note**: Roster is actually full ({16 - bench_spots}/16 spots filled) - drops required for additions."
+        
+        return jsonify({
+            'result': result,
+            'roster_analysis': roster_analysis,
+            'drop_recommendation': parse_drop_recommendation(result),
+            'enhanced': True
+        })
+        
+    except Exception as e:
+        print(f"ERROR: Enhanced waiver analysis failed: {e}")
+        traceback.print_exc()
+        
+        # Fallback to traditional analysis if enhanced fails
+        try:
+            print("INFO: Falling back to traditional waiver analysis")
+            fallback_data = {
+                'roster': filled_positions,
+                'player_to_add': player_to_add,
+                'ecr_type_preference': ecr_type_pref
+            }
+            
+            # Call traditional endpoint logic
+            return waiver_swap_analysis()
+            
+        except Exception as fallback_error:
+            print(f"ERROR: Fallback analysis also failed: {fallback_error}")
+            return jsonify({"error": f"Both enhanced and fallback analysis failed: {str(e)}"}), 500
 
 @app.route('/api/waiver_wire_analysis', methods=['POST'])
 def waiver_wire_analysis():
