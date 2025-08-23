@@ -581,11 +581,15 @@ def player_dossier():
         # Get data from combined cache using the normalized player name
         combined_info = combined_player_data_cache.get(normalize_player_name(player_name), {})
 
+        # Enhanced player data response with comprehensive metadata for frontend
         player_data_response = {
+            # Core player information
             "name": combined_info.get('display_name', player_name.title()), # Use display_name for the dossier header
             "team": combined_info.get('team', 'N/A'),
             "position": combined_info.get('position', 'N/A'),
             "bye_week": combined_info.get('bye_week'),
+            
+            # ECR and consensus data
             "ecr_overall": combined_info.get('ecr_overall'),
             "sd_overall": combined_info.get('sd_overall'),
             "best_overall": combined_info.get('best_overall'),
@@ -601,6 +605,38 @@ def player_dossier():
             "best_rookie": combined_info.get('best_rookie'),
             "worst_rookie": combined_info.get('worst_rookie'),
             "rank_delta_rookie": combined_info.get('rank_delta_rookie'),
+            
+            # Weekly projection and outlook data (NEW)
+            "projected_points": combined_info.get('projected_points'),
+            "start_sit_grade": combined_info.get('start_sit_grade'),
+            "grade_confidence_score": combined_info.get('grade_confidence_score'),
+            "projection_confidence": combined_info.get('projection_confidence'),
+            "weekly_ecr": combined_info.get('weekly_ecr'),
+            
+            # Matchup and schedule data (NEW)
+            "opponent": combined_info.get('opponent'),
+            "matchup_difficulty": combined_info.get('matchup_difficulty'),
+            "home_away": combined_info.get('home_away'),
+            "schedule_outlook": combined_info.get('schedule_outlook'),
+            
+            # Market value and ownership data (NEW)
+            "weekly_ownership": combined_info.get('weekly_ownership'),
+            "value_opportunity_score": combined_info.get('value_opportunity_score'),
+            "value_1qb": combined_info.get('value_1qb'),
+            "value_2qb": combined_info.get('value_2qb'),
+            
+            # Age and development data (NEW)
+            "age": combined_info.get('age'),
+            "age_category": combined_info.get('age_category'),
+            "draft_year": combined_info.get('draft_year'),
+            "years_exp": combined_info.get('years_exp'),
+            "is_rookie": combined_info.get('is_rookie'),
+            
+            # Additional metadata for comprehensive analysis (NEW)
+            "injury_status": combined_info.get('injury_status'),
+            "depth_chart_position": combined_info.get('depth_chart_position'),
+            "target_share": combined_info.get('target_share'),
+            "snap_percentage": combined_info.get('snap_percentage'),
         }
 
         # --- Generate Enhanced AI Analysis (Phase 0B) ---
@@ -615,13 +651,50 @@ def player_dossier():
         # Get chain-of-thought reasoning questions
         reasoning_questions = ChainOfThoughtBuilder.get_reasoning_questions_list(ReasoningType.PLAYER_EVALUATION)
         
-        # Build enhanced prompt with all Phase 0B components
+        # Build enhanced prompt with all Phase 0B components - COMPREHENSIVE 6-STEP METHODOLOGY
         methodology_steps = [
-            'Evaluate current role security and depth chart position within team context',
-            'Compare Expert Consensus Ranking to projected fantasy performance and draft value',
-            'Assess injury history, age factors, and other risk variables that could impact season',
-            'Project 2025 season outlook considering all supporting factors and potential scenarios',
-            'Synthesize analysis into clear, actionable draft recommendation with appropriate confidence'
+            "1. FANTASY VALUE ASSESSMENT (Enhanced Multi-Source)",
+            "   • Analyze ECR consensus and expert agreement levels",
+            "   • Integrate weekly projection data with season-long outlook", 
+            "   • Compare positional tier with weekly scoring potential",
+            "   • Factor expert confidence grades and projection reliability",
+            "   • Identify ranking volatility and consistency patterns",
+            "",
+            "2. WEEKLY OUTLOOK AND MATCHUP ANALYSIS",
+            "   • Evaluate current week projection and expert grade confidence",
+            "   • Assess matchup difficulty and historical performance vs opponent type",
+            "   • Consider home/away factors and travel implications",
+            "   • Analyze upcoming schedule strength (2-4 weeks)",
+            "   • Identify favorable and challenging matchup windows",
+            "",
+            "3. MARKET POSITIONING AND OWNERSHIP ANALYSIS", 
+            "   • Evaluate current ownership vs projected production",
+            "   • Identify potential market inefficiencies (over/under valued)",
+            "   • Assess acquisition opportunity and roster availability",
+            "   • Compare platform-specific ownership differences",
+            "   • Highlight arbitrage opportunities for astute managers",
+            "",
+            "4. AGE TRAJECTORY AND DEVELOPMENT CURVE",
+            "   • Analyze age-related performance expectations by position",
+            "   • Evaluate career stage (ascending, prime, declining)",
+            "   • Consider experience level and development potential",
+            "   • Assess long-term vs short-term roster value",
+            "   • Factor position-specific aging curves and decline patterns",
+            "",
+            "5. TREND ANALYSIS AND MOMENTUM EVALUATION",
+            "   • Examine recent ranking trends and expert consensus shifts",
+            "   • Evaluate trend sustainability vs temporary fluctuation",
+            "   • Assess injury impact, role changes, and team context",
+            "   • Identify potential breakout or decline indicators",
+            "   • Consider coaching changes and system fit implications",
+            "",
+            "6. COMPREHENSIVE STRATEGIC RECOMMENDATIONS",
+            "   • Provide clear DRAFT/TRADE FOR/HOLD/SELL guidance",
+            "   • Identify optimal usage scenarios (start/sit strategy)",
+            "   • Suggest complementary players and roster construction",
+            "   • Highlight key weeks to target (favorable matchups)",
+            "   • Address risk factors and contingency planning",
+            "   • Include confidence levels and timeline expectations"
         ]
         
         enhanced_prompt = PromptBuilder.build_enhanced_prompt(

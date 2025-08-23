@@ -76,7 +76,18 @@ button:hover {
 
 .dossierOutput {
   margin-top: 20px;
+  display: flex;
+  flex-direction: column;
 }
+
+/* Progressive disclosure - logical section ordering */
+.quickScanCard { order: 1; }
+.playerOverviewCard { order: 2; }
+.weeklyOutlookCard { order: 3; }
+.marketAnalysisCard { order: 4; }
+.ageTrajectoryCard { order: 5; }
+.ecrDataCard { order: 6; }
+.aiAnalysisCard { order: 7; }
 
 .playerOverviewCard {
   padding: 15px;
@@ -181,4 +192,1049 @@ button:hover {
   white-space: pre-wrap;
   word-wrap: break-word;
   font-size: 1.1em;
+}
+
+/* ========== TIER-BASED COLOR CODING SYSTEM ========== */
+
+/* Tier Colors */
+:root {
+  --tier-elite-color: #28a745;      /* Green - Elite/Premium */
+  --tier-elite-bg: rgba(40, 167, 69, 0.1);
+  --tier-elite-border: rgba(40, 167, 69, 0.3);
+  
+  --tier-high-color: #20c997;       /* Teal - High Value */
+  --tier-high-bg: rgba(32, 201, 151, 0.1);
+  --tier-high-border: rgba(32, 201, 151, 0.3);
+  
+  --tier-excellent-color: #17a2b8;  /* Cyan - Excellent */
+  --tier-excellent-bg: rgba(23, 162, 184, 0.1);
+  --tier-excellent-border: rgba(23, 162, 184, 0.3);
+  
+  --tier-good-color: #007bff;       /* Blue - Good/Solid */
+  --tier-good-bg: rgba(0, 123, 255, 0.1);
+  --tier-good-border: rgba(0, 123, 255, 0.3);
+  
+  --tier-solid-color: #6c757d;      /* Gray - Solid/Standard */
+  --tier-solid-bg: rgba(108, 117, 125, 0.1);
+  --tier-solid-border: rgba(108, 117, 125, 0.3);
+  
+  --tier-standard-color: #6f42c1;   /* Purple - Standard */
+  --tier-standard-bg: rgba(111, 66, 193, 0.1);
+  --tier-standard-border: rgba(111, 66, 193, 0.3);
+  
+  --tier-flex-color: #fd7e14;       /* Orange - Flex */
+  --tier-flex-bg: rgba(253, 126, 20, 0.1);
+  --tier-flex-border: rgba(253, 126, 20, 0.3);
+  
+  --tier-serviceable-color: #ffc107; /* Yellow - Serviceable */
+  --tier-serviceable-bg: rgba(255, 193, 7, 0.1);
+  --tier-serviceable-border: rgba(255, 193, 7, 0.3);
+  
+  --tier-limited-color: #dc3545;    /* Red - Limited/Risky */
+  --tier-limited-bg: rgba(220, 53, 69, 0.1);
+  --tier-limited-border: rgba(220, 53, 69, 0.3);
+  
+  --tier-concerning-color: #e83e8c;  /* Pink - Concerning */
+  --tier-concerning-bg: rgba(232, 62, 140, 0.1);
+  --tier-concerning-border: rgba(232, 62, 140, 0.3);
+}
+
+/* Base tier classes */
+.tier-elite {
+  color: var(--tier-elite-color);
+  background-color: var(--tier-elite-bg);
+  border: 1px solid var(--tier-elite-border);
+}
+
+.tier-high {
+  color: var(--tier-high-color);
+  background-color: var(--tier-high-bg);
+  border: 1px solid var(--tier-high-border);
+}
+
+.tier-excellent {
+  color: var(--tier-excellent-color);
+  background-color: var(--tier-excellent-bg);
+  border: 1px solid var(--tier-excellent-border);
+}
+
+.tier-good {
+  color: var(--tier-good-color);
+  background-color: var(--tier-good-bg);
+  border: 1px solid var(--tier-good-border);
+}
+
+.tier-solid {
+  color: var(--tier-solid-color);
+  background-color: var(--tier-solid-bg);
+  border: 1px solid var(--tier-solid-border);
+}
+
+.tier-standard {
+  color: var(--tier-standard-color);
+  background-color: var(--tier-standard-bg);
+  border: 1px solid var(--tier-standard-border);
+}
+
+.tier-flex {
+  color: var(--tier-flex-color);
+  background-color: var(--tier-flex-bg);
+  border: 1px solid var(--tier-flex-border);
+}
+
+.tier-serviceable {
+  color: var(--tier-serviceable-color);
+  background-color: var(--tier-serviceable-bg);
+  border: 1px solid var(--tier-serviceable-border);
+}
+
+.tier-limited {
+  color: var(--tier-limited-color);
+  background-color: var(--tier-limited-bg);
+  border: 1px solid var(--tier-limited-border);
+}
+
+.tier-concerning {
+  color: var(--tier-concerning-color);
+  background-color: var(--tier-concerning-bg);
+  border: 1px solid var(--tier-concerning-border);
+}
+
+/* Exceptional tier for special cases */
+.tier-exceptional {
+  color: #155724;
+  background: linear-gradient(135deg, rgba(40, 167, 69, 0.15), rgba(40, 167, 69, 0.25));
+  border: 2px solid var(--tier-elite-border);
+  box-shadow: 0 2px 8px rgba(40, 167, 69, 0.2);
+}
+
+/* ========== SPECIFIC ELEMENT CLASSES ========== */
+
+/* Player Overview Enhanced Displays */
+.ageDisplay, .experienceDisplay, .projectionDisplay, 
+.gradeDisplay, .matchupDisplay, .ownershipDisplay {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-weight: 500;
+  margin: 2px 0;
+  display: inline-block;
+  min-width: 200px;
+}
+
+/* Badge classes for specific sections */
+.projectionBadge, .matchupBadge, .valueBadge, 
+.opportunityBadge, .ownershipBadge, .ageBadge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.9em;
+  font-weight: 600;
+  margin-right: 8px;
+}
+
+/* Weekly Outlook Section */
+.weeklyOutlookCard {
+  border-left: 4px solid var(--tier-good-color);
+}
+
+.weeklyGrid {
+  display: grid;
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.weeklySection {
+  background-color: var(--input-background);
+  padding: 12px;
+  border-radius: 6px;
+  border-left: 3px solid transparent;
+}
+
+.projectionDetails, .matchupDetails {
+  display: block;
+  font-size: 0.95em;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.matchupRecommendation {
+  display: block;
+  font-style: italic;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.confidence-high {
+  background-color: var(--tier-elite-bg);
+  color: var(--tier-elite-color);
+}
+
+.confidence-moderate {
+  background-color: var(--tier-good-bg);
+  color: var(--tier-good-color);
+}
+
+.confidence-low {
+  background-color: var(--tier-limited-bg);
+  color: var(--tier-limited-color);
+}
+
+/* Market Analysis Section */
+.marketAnalysisCard {
+  border-left: 4px solid var(--tier-excellent-color);
+}
+
+.marketGrid {
+  display: grid;
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.marketSection {
+  background-color: var(--input-background);
+  padding: 12px;
+  border-radius: 6px;
+}
+
+.valueDescription, .opportunityDescription, .ownershipDetails {
+  display: block;
+  font-size: 0.95em;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.opportunityAction {
+  display: block;
+  font-weight: 500;
+  margin-top: 6px;
+  font-size: 0.9em;
+}
+
+/* Age Trajectory Section */
+.ageTrajectoryCard {
+  border-left: 4px solid var(--tier-standard-color);
+}
+
+.ageGrid {
+  display: grid;
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.ageSection {
+  background-color: var(--input-background);
+  padding: 12px;
+  border-radius: 6px;
+}
+
+.ageOutlook, .ageStrategy {
+  display: block;
+  font-size: 0.95em;
+  margin-top: 4px;
+}
+
+/* Ownership tier specific colors */
+.ultra-low { border-left-color: var(--tier-elite-color); }
+.low { border-left-color: var(--tier-high-color); }
+.moderate { border-left-color: var(--tier-good-color); }
+.high { border-left-color: var(--tier-standard-color); }
+.very-high { border-left-color: var(--tier-flex-color); }
+.universal { border-left-color: var(--tier-limited-color); }
+
+/* Priority classes for acquisition priority */
+.priorityImmediate {
+  background: linear-gradient(135deg, var(--tier-elite-bg), var(--tier-elite-border));
+  border: 2px solid var(--tier-elite-color);
+  color: var(--tier-elite-color);
+  font-weight: 700;
+}
+
+.priorityHigh {
+  background-color: var(--tier-high-bg);
+  border: 1px solid var(--tier-high-border);
+  color: var(--tier-high-color);
+  font-weight: 600;
+}
+
+.priorityMedium {
+  background-color: var(--tier-good-bg);
+  border: 1px solid var(--tier-good-border);
+  color: var(--tier-good-color);
+}
+
+.priorityStandard {
+  background-color: var(--tier-standard-bg);
+  border: 1px solid var(--tier-standard-border);
+  color: var(--tier-standard-color);
+}
+
+.priorityUnavailable {
+  background-color: var(--tier-limited-bg);
+  border: 1px solid var(--tier-limited-border);
+  color: var(--tier-limited-color);
+}
+
+/* Age/Career stage specific styling */
+.stageEarly { color: var(--tier-high-color); }
+.stageDevelopment { color: var(--tier-excellent-color); }
+.stagePeak { color: var(--tier-elite-color); }
+.stageVeteran { color: var(--tier-standard-color); }
+.stageLate { color: var(--tier-limited-color); }
+
+/* Trajectory classes */
+.trajectoryPeak { color: var(--tier-elite-color); font-weight: 600; }
+.trajectoryGood { color: var(--tier-good-color); font-weight: 500; }
+.trajectoryRisk { color: var(--tier-limited-color); font-weight: 500; }
+.trajectoryAscending { color: var(--tier-high-color); font-weight: 500; }
+.trajectoryPrime { color: var(--tier-elite-color); font-weight: 600; }
+.trajectoryBalance { color: var(--tier-standard-color); }
+.trajectoryConsider { color: var(--tier-flex-color); }
+
+/* Strategy classes */
+.strategyBuy { 
+  background-color: var(--tier-elite-bg);
+  color: var(--tier-elite-color);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.strategyHold { 
+  background-color: var(--tier-good-bg);
+  color: var(--tier-good-color);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.strategySell { 
+  background-color: var(--tier-limited-bg);
+  color: var(--tier-limited-color);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.strategyStandard { 
+  background-color: var(--tier-standard-bg);
+  color: var(--tier-standard-color);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+/* ========== ACTIONABLE RECOMMENDATIONS STYLING ========== */
+
+.actionableRecommendation {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.95em;
+  border-left: 4px solid transparent;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.strategyGuidance, .gameplanImpact, .competitiveEdge, 
+.fantasyImpact, .urgencyIndicator, .rosterStrategy, 
+.timelineGuidance, .waiverFantasyImpact {
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-style: italic;
+  background-color: var(--input-background);
+  border-left: 3px solid var(--border-color);
+}
+
+/* Tier-specific actionable recommendation styling */
+.actionableRecommendation.tier-elite {
+  background: linear-gradient(135deg, var(--tier-elite-bg), rgba(40, 167, 69, 0.15));
+  color: var(--tier-elite-color);
+  border-left-color: var(--tier-elite-color);
+  border: 1px solid var(--tier-elite-border);
+}
+
+.actionableRecommendation.tier-excellent {
+  background: linear-gradient(135deg, var(--tier-excellent-bg), rgba(23, 162, 184, 0.15));
+  color: var(--tier-excellent-color);
+  border-left-color: var(--tier-excellent-color);
+  border: 1px solid var(--tier-excellent-border);
+}
+
+.actionableRecommendation.tier-solid {
+  background: linear-gradient(135deg, var(--tier-solid-bg), rgba(108, 117, 125, 0.15));
+  color: var(--tier-solid-color);
+  border-left-color: var(--tier-solid-color);
+  border: 1px solid var(--tier-solid-border);
+}
+
+.actionableRecommendation.tier-serviceable,
+.actionableRecommendation.tier-flex {
+  background: linear-gradient(135deg, var(--tier-serviceable-bg), rgba(255, 193, 7, 0.15));
+  color: var(--tier-serviceable-color);
+  border-left-color: var(--tier-serviceable-color);
+  border: 1px solid var(--tier-serviceable-border);
+}
+
+.actionableRecommendation.tier-limited,
+.actionableRecommendation.tier-concerning {
+  background: linear-gradient(135deg, var(--tier-limited-bg), rgba(220, 53, 69, 0.15));
+  color: var(--tier-limited-color);
+  border-left-color: var(--tier-limited-color);
+  border: 1px solid var(--tier-limited-border);
+}
+
+/* Confidence-based styling for matchup recommendations */
+.actionableRecommendation.confidence-high {
+  background: linear-gradient(135deg, var(--tier-elite-bg), rgba(40, 167, 69, 0.2));
+  border-left-color: var(--tier-elite-color);
+  color: var(--tier-elite-color);
+}
+
+.actionableRecommendation.confidence-moderate {
+  background: linear-gradient(135deg, var(--tier-good-bg), rgba(0, 123, 255, 0.15));
+  border-left-color: var(--tier-good-color);
+  color: var(--tier-good-color);
+}
+
+.actionableRecommendation.confidence-low {
+  background: linear-gradient(135deg, var(--tier-limited-bg), rgba(220, 53, 69, 0.15));
+  border-left-color: var(--tier-limited-color);
+  color: var(--tier-limited-color);
+}
+
+/* Specific element styling */
+.competitiveEdge {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(255, 215, 0, 0.2));
+  border-left-color: #ffd700;
+  color: #b8860b;
+  font-weight: 600;
+}
+
+.urgencyIndicator {
+  animation: pulse 2s infinite;
+}
+
+.urgencyIndicator.exceptional {
+  background: linear-gradient(135deg, var(--tier-elite-bg), rgba(40, 167, 69, 0.25));
+  border-left-color: var(--tier-elite-color);
+  color: var(--tier-elite-color);
+  font-weight: 700;
+}
+
+.rosterStrategy.growth-potential {
+  background: linear-gradient(135deg, rgba(32, 201, 151, 0.1), rgba(32, 201, 151, 0.2));
+  border-left-color: var(--tier-high-color);
+  color: var(--tier-high-color);
+}
+
+.rosterStrategy.high-value {
+  background: linear-gradient(135deg, var(--tier-elite-bg), rgba(40, 167, 69, 0.2));
+  border-left-color: var(--tier-elite-color);
+  color: var(--tier-elite-color);
+}
+
+.rosterStrategy.decline-risk {
+  background: linear-gradient(135deg, var(--tier-limited-bg), rgba(220, 53, 69, 0.15));
+  border-left-color: var(--tier-limited-color);
+  color: var(--tier-limited-color);
+}
+
+/* Pulse animation for urgent items */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(40, 167, 69, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+  }
+}
+
+/* Enhanced visual hierarchy */
+.strategyGuidance {
+  background: linear-gradient(135deg, rgba(111, 66, 193, 0.05), rgba(111, 66, 193, 0.15));
+  border-left-color: var(--tier-standard-color);
+}
+
+.timelineGuidance {
+  background: linear-gradient(135deg, rgba(0, 123, 255, 0.05), rgba(0, 123, 255, 0.15));
+  border-left-color: var(--tier-good-color);
+}
+
+.gameplanImpact {
+  background: linear-gradient(135deg, rgba(253, 126, 20, 0.05), rgba(253, 126, 20, 0.15));
+  border-left-color: var(--tier-flex-color);
+}
+
+/* ========== TOOLTIP SYSTEM ========== */
+
+.tooltipWrapper {
+  position: relative;
+  cursor: help;
+  display: inline-block;
+}
+
+.tooltipWrapper:hover {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
+
+.tooltip {
+  background-color: rgba(0, 0, 0, 0.95);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.85em;
+  max-width: 300px;
+  line-height: 1.4;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(4px);
+  animation: tooltipFadeIn 0.2s ease-out;
+}
+
+.tooltipDetailed {
+  max-width: 400px;
+  padding: 12px 16px;
+  font-size: 0.9em;
+}
+
+.tooltip h4 {
+  margin: 0 0 6px 0;
+  color: var(--tier-high-color);
+  font-size: 0.95em;
+}
+
+.tooltip p {
+  margin: 4px 0;
+}
+
+.tooltip ul {
+  margin: 6px 0;
+  padding-left: 16px;
+}
+
+.tooltip li {
+  margin: 2px 0;
+}
+
+.tooltip strong {
+  color: var(--tier-elite-color);
+}
+
+.tooltip em {
+  color: var(--tier-high-color);
+  font-style: normal;
+}
+
+/* Tooltip content sections */
+.tooltipSection {
+  margin-bottom: 8px;
+}
+
+.tooltipSection:last-child {
+  margin-bottom: 0;
+}
+
+.tooltipBadge {
+  display: inline-block;
+  padding: 2px 6px;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  font-size: 0.8em;
+  margin-right: 4px;
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Methodology tooltips */
+.methodologyTooltip {
+  background: linear-gradient(135deg, rgba(111, 66, 193, 0.95), rgba(23, 162, 184, 0.95));
+  border: 1px solid var(--tier-standard-border);
+}
+
+.calculationTooltip {
+  background: linear-gradient(135deg, rgba(0, 123, 255, 0.95), rgba(32, 201, 151, 0.95));
+  border: 1px solid var(--tier-good-border);
+}
+
+/* ========== QUICK SCAN SUMMARY SECTION ========== */
+
+.quickScanCard {
+  background: linear-gradient(135deg, rgba(0, 123, 255, 0.05), rgba(32, 201, 151, 0.05));
+  border-left: 4px solid var(--tier-good-color);
+  margin-bottom: 25px;
+}
+
+.quickScanCard h3 {
+  color: var(--tier-good-color);
+  margin-bottom: 15px;
+  font-size: 1.4em;
+  text-align: center;
+}
+
+.quickScanGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.quickScanItem {
+  background-color: white;
+  padding: 12px;
+  border-radius: 8px;
+  text-align: center;
+  border: 2px solid transparent;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.quickScanItem:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.quickScanLabel {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.quickScanValue {
+  font-size: 1.1em;
+  font-weight: 700;
+  margin-bottom: 4px;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.quickScanContext {
+  font-size: 0.8em;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Quick scan item tier styling */
+.quickScanItem.tier-elite {
+  border-color: var(--tier-elite-color);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), var(--tier-elite-bg));
+}
+
+.quickScanItem.tier-elite .quickScanValue {
+  color: var(--tier-elite-color);
+}
+
+.quickScanItem.tier-excellent {
+  border-color: var(--tier-excellent-color);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), var(--tier-excellent-bg));
+}
+
+.quickScanItem.tier-excellent .quickScanValue {
+  color: var(--tier-excellent-color);
+}
+
+.quickScanItem.tier-solid {
+  border-color: var(--tier-solid-color);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), var(--tier-solid-bg));
+}
+
+.quickScanItem.tier-solid .quickScanValue {
+  color: var(--tier-solid-color);
+}
+
+.quickScanItem.tier-high {
+  border-color: var(--tier-high-color);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), var(--tier-high-bg));
+}
+
+.quickScanItem.tier-high .quickScanValue {
+  color: var(--tier-high-color);
+}
+
+.quickScanItem.tier-good {
+  border-color: var(--tier-good-color);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), var(--tier-good-bg));
+}
+
+.quickScanItem.tier-good .quickScanValue {
+  color: var(--tier-good-color);
+}
+
+.quickScanItem.tier-standard,
+.quickScanItem.tier-serviceable {
+  border-color: var(--tier-standard-color);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), var(--tier-standard-bg));
+}
+
+.quickScanItem.tier-standard .quickScanValue,
+.quickScanItem.tier-serviceable .quickScanValue {
+  color: var(--tier-standard-color);
+}
+
+.quickScanItem.tier-limited {
+  border-color: var(--tier-limited-color);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), var(--tier-limited-bg));
+}
+
+.quickScanItem.tier-limited .quickScanValue {
+  color: var(--tier-limited-color);
+}
+
+/* Confidence-based quick scan styling */
+.quickScanItem.confidence-high {
+  border-color: var(--tier-elite-color);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), var(--tier-elite-bg));
+}
+
+.quickScanItem.confidence-high .quickScanValue {
+  color: var(--tier-elite-color);
+}
+
+.quickScanItem.confidence-moderate {
+  border-color: var(--tier-good-color);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), var(--tier-good-bg));
+}
+
+.quickScanItem.confidence-moderate .quickScanValue {
+  color: var(--tier-good-color);
+}
+
+.quickScanItem.confidence-low {
+  border-color: var(--tier-limited-color);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), var(--tier-limited-bg));
+}
+
+.quickScanItem.confidence-low .quickScanValue {
+  color: var(--tier-limited-color);
+}
+
+/* Ownership tier styling for quick scan */
+.quickScanItem.ultra-low,
+.quickScanItem.low {
+  border-color: var(--tier-elite-color);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), var(--tier-elite-bg));
+}
+
+.quickScanItem.ultra-low .quickScanValue,
+.quickScanItem.low .quickScanValue {
+  color: var(--tier-elite-color);
+}
+
+.quickScanItem.moderate {
+  border-color: var(--tier-good-color);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), var(--tier-good-bg));
+}
+
+.quickScanItem.moderate .quickScanValue {
+  color: var(--tier-good-color);
+}
+
+.quickScanItem.high,
+.quickScanItem.very-high,
+.quickScanItem.universal {
+  border-color: var(--tier-standard-color);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), var(--tier-standard-bg));
+}
+
+.quickScanItem.high .quickScanValue,
+.quickScanItem.very-high .quickScanValue,
+.quickScanItem.universal .quickScanValue {
+  color: var(--tier-standard-color);
+}
+
+/* ========== PROGRESSIVE DISCLOSURE & PRIORITY INDICATORS ========== */
+
+.sectionPriorityIndicator {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: priorityPulse 2s infinite ease-in-out;
+}
+
+.priorityHigh .sectionPriorityIndicator {
+  background-color: var(--tier-elite-color);
+  box-shadow: 0 0 8px var(--tier-elite-color);
+}
+
+.priorityMedium .sectionPriorityIndicator {
+  background-color: var(--tier-good-color);
+  box-shadow: 0 0 6px var(--tier-good-color);
+}
+
+.priorityStandard .sectionPriorityIndicator {
+  background-color: var(--tier-standard-color);
+  box-shadow: 0 0 4px var(--tier-standard-color);
+}
+
+@keyframes priorityPulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+/* Enhanced information architecture labels */
+.sectionTypeLabel {
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 0.65em;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  z-index: 10;
+}
+
+.quickScanCard .sectionTypeLabel {
+  background: linear-gradient(135deg, var(--tier-good-color), var(--tier-excellent-color));
+  color: white;
+}
+
+.weeklyOutlookCard .sectionTypeLabel {
+  background: linear-gradient(135deg, var(--tier-elite-color), var(--tier-high-color));
+  color: white;
+}
+
+.marketAnalysisCard .sectionTypeLabel {
+  background: linear-gradient(135deg, var(--tier-excellent-color), var(--tier-good-color));
+  color: white;
+}
+
+/* ========== IMPROVED VISUAL HIERARCHY & SECTION SEPARATORS ========== */
+
+.playerOverviewCard,
+.ecrDataCard,
+.weeklyOutlookCard,
+.marketAnalysisCard,
+.ageTrajectoryCard,
+.aiAnalysisCard {
+  position: relative;
+  margin-bottom: 30px;
+  border-radius: 12px;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+}
+
+.playerOverviewCard:hover,
+.ecrDataCard:hover,
+.weeklyOutlookCard:hover,
+.marketAnalysisCard:hover,
+.ageTrajectoryCard:hover,
+.aiAnalysisCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 12px rgba(0, 0, 0, 0.12);
+}
+
+/* Progressive section numbering and emphasis */
+.playerOverviewCard {
+  background: linear-gradient(135deg, rgba(0, 123, 255, 0.03), rgba(255, 255, 255, 0.98));
+  border-left: 5px solid var(--tier-good-color);
+  order: 1;
+}
+
+.weeklyOutlookCard {
+  background: linear-gradient(135deg, rgba(40, 167, 69, 0.03), rgba(255, 255, 255, 0.98));
+  border-left: 5px solid var(--tier-elite-color);
+  order: 2;
+  position: relative;
+}
+
+.weeklyOutlookCard::before {
+  content: 'PRIORITY FOCUS';
+  position: absolute;
+  top: -8px;
+  right: 15px;
+  background: linear-gradient(135deg, var(--tier-elite-color), var(--tier-high-color));
+  color: white;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.7em;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.marketAnalysisCard {
+  background: linear-gradient(135deg, rgba(23, 162, 184, 0.03), rgba(255, 255, 255, 0.98));
+  border-left: 5px solid var(--tier-excellent-color);
+  order: 3;
+}
+
+.ageTrajectoryCard {
+  background: linear-gradient(135deg, rgba(111, 66, 193, 0.03), rgba(255, 255, 255, 0.98));
+  border-left: 5px solid var(--tier-standard-color);
+  order: 4;
+}
+
+.ecrDataCard {
+  background: linear-gradient(135deg, rgba(108, 117, 125, 0.03), rgba(255, 255, 255, 0.98));
+  border-left: 5px solid var(--tier-solid-color);
+  order: 5;
+}
+
+.aiAnalysisCard {
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.03), rgba(255, 255, 255, 0.98));
+  border-left: 5px solid var(--tier-serviceable-color);
+  order: 6;
+  margin-top: 40px;
+  position: relative;
+}
+
+.aiAnalysisCard::before {
+  content: 'DETAILED ANALYSIS';
+  position: absolute;
+  top: -8px;
+  left: 15px;
+  background: linear-gradient(135deg, var(--tier-serviceable-color), var(--tier-flex-color));
+  color: white;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.7em;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Enhanced section headers */
+.playerOverviewCard h3,
+.ecrDataCard h3,
+.weeklyOutlookCard h3,
+.marketAnalysisCard h3,
+.ageTrajectoryCard h3,
+.aiAnalysisCard h3 {
+  font-size: 1.3em;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.06);
+  position: relative;
+  font-weight: 600;
+}
+
+.playerOverviewCard h3 {
+  color: var(--tier-good-color);
+}
+
+.weeklyOutlookCard h3 {
+  color: var(--tier-elite-color);
+  font-weight: 700;
+}
+
+.marketAnalysisCard h3 {
+  color: var(--tier-excellent-color);
+}
+
+.ageTrajectoryCard h3 {
+  color: var(--tier-standard-color);
+}
+
+.ecrDataCard h3 {
+  color: var(--tier-solid-color);
+}
+
+.aiAnalysisCard h3 {
+  color: var(--tier-serviceable-color);
+}
+
+/* Section dividers between major sections */
+.playerOverviewCard::after,
+.weeklyOutlookCard::after,
+.marketAnalysisCard::after,
+.ageTrajectoryCard::after,
+.ecrDataCard::after {
+  content: '';
+  position: absolute;
+  bottom: -15px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80px;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--border-color), transparent);
+  border-radius: 2px;
+}
+
+/* ========== RESPONSIVE DESIGN ========== */
+
+@media (max-width: 768px) {
+  .ecrGrid, .weeklyGrid, .marketGrid, .ageGrid {
+    grid-template-columns: 1fr;
+  }
+  
+  .quickScanGrid {
+    grid-template-columns: 1fr;
+  }
+  
+  .quickScanItem {
+    padding: 10px;
+    margin-bottom: 8px;
+  }
+  
+  .playerBasicInfo {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .ageDisplay, .experienceDisplay, .projectionDisplay, 
+  .gradeDisplay, .matchupDisplay, .ownershipDisplay {
+    min-width: auto;
+    width: 100%;
+  }
+  
+  /* Mobile section adjustments */
+  .weeklyOutlookCard::before,
+  .aiAnalysisCard::before {
+    font-size: 0.6em;
+    padding: 2px 8px;
+  }
+  
+  .sectionPriorityIndicator {
+    width: 6px;
+    height: 6px;
+    top: 8px;
+    left: 8px;
+  }
+  
+  .playerOverviewCard h3,
+  .ecrDataCard h3,
+  .weeklyOutlookCard h3,
+  .marketAnalysisCard h3,
+  .ageTrajectoryCard h3,
+  .aiAnalysisCard h3 {
+    font-size: 1.2em;
+  }
+  
+  .tooltip {
+    max-width: 280px;
+    font-size: 0.8em;
+  }
+  
+  .tooltipDetailed {
+    max-width: 320px;
+  }
+  
+  .actionableRecommendation {
+    padding: 6px 10px;
+    font-size: 0.9em;
+  }
 }
