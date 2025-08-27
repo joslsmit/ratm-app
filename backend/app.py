@@ -2423,7 +2423,7 @@ def yahoo_callback():
         token_json = json.dumps(token)
         encoded_token = requests.utils.quote(token_json)
 
-        return redirect(f'http://localhost:3000/#yahoo-leagues?token={encoded_token}')
+        return redirect(f'https://ratm-app.vercel.app/#yahoo-leagues?token={encoded_token}')
 
     except Exception as e:
         print(f"Error fetching Yahoo token: {e}")
