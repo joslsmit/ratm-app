@@ -39,7 +39,7 @@ FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY")
 if not FLASK_SECRET_KEY:
     raise ValueError("FLASK_SECRET_KEY environment variable not set. This is required for Flask sessions.")
 app.secret_key = FLASK_SECRET_KEY # Needed for Flask sessions
-CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000", "https://ratm-app-git-oauth-dev-joshua-smiths-projects-2dcfc522.vercel.app", "https://localhost:5000"]}}) # Updated ngrok URL in CORS
+CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000", "https://ratm-app-git-oauth-dev-joshua-smiths-projects-2dcfc522.vercel.app", "https://localhost:5000", "https://ratm-app.vercel.app"]}}) # Updated ngrok URL in CORS
 
 # --- Configuration (API key will be passed per request) ---
 # Using the latest available preview model as requested
