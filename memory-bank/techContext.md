@@ -49,8 +49,11 @@ This document provides detailed technical information about the RATM Draft Kit p
 *   **Location:** `backend/app.py`
 *   **Allowed Origins:**
     *   `http://localhost:3000` (for local frontend development)
-    *   `https://ratm-app-git-oauth-dev-joshua-smiths-projects-2dcfc522.vercel.app` (for Vercel-deployed frontend)
+    *   `https://localhost:5000` (for local HTTPS development with mkcert)
+    *   `https://ratm-app-git-oauth-dev-joshua-smiths-projects-2dcfc522.vercel.app` (legacy Vercel deployment)
+    *   `https://ratm-app.vercel.app` (current production Vercel frontend)
 *   **Purpose:** Ensures the browser allows the frontend to make requests to the backend API.
+*   **Production Issue Resolution (August 27, 2025):** Added `https://ratm-app.vercel.app` to CORS origins to resolve "Access-Control-Allow-Origin" errors when frontend deployed to production.
 
 ### D. Data Paths
 *   **`basedir`:** Defined in `backend/app.py` to correctly resolve paths to local data files.
@@ -59,35 +62,64 @@ This document provides detailed technical information about the RATM Draft Kit p
 ## 3. Tool-Specific Context
 
 ### A. Git & GitHub
-*   **Main Branch:** `main` (for stable releases, though not heavily used in active development).
-*   **Development Branch:** `oauth-dev` (primary branch for active development, features, and deployments).
+*   **Main Branch:** `main` (production branch for stable releases and deployments).
+*   **Development Branches:** `yahoo-features`, `oauth-dev` (feature development branches, merged to main for production).
+*   **Branch Protection:** Temporarily removed for direct main branch updates (August 27, 2025).
 *   **Commit Messages:** General convention is descriptive and follows a clear purpose (e.g., "Fix: ...", "Feat: ...", "Update: ...").
 
-### B. Render
+### B. Render (Backend Deployment)
 *   **Service Type:** Web Service.
-*   **Build Command:** (Typically `pip install -r requirements.txt` or similar, depending on Render's auto-detection).
-*   **Start Command:** (Typically `gunicorn app:app` or `gunicorn app:app --chdir backend`, depending on project structure and Render's configuration).
-*   **Environment Variables:** Must be set manually in the Render dashboard.
+*   **Production Branch:** `main` (automatically deploys from main branch).
+*   **Build Command:** `pip install -r requirements.txt` (auto-detected).
+*   **Start Command:** `gunicorn app:app` (auto-detected).
+*   **Environment Variables:** Must be set manually in the Render dashboard (FLASK_SECRET_KEY, YAHOO_CLIENT_ID, YAHOO_CLIENT_SECRET).
+*   **Production URL:** `https://ratm-app.onrender.com`
 
-### C. Vercel
+### C. Vercel (Frontend Deployment)
 *   **Project Linking:** Linked to the GitHub repository.
-*   **Production Branch:** Configured to `oauth-dev` to enable automatic deployments from this branch.
+*   **Production Branch:** `main` (updated August 27, 2025 from oauth-dev).
+*   **Root Directory:** `frontend` (auto-detected React project).
 *   **Build & Start Commands:** Vercel automatically detects React projects and handles these.
+*   **Production URL:** `https://ratm-app.vercel.app`
 
-## 5. Security Considerations (Production Roadmap)
+## 5. Production Deployment (Updated August 27, 2025)
+
+### ✅ Current Production Status
+*   **Frontend:** Successfully deployed at `https://ratm-app.vercel.app`
+*   **Backend:** Successfully deployed at `https://ratm-app.onrender.com`
+*   **Database:** All CSV data files properly loaded and accessible
+*   **CORS:** Configured to allow production frontend access
+*   **Connection:** Frontend successfully connects to backend API
+*   **Yahoo OAuth:** ✅ Production configuration completed (August 27, 2025)
+    *   Environment variables set in Render dashboard: YAHOO_CLIENT_ID, YAHOO_CLIENT_SECRET, FLASK_SECRET_KEY
+    *   Redirect URI updated from localhost to production: `https://ratm-app.onrender.com/api/yahoo/callback`
+    *   Yahoo Developer Console updated with production URLs
+
+### Production Deployment Process
+1. **Branch Management:** Merge feature branches to `main` for production
+2. **Automatic Deployment:** Both Vercel and Render automatically deploy from `main` branch
+3. **CORS Configuration:** Ensure `ratm-app.vercel.app` is included in backend CORS origins
+4. **Environment Variables:** Set required variables in Render dashboard (FLASK_SECRET_KEY, Yahoo OAuth credentials)
+
+## 6. Security Considerations (Production Roadmap)
 
 *   **Secure Yahoo Token Handling:** For production deployments, the current method of passing Yahoo access tokens via URL parameters is insecure. Implement a more robust and secure method, such as HTTP-only cookies or server-side token exchange, to prevent token exposure.
 
+## 7. Common Issues & Troubleshooting
+
+*   **CORS Errors (RESOLVED August 27, 2025):**
+    *   **Symptom:** "Access-Control-Allow-Origin" header missing errors in browser console
+    *   **Solution:** Add production frontend domain to CORS origins in `backend/app.py`
+    *   **Fix Applied:** Added `https://ratm-app.vercel.app` to allowed origins list
 *   **Frontend not loading/connecting:**
-    *   Check `API_BASE_URL` in `frontend/src/context/AppContext.js` for correctness (should be `https://localhost:5000/api` for local development).
+    *   Check `API_BASE_URL` in `frontend/src/context/AppContext.js` for correctness (should automatically switch to production URL).
     *   Verify Vercel deployment status.
 *   **Yahoo OAuth `INVALID_REDIRECT_URI` error:**
-    *   Ensure `YAHOO_REDIRECT_URI` in `backend/app.py` exactly matches the active `localhost` URL (`https://localhost:5000/api/yahoo/callback`).
-    *   Verify that the Yahoo Developer Network application settings have *only* `https://localhost:5000/api/yahoo/callback` registered as a redirect URI.
-    *   Confirm Client ID and Client Secret are correct in `backend/.env`.
-    *   If persistent, create a new Yahoo application with fresh credentials and the correct `localhost` redirect URI.
+    *   Ensure `YAHOO_REDIRECT_URI` in `backend/app.py` matches the environment (localhost for dev, production URL for prod).
+    *   Verify Yahoo Developer Network application settings match the redirect URI.
+    *   Confirm Client ID and Client Secret are correct in environment variables.
 *   **Backend errors/API calls failing:**
-    *   Check Render service logs for Python tracebacks (e.g., `AttributeError: 'NoneType' object has no attribute 'get'`).
+    *   Check Render service logs for Python tracebacks.
     *   Verify environment variables are set correctly on Render.
     *   Confirm data files (`.csv`) are accessible on Render.
     *   Check CORS origins in `backend/app.py` match the frontend's URL.

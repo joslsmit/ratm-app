@@ -2374,7 +2374,7 @@ def debug_player_cache(player_name):
 YAHOO_CLIENT_ID = os.getenv("YAHOO_CLIENT_ID")
 YAHOO_CLIENT_SECRET = os.getenv("YAHOO_CLIENT_SECRET")
 # Ensure this matches what you set in the Yahoo Developer Network app settings
-YAHOO_REDIRECT_URI = 'https://localhost:5000/api/yahoo/callback' # <-- Make sure this is up-to-date with your ngrok URL for local dev
+YAHOO_REDIRECT_URI = 'https://ratm-app.onrender.com/api/yahoo/callback'
 AUTHORIZATION_BASE_URL = 'https://api.login.yahoo.com/oauth2/request_auth'
 TOKEN_URL = 'https://api.login.yahoo.com/oauth2/get_token'
 
