@@ -323,6 +323,30 @@ function App() {
     };
   }, [allPlayers, activeTool]);
 
+  // Autocomplete for Draft Assistant
+  useEffect(() => {
+    console.log('Initializing draft autocomplete. activeTool:', activeTool, 'allPlayers length:', allPlayers.length);
+    if (activeTool !== 'draft' || allPlayers.length === 0) return;
+    const ac = new autoComplete({
+        selector: '#draft-pick-player',
+        placeHolder: "Player being considered...",
+        data: { src: allPlayers, cache: true },
+        resultItem: { highlight: true },
+        events: {
+            input: {
+                selection: (event) => {
+                    const selection = event.detail.selection.value;
+                    document.getElementById('draft-pick-player').value = selection;
+                },
+            },
+        },
+    });
+    return () => {
+      console.log('Uninitializing draft autocomplete.');
+      ac.unInit();
+    };
+  }, [allPlayers, activeTool]);
+
   // Autocomplete for Keeper Evaluator - Commented out to avoid conflict with react-autosuggest in KeeperEvaluator.js
   /*
   useEffect(() => {
