@@ -262,6 +262,33 @@ This document tracks the progress of the RATM Draft Kit project against the defi
 
 ## 🚀 **NEW HIGH-PRIORITY DEVELOPMENT PHASES** 
 
+### 🎯 **IN-SEASON FUNCTIONALITY ENHANCEMENT** 
+
+### 🔥 **CURRENT PRIORITY: Lineup Optimizer Implementation (August 30, 2025)**
+*   **Status:** **📋 DETAILED PLANNING COMPLETE - Ready for Post-Draft Implementation**
+*   **Implementation Guide:** `lineup_optimizer_implementation_plan.md` - Comprehensive 8,000+ word technical specification
+*   **Objective:** Add comprehensive start/sit analysis capability to existing Waiver Wire Assistant
+*   **Business Impact:** Transform app from draft-focused tool to complete in-season roster management solution
+*   **Technical Approach:** **Minimal Enhancement Strategy** - Zero breaking changes, maximum code reuse
+*   **Key Features:**
+    *   **Dual-Mode Interface**: Toggle between "Add/Drop Players" and "Optimize Lineup" within single component
+    *   **7-Step AI Methodology**: Comprehensive start/sit analysis following established prompting patterns
+    *   **Yahoo Integration**: Leverages existing roster access and league data for personalized recommendations
+    *   **Defensive Coding**: Comprehensive error handling, graceful degradation, and fallback mechanisms
+*   **Technical Implementation:**
+    *   **Backend Enhancement**: New `/api/lineup_optimizer` endpoint using proven roster analysis patterns
+    *   **Frontend Enhancement**: Enhanced WaiverWireAssistant with mode toggle and conditional rendering
+    *   **AI Integration**: New prompt templates following PromptBuilder/ExampleLibrary established architecture
+    *   **UI/UX Design**: Mode toggle, lineup-specific styling, results formatting without breaking existing design
+*   **Development Plan:**
+    *   **Phase 1**: Backend foundation and API endpoint (2-3 hours)
+    *   **Phase 2**: Frontend enhancement and dual-mode UI (3-4 hours)
+    *   **Phase 3**: Integration testing and validation (2-3 hours)
+    *   **Total Effort**: 8-12 hours development + 4-6 hours comprehensive testing
+*   **Risk Mitigation:** Zero modification of existing functions, additive functionality only, comprehensive rollback procedures
+*   **Testing Strategy:** Pre-draft component testing with mock data, post-draft integration testing with real rosters
+*   **Success Criteria:** Zero breaking changes + intuitive UX + valuable start/sit recommendations + maintained performance
+
 ### 🎯 **DATA INTEGRATION ENHANCEMENT SEQUENCE**
 > **📋 CENTRAL ROADMAP**: Complete coordination and implementation strategy in `data_integration_enhancement_roadmap.md`
 

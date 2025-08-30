@@ -252,8 +252,32 @@
 *   **🔮 Future Enhancements:** Enhanced trade analysis data integration ready for implementation when needed
 *   **📊 Success Metrics:** Application provides world-class fantasy football analysis with 40-60% improved AI quality
 
-## 10. Current Development Focus - PRODUCTION MAINTENANCE MODE
+## 10. Current Development Focus - IN-SEASON ENHANCEMENT PHASE
 *   **Primary Status:** **Production deployment complete and operational**
+*   **New Development Priority:** **🔥 Lineup Optimizer Implementation - DETAILED PLANNING COMPLETE**
+*   **Implementation Guide:** `lineup_optimizer_implementation_plan.md` - Comprehensive technical specification ready
 *   **Monitoring:** Track application performance, user feedback, and any production issues
 *   **Maintenance:** Regular data updates, security patches, and minor improvements as needed
-*   **Future Development:** Enhanced trade analysis and other advanced features available for implementation
+
+### 🚀 **NEW PRIORITY: IN-SEASON FUNCTIONALITY ENHANCEMENT (August 30, 2025)**
+*   **Status:** **📋 DETAILED PLANNING COMPLETE - Ready for Post-Draft Implementation**
+*   **Implementation Guide:** `lineup_optimizer_implementation_plan.md` - 8,000+ word comprehensive technical specification
+*   **Objective:** Add "Lineup Optimizer" mode to existing Waiver Wire Assistant for complete start/sit analysis
+*   **Approach:** **Minimal Enhancement Strategy** - Zero breaking changes, leveraging proven infrastructure
+*   **Key Features:**
+    *   **Dual-Mode Interface**: Toggle between "Add/Drop Players" and "Optimize Lineup"
+    *   **Comprehensive Start/Sit Analysis**: 7-step AI methodology for weekly lineup decisions
+    *   **Yahoo Integration**: Uses existing roster access for personalized recommendations
+    *   **Defensive Coding**: Comprehensive error handling and graceful degradation
+*   **Technical Implementation:**
+    *   **Backend**: New `/api/lineup_optimizer` endpoint using existing roster analysis patterns
+    *   **Frontend**: Enhanced WaiverWireAssistant component with mode toggle capability
+    *   **AI Enhancement**: New prompt templates following established PromptBuilder/ExampleLibrary patterns
+    *   **Zero Risk**: Additive functionality with complete preservation of existing features
+*   **Development Timeline:**
+    *   **Phase 1**: Backend foundation (2-3 hours)
+    *   **Phase 2**: Frontend enhancement (3-4 hours)
+    *   **Phase 3**: Integration & testing (2-3 hours)
+    *   **Total Effort**: 8-12 hours development + 4-6 hours testing
+*   **Testing Strategy:** Cannot test until post-draft - comprehensive validation plan prepared
+*   **Success Criteria:** Zero breaking changes + valuable start/sit recommendations + intuitive UX
