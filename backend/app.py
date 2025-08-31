@@ -2374,7 +2374,7 @@ def debug_player_cache(player_name):
 YAHOO_CLIENT_ID = os.getenv("YAHOO_CLIENT_ID")
 YAHOO_CLIENT_SECRET = os.getenv("YAHOO_CLIENT_SECRET")
 # Ensure this matches what you set in the Yahoo Developer Network app settings
-YAHOO_REDIRECT_URI = 'https://ratm-app.onrender.com/api/yahoo/callback'
+YAHOO_REDIRECT_URI = 'https://localhost:5000/api/yahoo/callback'
 AUTHORIZATION_BASE_URL = 'https://api.login.yahoo.com/oauth2/request_auth'
 TOKEN_URL = 'https://api.login.yahoo.com/oauth2/get_token'
 
@@ -2423,7 +2423,14 @@ def yahoo_callback():
         token_json = json.dumps(token)
         encoded_token = requests.utils.quote(token_json)
 
-        return redirect(f'https://ratm-app.vercel.app/#yahoo-leagues?token={encoded_token}')
+        # Determine frontend URL based on request origin for local development support
+        referer = request.headers.get('Referer', '')
+        if 'localhost' in referer:
+            frontend_url = 'http://localhost:3000'
+        else:
+            frontend_url = 'https://ratm-app.vercel.app'
+
+        return redirect(f'{frontend_url}/#yahoo-leagues?token={encoded_token}')
 
     except Exception as e:
         print(f"Error fetching Yahoo token: {e}")

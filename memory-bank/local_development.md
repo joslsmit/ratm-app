@@ -70,3 +70,67 @@ For local development, especially when dealing with OAuth providers like Yahoo t
     *   Close and re-open your web browser (or use an incognito window).
 
 This setup provides a stable and secure local development environment for OAuth, eliminating the need to constantly update URLs.
+
+## Yahoo OAuth Local Development Configuration
+
+### Critical OAuth Redirect Fix (Required for Local Development)
+
+**Problem**: The Yahoo OAuth callback was hardcoded to redirect to production Vercel URL, causing local development to redirect away from localhost.
+
+**Solution Implemented (August 31, 2025)**:
+- **File**: `backend/app.py` line ~2426
+- **Dynamic redirect logic** added to detect localhost development vs production
+- **Automatic environment detection** using request Referer header
+
+### Yahoo Developer Console Configuration
+
+**For Local Development**:
+1. **Homepage URL**: Set to `http://localhost:3000` (temporarily during development)
+2. **Redirect URIs**: Both URLs should be present:
+   - `https://localhost:5000/api/yahoo/callback` (local backend)
+   - `https://ratm-app.onrender.com/api/yahoo/callback` (production backend)
+
+**Important**: Change Homepage URL back to `https://ratm-app.vercel.app/` before production deployment.
+
+### Complete Local Development Yahoo Setup
+
+1. **Create development branch**:
+   ```bash
+   git checkout -b feature/yahoo-[feature-name]
+   ```
+
+2. **Configure backend for local OAuth**:
+   - Set `YAHOO_REDIRECT_URI = 'https://localhost:5000/api/yahoo/callback'` in `backend/app.py` line 2377
+   - The OAuth redirect logic will automatically handle localhost vs production frontend redirects
+
+3. **Set Yahoo Homepage URL** (in Yahoo Developer Console):
+   ```
+   http://localhost:3000
+   ```
+
+4. **Start development servers**:
+   ```bash
+   # Terminal 1: Backend with HTTPS
+   cd backend && source venv/bin/activate && python app.py
+   
+   # Terminal 2: Frontend
+   cd frontend && npm start
+   ```
+
+5. **Test Yahoo OAuth**:
+   - Navigate to `http://localhost:3000`
+   - Click "Sign in with Yahoo"
+   - Should redirect back to `http://localhost:3000/#yahoo-leagues?token=...`
+   - Team data should now be visible in local development
+
+### Troubleshooting Yahoo OAuth Issues
+
+**"Still redirecting to Vercel"**:
+- Verify Yahoo Homepage URL is set to `http://localhost:3000`
+- Check that backend server was restarted after OAuth redirect fix
+- Clear browser cache/cookies for Yahoo authentication
+
+**"No team data showing"**:
+- Verify `YAHOO_REDIRECT_URI` points to localhost:5000
+- Check browser network tab for successful API calls to localhost:5000
+- Ensure both backend and frontend are running on correct ports
