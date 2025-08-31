@@ -78,6 +78,12 @@ This document tracks the progress of the RATM Draft Kit project against the defi
 ### 🚀 ALL YAHOO API FEATURES NOW UNBLOCKED!
 **Achievement:** With world-class AI foundation complete, all Yahoo API development can proceed with confidence.
 
+## August 31, 2025 — Yahoo Roster Parsing Resolved
+- Implemented robust NFL roster parsing handling Yahoo's nested list-of-lists and varied `selected_position` shapes (dict/string/list)
+- Switched Yahoo data fetches to explicit Bearer requests with JSON accept; added `/api/yahoo/roster_debug` with `slot_samples`
+- My Team UI updated: single slot badge with Starter/Flex/Bench/IR variants + explicit Slot line.
+- Result: Roster displays correct names and accurate slot codes (e.g., BN, W/T, W/R/T). Verified locally via curl and app UI.
+
 ## Current and Future Phases - NOW READY FOR DEVELOPMENT! 🚀
 
 **🎉 PHASE 0 COMPLETE:** All Yahoo API features are now unblocked and ready for development with world-class AI foundation supporting all analysis features.

@@ -1,8 +1,38 @@
-# Yahoo Roster Display Issue - Debugging History
+# Yahoo Roster Display Issue - Debugging History (RESOLVED)
 
 > **File Type**: RECORD  
 > **Created**: August 31, 2025  
-> **Purpose**: Document unsuccessful approaches tried to fix Yahoo roster display issue  
+> **Purpose**: Document unsuccessful approaches tried to fix Yahoo roster display issue, and final resolution  
+
+## Resolution Summary (August 31, 2025)
+
+**Status**: ✅ Fully Resolved
+
+**Root-Cause Clarification**:
+- NFL roster JSON from Yahoo often nests player data in list-of-lists and places `selected_position` as a sibling to `player` — sometimes as an array of dicts — rather than inside the `player` object.
+- Earlier parsing scanned only the `player` node, so names were found but roster slots (`selected_position`) were blank.
+
+**Fix Implemented**:
+- Backend: Deep-scan roster entries to extract `player_key`, `name`, `eligible_positions`, and `selected_position` regardless of nesting/shape.
+  - Added recursive helpers: `_find_first_dict_with_key`, `_find_roster_container`, `_extract_players_collection`, `_collect_dicts`, and `_extract_player_fields_from_any`.
+  - `parse_yahoo_roster_response()` and the minimal extractor now scan the entire container (not just `player`).
+  - Handle `selected_position` when it is a dict, string, or list of dicts.
+  - Switched Yahoo data fetches to explicit Bearer requests with `Accept: application/json`.
+  - Added `/api/yahoo/roster_debug` with `slot_samples` for quick verification.
+- Frontend (My Team):
+  - Single roster-slot badge driven strictly by `selected_position` (starter/flex/bench/IR color variants).
+  - Visible line: `Slot: <code> (<category>) • Position: <pos> • Eligible: ...`.
+
+**Outcome**:
+- Roster now displays with correct names and accurate slot codes (e.g., `BN`, `W/R/T`). Bench players (e.g., Jordan Love) show BN, flex slots show W/T or W/R/T.
+
+**Verification**:
+- `GET /api/yahoo/roster_debug?team_key=...&week=1` shows `parsed_count: 15` and `slot_samples` with populated `selected_position`.
+- Frontend My Team page shows correct blue badge and explicit Slot line for each player.
+
+**Follow-ups**:
+- Optional: add a third server-side fallback using `teams;team_keys={team_key}/roster/players` if needed.
+- Optional: frontend week selector for roster views.
 
 ## Problem Summary
 
@@ -92,10 +122,7 @@ player_url = f'https://fantasysports.yahooapis.com/fantasy/v2/player/{player_key
 
 ## Recommended Next Steps
 
-1. **Research Yahoo API Documentation**: Look for proper endpoints or sub-resources that return full player data
-2. **Test Individual Player Calls**: Verify if `/player/{player_key}` endpoints return full details
-3. **Alternative Data Sources**: Consider if local database can be enhanced with Yahoo player mappings
-4. **Accept Minimal Data**: Potentially display roster with player keys and rely on other data sources for names
+This section is superseded by the resolution above.
 
 ## Lessons Learned
 

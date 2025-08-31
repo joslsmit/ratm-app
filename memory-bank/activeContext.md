@@ -281,3 +281,8 @@
     *   **Total Effort**: 8-12 hours development + 4-6 hours testing
 *   **Testing Strategy:** Cannot test until post-draft - comprehensive validation plan prepared
 *   **Success Criteria:** Zero breaking changes + valuable start/sit recommendations + intuitive UX
+### ✅ RESOLVED: Yahoo Roster Parsing + UI Slots (August 31, 2025)
+- ✅ Backend: Robust NFL roster parser with deep-scan across nested list-of-lists; captures `selected_position` (dict/string/list forms)
+- ✅ Endpoints: `/api/yahoo/roster` and `/api/yahoo/roster_debug` hardened; explicit Bearer auth + JSON accept
+- ✅ Frontend: My Team shows accurate roster slot badge (Starter/Flex/Bench/IR) and explicit slot line
+- 🎯 Outcome: Correct names + slot codes (e.g., BN, W/T, W/R/T) displayed; verified via roster_debug `slot_samples`
