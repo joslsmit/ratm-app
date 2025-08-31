@@ -2463,16 +2463,19 @@ def get_yahoo_leagues():
         traceback.print_exc()
         return jsonify({"error": "Invalid token format in Authorization header."}), 401
 
-    # Use the extracted access_token string to create the OAuth2Session
-    yahoo = OAuth2Session(YAHOO_CLIENT_ID, token={'access_token': access_token_string})
+    # Prepare direct request headers for Yahoo API
+    yahoo_headers = {
+        'Authorization': f'Bearer {access_token_string}',
+        'Accept': 'application/json'
+    }
 
     try:
         # The URL for fetching a user's games, then leagues for the NFL game (game_key=nfl)
         # We use 'use_login=1' to specify the logged-in user.
         url = 'https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games;game_keys=nfl/leagues;out=teams?format=json'
-        
-        response = yahoo.get(url)
-        response.raise_for_status() # Raise an exception for bad status codes
+
+        response = requests.get(url, headers=yahoo_headers, timeout=10)
+        response.raise_for_status()  # Raise an exception for bad status codes
         
         # Parse and transform the response using defensive JSON parsing
         return jsonify(parse_yahoo_leagues_response(response.json()))
@@ -2646,6 +2649,200 @@ def test_roster_parser():
     result = parse_yahoo_roster_response(mock_response)
     return jsonify(result)
 
+def _derive_league_key_from_team_key(team_key: str) -> str:
+    try:
+        # Typical pattern: 461.l.12345.t.7 -> 461.l.12345
+        return team_key.split('.t.')[0]
+    except Exception:
+        return ''
+
+def _extract_roster_player_entries_minimal(data):
+    """Extract roster player entries even when only minimal fields are present.
+
+    Returns list of dicts with keys: player_key, player_id, selected_position, eligible_positions, status.
+    """
+    results = []
+    try:
+        fantasy_content = data.get('fantasy_content', {}) if isinstance(data, dict) else {}
+        team_data = fantasy_content.get('team', [])
+        roster_container = _find_roster_container(team_data)
+        if not isinstance(roster_container, dict):
+            return results
+        players_data = roster_container.get('players', {})
+
+        def add_entry_from_container(pc):
+            if not isinstance(pc, dict):
+                return
+            agg = _extract_player_fields_from_any(pc)
+            if not agg or not agg.get('player_key'):
+                return
+            results.append({
+                'player_key': agg.get('player_key', ''),
+                'player_id': agg.get('player_id', ''),
+                'selected_position': agg.get('selected_position', ''),
+                'eligible_positions': agg.get('eligible_positions', []),
+                'status': agg.get('status', ''),
+            })
+
+        def handle_container(pc):
+            add_entry_from_container(pc)
+
+        if isinstance(players_data, dict):
+            for key, player_container in players_data.items():
+                if str(key).lower() == 'count':
+                    continue
+                handle_container(player_container)
+        elif isinstance(players_data, list):
+            for player_container in players_data:
+                handle_container(player_container)
+        return results
+    except Exception:
+        return results
+
+def _find_first_dict_with_key(obj, key):
+    """Recursively search lists/dicts for the first dict containing a key."""
+    if isinstance(obj, dict):
+        if key in obj:
+            return obj
+        for v in obj.values():
+            found = _find_first_dict_with_key(v, key)
+            if found:
+                return found
+        return None
+    if isinstance(obj, list):
+        for item in obj:
+            found = _find_first_dict_with_key(item, key)
+            if found:
+                return found
+        return None
+    return None
+
+def _find_roster_container(team_data):
+    """Find the roster container in Yahoo's team structure (handles nested list-of-lists)."""
+    holder = _find_first_dict_with_key(team_data, 'roster')
+    return holder.get('roster', {}) if isinstance(holder, dict) else {}
+
+def _extract_players_collection(roster_container):
+    """Return the Yahoo 'players' collection from a roster container (recursive)."""
+    holder = _find_first_dict_with_key(roster_container, 'players')
+    if isinstance(holder, dict) and 'players' in holder:
+        return holder.get('players', {})
+    return {}
+
+def _collect_dicts(obj, acc):
+    """Recursively collect all dict nodes under obj into acc list."""
+    if isinstance(obj, dict):
+        acc.append(obj)
+        for v in obj.values():
+            _collect_dicts(v, acc)
+    elif isinstance(obj, list):
+        for item in obj:
+            _collect_dicts(item, acc)
+    return acc
+
+def _extract_player_fields_from_any(player_container):
+    """Extract player fields from any Yahoo player container shape by deep-scanning.
+
+    Returns dict with keys: player_key, player_id, name, selected_position, eligible_positions, status.
+    """
+    dicts = _collect_dicts(player_container, [])
+    player_key = ''
+    player_id = ''
+    name = ''
+    selected_position = ''
+    eligible_positions = []
+    status = ''
+
+    for d in dicts:
+        if not player_key and 'player_key' in d:
+            player_key = d.get('player_key', '')
+        if not player_id and 'player_id' in d:
+            player_id = d.get('player_id', '')
+        if not name and 'name' in d:
+            name_val = d.get('name')
+            if isinstance(name_val, dict):
+                name = name_val.get('full') or name
+            elif isinstance(name_val, str):
+                name = name_val or name
+        if not selected_position and 'selected_position' in d:
+            sp = d.get('selected_position')
+            if isinstance(sp, dict):
+                selected_position = sp.get('position', selected_position) or selected_position
+            elif isinstance(sp, list):
+                # Some responses provide selected_position as a list of dicts
+                for item in sp:
+                    if isinstance(item, dict) and item.get('position'):
+                        selected_position = item.get('position')
+                        break
+            elif isinstance(sp, str):
+                selected_position = sp or selected_position
+        if not eligible_positions and 'eligible_positions' in d:
+            eps = d.get('eligible_positions')
+            if isinstance(eps, list):
+                eligible_positions = eps
+            elif isinstance(eps, str):
+                eligible_positions = [eps]
+        if not status and 'status' in d:
+            status = d.get('status', status)
+
+    if player_key:
+        return {
+            'player_key': player_key,
+            'player_id': player_id,
+            'name': name,
+            'selected_position': selected_position,
+            'eligible_positions': eligible_positions,
+            'status': status,
+        }
+    return None
+
+def _fetch_yahoo_player_details_by_keys(access_token: str, league_key: str, player_keys: list):
+    """Batch-fetch player details using league players collection and player_keys.
+
+    Returns dict mapping player_key -> {'name': str, 'eligible_positions': list}
+    """
+    details = {}
+    if not access_token or not league_key or not player_keys:
+        return details
+    try:
+        import requests as _req
+        base = "https://fantasysports.yahooapis.com/fantasy/v2"
+        # Yahoo supports comma-separated keys; cap batch size to reasonable number
+        keys_chunk = ','.join(player_keys)
+        url = f"{base}/league/{league_key}/players;player_keys={keys_chunk}?format=json"
+        headers = {"Authorization": f"Bearer {access_token}"}
+        resp = _req.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        fantasy_content = data.get('fantasy_content', {}) if isinstance(data, dict) else {}
+        league = fantasy_content.get('league', [])
+        if not (isinstance(league, list) and len(league) >= 2):
+            return details
+        players_container = league[1].get('players', {})
+        if not isinstance(players_container, dict):
+            return details
+        for key, entry in players_container.items():
+            if not str(key).isdigit():
+                continue
+            player_arr = entry.get('player', [])
+            if not (isinstance(player_arr, list) and len(player_arr) >= 1):
+                continue
+            pdata = player_arr[0]
+            pkey = pdata.get('player_key')
+            name_data = pdata.get('name', {})
+            full_name = name_data.get('full') if isinstance(name_data, dict) else (str(name_data) if name_data else '')
+            eligible_positions = pdata.get('eligible_positions', [])
+            if not isinstance(eligible_positions, list):
+                eligible_positions = [str(eligible_positions)] if eligible_positions else []
+            if pkey:
+                details[pkey] = {
+                    'name': full_name or '',
+                    'eligible_positions': eligible_positions,
+                }
+        return details
+    except Exception:
+        return details
+
 @app.route('/api/yahoo/roster')
 def get_yahoo_roster():
     """
@@ -2675,30 +2872,223 @@ def get_yahoo_roster():
         traceback.print_exc()
         return jsonify({"error": "Invalid token format in Authorization header."}), 401
 
-    # Use the extracted access_token string to create the OAuth2Session
-    yahoo = OAuth2Session(YAHOO_CLIENT_ID, token={'access_token': access_token_string})
+    # Prepare direct request headers for Yahoo API
+    yahoo_headers = {
+        'Authorization': f'Bearer {access_token_string}',
+        'Accept': 'application/json'
+    }
 
     try:
-        # Build URL with optional week parameter
+        # Prefer explicit players subresource per Yahoo docs
         if week:
-            url = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster;week={week}?format=json'
+            url_primary = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster/players;week={week}?format=json'
+            url_fallback = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster;week={week}?format=json'
         else:
-            url = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster?format=json'
-        
-        response = yahoo.get(url)
+            url_primary = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster/players?format=json'
+            url_fallback = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster?format=json'
+
+        # Try primary (explicit players)
+        print(f"DEBUG: Requesting Yahoo roster primary URL: {url_primary}")
+        response = requests.get(url_primary, headers=yahoo_headers, timeout=10)
+        if response.status_code == 404:
+            # Some leagues may not support the explicit subresource path
+            print("DEBUG: Primary roster URL 404, trying fallback URL")
+            response = requests.get(url_fallback, headers=yahoo_headers, timeout=10)
         response.raise_for_status()
-        
-        # Parse and transform the response using defensive JSON parsing
-        return jsonify(parse_yahoo_roster_response(response.json()))
+
+        try:
+            raw = response.json()
+        except Exception:
+            print(f"ERROR: Yahoo roster response not JSON. Content-Type: {response.headers.get('Content-Type')}\nSnippet: {response.text[:200]}")
+            raise
+        parsed_players = parse_yahoo_roster_response(raw)
+        minimal_entries = _extract_roster_player_entries_minimal(raw)
+        print(f"DEBUG: Parsed {len(parsed_players) if isinstance(parsed_players, list) else 'N/A'} players; minimal_entries={len(minimal_entries)}")
+
+        # If primary returned 200 but empty, try fallback URL anyway
+        if (not parsed_players) and (not minimal_entries):
+            print("DEBUG: Primary roster returned empty; attempting fallback URL despite 200 status")
+            response = requests.get(url_fallback, headers=yahoo_headers, timeout=10)
+            response.raise_for_status()
+            raw = response.json()
+            parsed_players = parse_yahoo_roster_response(raw)
+            minimal_entries = _extract_roster_player_entries_minimal(raw)
+            print(f"DEBUG: Fallback parse counts -> parsed={len(parsed_players) if isinstance(parsed_players, list) else 'N/A'}, minimal={len(minimal_entries)}")
+
+        if parsed_players:
+            return jsonify(parsed_players)
+
+        # Fallback: batch-enrich using player_keys if names were missing
+        if not minimal_entries:
+            print("DEBUG: Minimal roster extraction returned 0 players")
+            return jsonify([])
+
+        league_key = _derive_league_key_from_team_key(team_key)
+        keys = [p['player_key'] for p in minimal_entries]
+        details_map = _fetch_yahoo_player_details_by_keys(access_token_string, league_key, keys)
+        print(f"DEBUG: Batch details fetch resolved {len(details_map)} of {len(keys)} player keys")
+
+        # Merge details and enrich locally
+        merged = []
+        for p in minimal_entries:
+            d = details_map.get(p['player_key'], {})
+            name = d.get('name', '')
+            eligible_positions = d.get('eligible_positions', p.get('eligible_positions', []))
+            entry = {
+                'player_key': p['player_key'],
+                'player_id': p.get('player_id', ''),
+                'name': name,
+                'selected_position': p.get('selected_position', ''),
+                'eligible_positions': eligible_positions,
+                'status': p.get('status', ''),
+            }
+            merged.append(entry)
+
+        # Enrich named players; include unnamed as-is
+        named = [m for m in merged if m.get('name')]
+        unnamed = [m for m in merged if not m.get('name')]
+        if named:
+            named = enrich_roster_players(named)
+        return jsonify(named + unnamed)
 
     except requests.exceptions.RequestException as req_e:
         print(f"Error fetching Yahoo roster: {req_e}")
-        if req_e.response is not None:
+        if getattr(req_e, 'response', None) is not None:
             print(f"Yahoo roster error response content: {req_e.response.text}")
         traceback.print_exc()
         return jsonify({"error": "Failed to fetch roster from Yahoo.", "details": str(req_e)}), 500
     except Exception as e:
         print(f"Error processing Yahoo roster: {e}")
+        traceback.print_exc()
+        return jsonify({"error": "Failed to process roster data.", "details": str(e)}), 500
+
+@app.route('/api/yahoo/roster_debug')
+def get_yahoo_roster_debug():
+    """
+    Debug endpoint: shows which roster URL branch is used and what we parsed.
+    Requires Authorization header and team_key. Optional week.
+    """
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Not authenticated with Yahoo. Authorization header missing."}), 401
+
+    team_key = request.args.get('team_key')
+    if not team_key:
+        return jsonify({"error": "team_key parameter is required."}), 400
+
+    week = request.args.get('week')
+
+    try:
+        access_token_string = auth_header.split(' ')[1]
+        if not access_token_string:
+            return jsonify({"error": "Invalid token format: access_token missing."}), 401
+    except Exception:
+        return jsonify({"error": "Invalid token format in Authorization header."}), 401
+
+    try:
+        yahoo_headers = {
+            'Authorization': f'Bearer {access_token_string}',
+            'Accept': 'application/json'
+        }
+
+        if week:
+            url_primary = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster/players;week={week}?format=json'
+            url_fallback = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster;week={week}?format=json'
+        else:
+            url_primary = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster/players?format=json'
+            url_fallback = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster?format=json'
+
+        branch = 'primary'
+        resp = requests.get(url_primary, headers=yahoo_headers, timeout=10)
+        if resp.status_code == 404:
+            branch = 'fallback'
+            resp = requests.get(url_fallback, headers=yahoo_headers, timeout=10)
+
+        status = resp.status_code
+        try:
+            raw = resp.json()
+        except Exception:
+            raw = {'__non_json__': True, 'content_type': resp.headers.get('Content-Type'), 'snippet': resp.text[:120]}
+
+        parsed = parse_yahoo_roster_response(raw)
+        minimal = _extract_roster_player_entries_minimal(raw)
+
+        # If primary returned 200 but empty, try fallback URL anyway
+        tried_secondary = False
+        if (not parsed) and (not minimal):
+            resp2 = requests.get(url_fallback, headers=yahoo_headers, timeout=10)
+            if resp2.status_code == 200:
+                tried_secondary = True
+                try:
+                    raw2 = resp2.json()
+                except Exception:
+                    raw2 = {}
+                parsed2 = parse_yahoo_roster_response(raw2)
+                minimal2 = _extract_roster_player_entries_minimal(raw2)
+                if parsed2 or minimal2:
+                    branch = 'fallback_after_empty'
+                    raw = raw2
+                    parsed = parsed2
+                    minimal = minimal2
+
+        # Attempt to read Yahoo's reported players count field if present
+        players_count_value = None
+        try:
+            fantasy_content = raw.get('fantasy_content', {}) if isinstance(raw, dict) else {}
+            team_data = fantasy_content.get('team', [])
+            roster_container = _find_roster_container(team_data)
+            players_data = _extract_players_collection(roster_container) if roster_container else {}
+            if isinstance(players_data, dict) and 'count' in players_data:
+                players_count_value = players_data.get('count')
+        except Exception:
+            pass
+
+        # Build player slot samples for quick inspection
+        slot_samples = []
+        try:
+            if isinstance(parsed, list) and parsed:
+                for p in parsed[:5]:
+                    slot_samples.append({
+                        'name': p.get('name'),
+                        'player_key': p.get('player_key'),
+                        'selected_position': p.get('selected_position'),
+                        'position': p.get('position'),
+                        'eligible_positions': p.get('eligible_positions'),
+                    })
+        except Exception:
+            pass
+
+        result = {
+            'branch': branch,
+            'status': status,
+            'url_used': url_primary if branch == 'primary' else url_fallback,
+            'team_key': team_key,
+            'parsed_count': len(parsed) if isinstance(parsed, list) else None,
+            'minimal_count': len(minimal),
+            'parsed_sample': parsed[:2] if isinstance(parsed, list) else [],
+            'minimal_keys_sample': [p.get('player_key') for p in minimal[:5]],
+            'yahoo_players_count_field': players_count_value,
+            'raw_top_keys': list(raw.keys()) if isinstance(raw, dict) else None,
+            'tried_secondary': tried_secondary,
+            'slot_samples': slot_samples,
+        }
+
+        # If parsed empty but we have minimal entries, try batch details resolution and report count
+        if (not parsed) and minimal:
+            league_key = _derive_league_key_from_team_key(team_key)
+            keys = [p['player_key'] for p in minimal]
+            details_map = _fetch_yahoo_player_details_by_keys(access_token_string, league_key, keys)
+            result['batch_details_resolved'] = len(details_map)
+
+        return jsonify(result)
+    except requests.exceptions.RequestException as req_e:
+        print(f"Error fetching Yahoo roster (debug): {req_e}")
+        if getattr(req_e, 'response', None) is not None:
+            print(f"Yahoo roster error response content: {req_e.response.text}")
+        traceback.print_exc()
+        return jsonify({"error": "Failed to fetch roster from Yahoo.", "details": str(req_e)}), 500
+    except Exception as e:
+        print(f"Error processing Yahoo roster (debug): {e}")
         traceback.print_exc()
         return jsonify({"error": "Failed to process roster data.", "details": str(e)}), 500
 
@@ -2716,70 +3106,50 @@ def parse_yahoo_roster_response(data):
         # Navigate the complex JSON structure using defensive .get() calls
         fantasy_content = data.get('fantasy_content', {})
         
-        # Team data is typically an array where [1] contains roster
+        # Team data commonly is a list or dict; find the element that has 'roster'
         team_data = fantasy_content.get('team', [])
         print(f"DEBUG: team_data type: {type(team_data)}")
         print(f"DEBUG: team_data keys/length: {list(team_data.keys()) if isinstance(team_data, dict) else len(team_data) if isinstance(team_data, list) else 'Neither dict nor list'}")
-        
-        if not isinstance(team_data, list) or len(team_data) < 2:
-            print("DEBUG: Team data structure unexpected - checking if it's a dict instead")
-            if isinstance(team_data, dict):
-                print(f"DEBUG: team_data is dict with keys: {list(team_data.keys())}")
+
+        roster_container = _find_roster_container(team_data)
+        if not roster_container:
             return []
+        players_data = _extract_players_collection(roster_container)
+        try:
+            debug_pd_keys = list(players_data.keys()) if isinstance(players_data, dict) else 'N/A'
+        except Exception:
+            debug_pd_keys = 'N/A'
+        print(f"DEBUG: players_data type: {type(players_data)}; keys: {debug_pd_keys}")
         
-        roster_container = team_data[1].get('roster', {})
-        players_data = roster_container.get('players', {})
-        
-        # Parse players - dict with numbered keys
+        # Parse players - handle dict or list shapes by deep-scan of each container
         players = []
-        
+
+        def handle_container(pc):
+            if not isinstance(pc, dict):
+                return
+            # Deep-scan the entire player container so we capture sibling
+            # fields like selected_position that may sit outside 'player'.
+            agg = _extract_player_fields_from_any(pc)
+            if agg and agg.get('player_key'):
+                players.append(agg)
+
         if isinstance(players_data, dict):
             for key, player_container in players_data.items():
-                if key.isdigit():  # Skip non-numeric keys like "count"
-                    player_info = player_container.get('player', [])
-                    
-                    # Player info is typically an array where [0] has player data
-                    if isinstance(player_info, list) and len(player_info) >= 1:
-                        player_data = player_info[0]
-                        
-                        # Extract player information with defensive parsing
-                        player_key = player_data.get('player_key', '')
-                        player_id = player_data.get('player_id', '')
-                        
-                        # Handle name structure (could be nested)
-                        name_data = player_data.get('name', {})
-                        if isinstance(name_data, dict):
-                            full_name = name_data.get('full', '')
-                        else:
-                            full_name = str(name_data) if name_data else ''
-                        
-                        # Handle position data
-                        selected_pos_data = player_data.get('selected_position', {})
-                        if isinstance(selected_pos_data, dict):
-                            selected_position = selected_pos_data.get('position', '')
-                        else:
-                            selected_position = str(selected_pos_data) if selected_pos_data else ''
-                        
-                        eligible_positions = player_data.get('eligible_positions', [])
-                        if not isinstance(eligible_positions, list):
-                            eligible_positions = [str(eligible_positions)] if eligible_positions else []
-                        
-                        status = player_data.get('status', '')
-                        
-                        if player_key and full_name:  # Only add if we have key data
-                            players.append({
-                                'player_key': player_key,
-                                'player_id': player_id,
-                                'name': full_name,
-                                'selected_position': selected_position,
-                                'eligible_positions': eligible_positions,
-                                'status': status
-                            })
+                if str(key).lower() == 'count':
+                    continue
+                handle_container(player_container)
+        elif isinstance(players_data, list):
+            for player_container in players_data:
+                handle_container(player_container)
         
-        # Enrich players with local data
+        # Enrich players with local data when names are present; otherwise pass through
         if players:
-            players = enrich_roster_players(players)
-        
+            named = [p for p in players if p.get('name')]
+            unnamed = [p for p in players if not p.get('name')]
+            if named:
+                named = enrich_roster_players(named)
+            players = named + unnamed
+
         return players
         
     except Exception as e:

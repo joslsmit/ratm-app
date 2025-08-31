@@ -104,6 +104,54 @@
     font-weight: bold;
 }
 
+/* New: badge group and dual badges for slot + natural position */
+.badgeGroup {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.slotBadge {
+    composes: position;
+}
+
+.posBadge {
+    background-color: var(--input-background);
+    color: var(--text-color);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    border: 1px solid var(--border-color);
+}
+
+/* Slot variants for clearer semantics */
+.slotStarter {
+    background-color: var(--primary-color);
+    color: var(--button-text);
+}
+.slotFlex {
+    background-color: #6c5ce7; /* purple */
+    color: #ffffff;
+}
+.slotBench {
+    background-color: #64748b; /* slate */
+    color: #ffffff;
+}
+.slotIR {
+    background-color: #ef4444; /* red */
+    color: #ffffff;
+}
+
+.slotLine {
+    margin-top: 6px;
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+.slotLine strong {
+    color: var(--text-color);
+}
+
 .playerStats {
     margin-top: 10px;
 }
