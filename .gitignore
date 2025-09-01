@@ -97,3 +97,6 @@ backend/ai_response.log
 backend/*.csv
 backend/venv/
 backend/certs/
+
+# Local test artifacts
+yahoo-test-*

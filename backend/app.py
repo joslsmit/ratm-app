@@ -503,8 +503,28 @@ def load_all_data():
 load_all_data()
 
 # --- Background Scheduler for Data Refresh ---
+def refresh_external_data():
+    """Download latest CSVs and rebuild combined caches."""
+    try:
+        print("DEBUG: Refreshing external data (CSV download + cache rebuild)")
+        import_data()
+        # Reload CSV-derived caches and rebuild combined cache
+        global static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data
+        global player_values_cache, pick_values_cache, weekly_projections_cache
+        csv_file_path = os.path.join(basedir, 'db_fpecr_latest.csv')
+        static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data = load_ecr_data_from_csv(csv_file_path)
+        player_values_cache = load_values_from_csv(os.path.join(basedir, 'values-players.csv'))
+        pick_values_cache = load_values_from_csv(os.path.join(basedir, 'values-picks.csv'))
+        weekly_projections_cache = load_weekly_projections_data(os.path.join(basedir, 'fp_latest_weekly.csv'))
+        create_combined_player_data_cache()
+        print("DEBUG: External data refresh complete")
+    except Exception as e:
+        print(f"ERROR: External data refresh failed: {e}")
+        traceback.print_exc()
+
 scheduler = BackgroundScheduler()
-scheduler.add_job(func=import_data, trigger="interval", hours=24)
+# Run once every 24 hours
+scheduler.add_job(func=refresh_external_data, trigger="interval", hours=24)
 scheduler.start()
 
 
@@ -3226,97 +3246,85 @@ def get_yahoo_waiver_wire():
 
         access_token = auth_header.split(' ')[1]
         
-        # Construct Yahoo API URL following established patterns
-        yahoo_url = f"https://fantasysports.yahooapis.com/fantasy/v2/league/{league_key}/players;status={status}"
+        # Pagination over Yahoo players collection
+        base_url = "https://fantasysports.yahooapis.com/fantasy/v2"
         yahoo_headers = {
             'Authorization': f'Bearer {access_token}',
             'Content-Type': 'application/json'
         }
-        
-        # Add format parameter for JSON response
-        yahoo_params = {'format': 'json'}
-        
-        # Make request to Yahoo API with timeout and error handling
-        print(f"DEBUG: Requesting Yahoo waiver wire data from {yahoo_url}")
-        yahoo_response = requests.get(yahoo_url, headers=yahoo_headers, params=yahoo_params, timeout=10)
-        
-        # Handle HTTP errors
-        if yahoo_response.status_code == 401:
-            print("ERROR: Yahoo API authentication failed - token may be expired")
-            return jsonify({"error": "Yahoo authentication failed. Please re-authenticate."}), 401
-        elif yahoo_response.status_code == 403:
-            print("ERROR: Yahoo API access forbidden - insufficient permissions")
-            return jsonify({"error": "Insufficient permissions to access league data."}), 403
-        elif yahoo_response.status_code == 404:
-            print(f"ERROR: Yahoo API league not found: {league_key}")
-            return jsonify({"error": "League not found or not accessible."}), 404
-        elif yahoo_response.status_code != 200:
-            print(f"ERROR: Yahoo API returned status {yahoo_response.status_code}: {yahoo_response.text}")
-            return jsonify({"error": f"Yahoo API error: {yahoo_response.status_code}"}), 500
+        page_start = 0
+        # Yahoo players collection typically pages in 25-item chunks regardless of requested count
+        page_count = 25
+        max_players_cap = 150
+        aggregated_players = []
 
-        # Parse JSON response with defensive error handling
-        try:
-            yahoo_data = yahoo_response.json()
-            print(f"DEBUG: Received Yahoo response with keys: {yahoo_data.keys()}")
-        except ValueError as e:
-            print(f"ERROR: Failed to parse Yahoo API JSON response: {e}")
-            return jsonify({"error": "Invalid response format from Yahoo API"}), 500
-        
-        # Parse using defensive pattern matching existing Yahoo endpoints
-        parsed_players = parse_yahoo_waiver_response(yahoo_data)
-        if not parsed_players:
-            print("ERROR: Failed to parse Yahoo waiver wire response structure")
-            return jsonify({"error": "Unable to parse waiver wire data"}), 500
+        while True:
+            yahoo_url = f"{base_url}/league/{league_key}/players;status={status};start={page_start};count={page_count}"
+            print(f"DEBUG: Requesting Yahoo waiver page start={page_start} count={page_count}")
+            yahoo_response = requests.get(yahoo_url, headers=yahoo_headers, params={'format': 'json'}, timeout=10)
 
-        # Enrich Yahoo players with local ECR and analysis data
+            if yahoo_response.status_code == 401:
+                print("ERROR: Yahoo API authentication failed - token may be expired")
+                return jsonify({"error": "Yahoo authentication failed. Please re-authenticate."}), 401
+            elif yahoo_response.status_code == 403:
+                print("ERROR: Yahoo API access forbidden - insufficient permissions")
+                return jsonify({"error": "Insufficient permissions to access league data."}), 403
+            elif yahoo_response.status_code == 404:
+                print(f"ERROR: Yahoo API league not found: {league_key}")
+                return jsonify({"error": "League not found or not accessible."}), 404
+            elif yahoo_response.status_code != 200:
+                print(f"ERROR: Yahoo API returned status {yahoo_response.status_code}: {yahoo_response.text}")
+                return jsonify({"error": f"Yahoo API error: {yahoo_response.status_code}"}), 500
+
+            try:
+                page_json = yahoo_response.json()
+            except ValueError as e:
+                print(f"ERROR: Failed to parse Yahoo API JSON response: {e}")
+                return jsonify({"error": "Invalid response format from Yahoo API"}), 500
+
+            page_players = parse_yahoo_waiver_response(page_json)
+            print(f"DEBUG: Parsed {len(page_players)} players from page start={page_start}")
+            aggregated_players.extend(page_players)
+
+            if len(page_players) < page_count or len(aggregated_players) >= max_players_cap:
+                break
+            page_start += page_count
+
+        # Enrich aggregated players with local cache
         enriched_players = []
-        
-        for player in parsed_players:
-            # Normalize player name for local database lookup
-            normalized_name = normalize_player_name(player['name'])
-            
-            # Get enhanced player context using existing function
-            player_context = get_player_context(
-                player['name'],
-                ecr_type_preference='overall',
-                combined_player_data_cache=combined_player_data_cache,
-                player_name_to_id=player_name_to_id,
-                player_data_cache=player_data_cache,
-                static_ecr_overall_data=static_ecr_overall_data,
-                static_ecr_positional_data=static_ecr_positional_data,
-                static_ecr_rookie_data=static_ecr_rookie_data
-            )
-            
-            # Merge Yahoo data with local enrichment
+        for player in aggregated_players:
+            name = player.get('name')
+            if not name:
+                continue
+            normalized_name = normalize_player_name(name)
+            player_context = combined_player_data_cache.get(normalized_name, {}) if combined_player_data_cache else {}
             enriched_player = {
-                **player,  # Yahoo data (player_key, name, team, positions)
-                'ecr': player_context.get('ecr'),
-                'ecr_rank': player_context.get('ecr_rank'),
-                'sd': player_context.get('sd'),
-                'best_rank': player_context.get('best'),
-                'worst_rank': player_context.get('worst'),
-                'rank_delta': player_context.get('rank_delta'),
+                **player,
+                'ecr': player_context.get('ecr_overall'),
+                'ecr_rank': player_context.get('ecr_overall'),
+                'sd': player_context.get('sd_overall'),
+                'best_rank': player_context.get('best_overall'),
+                'worst_rank': player_context.get('worst_overall'),
+                'rank_delta': player_context.get('rank_delta_overall'),
                 'bye_week': player_context.get('bye_week'),
                 'is_rookie': player_context.get('is_rookie', False),
                 'injury_status': player_context.get('injury_status'),
                 'analysis_notes': player_context.get('notes', '')
             }
-            
             enriched_players.append(enriched_player)
-            
-            # Limit to top 100 available players to prevent overwhelming response
-            if len(enriched_players) >= 100:
-                break
-        
-        print(f"DEBUG: Enriched {len(enriched_players)} players with local data")
-        
-        # Sort players by ECR (best first) with None values last
-        enriched_players.sort(key=lambda x: x['ecr'] if x['ecr'] is not None else 999)
-        
-        # Return successful response
+
+        print(f"DEBUG: Enriched {len(enriched_players)} players with local data (pre-sort)")
+
+        # Sort by ECR (best first), None last
+        enriched_players.sort(key=lambda x: (x['ecr'] is None, x['ecr'] if x['ecr'] is not None else 9999))
+
+        # Limit output to top 100 for performance
+        limited = enriched_players[:100]
+        print(f"DEBUG: Returning {len(limited)} players after pagination + enrichment")
+
         return jsonify({
             'league_key': league_key,
-            'available_players': enriched_players,
+            'available_players': limited,
             'total_count': len(enriched_players),
             'status_filter': status
         })
@@ -3326,6 +3334,117 @@ def get_yahoo_waiver_wire():
         return jsonify({"error": "Failed to connect to Yahoo API"}), 500
     except Exception as e:
         print(f"ERROR: Unexpected error in yahoo waiver wire: {e}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/yahoo/waiver_debug')
+def get_yahoo_waiver_debug():
+    """
+    Debug endpoint for Yahoo waiver wire requests.
+    Echoes exact Yahoo URL (including status/start/count), HTTP status, parse count,
+    elapsed time, and a small sample of parsed players.
+    
+    Query params:
+      - league_key (required)
+      - status (optional: A|FA|W, default A)
+      - start (optional: default 0)
+      - count (optional: default 50)
+    """
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Valid Authorization header with Bearer token is required"}), 401
+
+    league_key = request.args.get('league_key')
+    if not league_key:
+        return jsonify({"error": "league_key parameter is required"}), 400
+
+    status = request.args.get('status', 'A')
+    try:
+        start = int(request.args.get('start', '0'))
+    except ValueError:
+        start = 0
+    try:
+        count = int(request.args.get('count', '50'))
+    except ValueError:
+        count = 50
+
+    try:
+        access_token = auth_header.split(' ')[1]
+        if not access_token:
+            return jsonify({"error": "Invalid token format: access_token missing."}), 401
+    except Exception:
+        return jsonify({"error": "Invalid token format in Authorization header."}), 401
+
+    yahoo_headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Accept': 'application/json'
+    }
+
+    # Build URL using Yahoo path selectors for pagination
+    base = "https://fantasysports.yahooapis.com/fantasy/v2"
+    yahoo_url = f"{base}/league/{league_key}/players;status={status};start={start};count={count}"
+
+    try:
+        import time as _t
+        t0 = _t.time()
+        resp = requests.get(yahoo_url, headers=yahoo_headers, params={'format': 'json'}, timeout=10)
+        elapsed_ms = int((_t.time() - t0) * 1000)
+
+        # Best‑effort parse
+        parsed_count = None
+        sample = []
+        raw_keys = []
+        structure = {}
+        try:
+            data = resp.json()
+            raw_keys = list(data.keys()) if isinstance(data, dict) else []
+            parsed = parse_yahoo_waiver_response(data)
+            if isinstance(parsed, list):
+                parsed_count = len(parsed)
+                sample = parsed[:5]
+
+            # Inspect nested structure for diagnostics
+            fc = data.get('fantasy_content', {}) if isinstance(data, dict) else {}
+            league = fc.get('league', []) if isinstance(fc, dict) else []
+            players_container = None
+            if isinstance(league, list) and len(league) >= 2 and isinstance(league[1], dict):
+                players_container = league[1].get('players')
+            structure = {
+                'league_is_list': isinstance(league, list),
+                'league_len': len(league) if isinstance(league, list) else None,
+                'players_container_type': type(players_container).__name__ if players_container is not None else None,
+                'players_container_keys_count': (len(players_container.keys()) if isinstance(players_container, dict) else None)
+            }
+        except Exception:
+            pass
+
+        print(f"DEBUG: WAIVER_DEBUG url={yahoo_url} status={resp.status_code} elapsed_ms={elapsed_ms} parsed_count={parsed_count}")
+
+        return jsonify({
+            'request': {
+                'league_key': league_key,
+                'status': status,
+                'start': start,
+                'count': count,
+                'url': yahoo_url
+            },
+            'response': {
+                'http_status': resp.status_code,
+                'elapsed_ms': elapsed_ms,
+                'raw_top_keys': raw_keys,
+                'structure': structure
+            },
+            'parsed': {
+                'count': parsed_count,
+                'sample': sample
+            }
+        })
+
+    except requests.exceptions.RequestException as e:
+        print(f"ERROR: Yahoo WAIVER_DEBUG request failed: {e}")
+        return jsonify({"error": "Failed to connect to Yahoo API"}), 500
+    except Exception as e:
+        print(f"ERROR: Unexpected error in WAIVER_DEBUG: {e}")
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
@@ -3348,46 +3467,75 @@ def parse_yahoo_waiver_response(data):
         players_container = league_data[1].get('players', {})
         available_players = []
         
+        def _extract_from_player_container(player_container):
+            player_info = player_container.get('player', []) if isinstance(player_container, dict) else []
+            if not isinstance(player_info, list) or len(player_info) == 0:
+                return None
+            # Normalize into a flat list of dict elements to search across
+            elements = []
+            first = player_info[0]
+            if isinstance(first, list):
+                for e in first:
+                    if isinstance(e, dict):
+                        elements.append(e)
+            elif isinstance(first, dict):
+                elements.append(first)
+            # Include remaining dict elements
+            for e in player_info[1:]:
+                if isinstance(e, dict):
+                    elements.append(e)
+
+            # Extract fields by scanning elements
+            player_key = ''
+            player_id = ''
+            full_name = ''
+            team_abbr = ''
+            positions = []
+
+            for e in elements:
+                if not player_key and isinstance(e, dict) and 'player_key' in e:
+                    player_key = e.get('player_key') or player_key
+                if not player_id and isinstance(e, dict) and 'player_id' in e:
+                    player_id = e.get('player_id') or player_id
+                if not full_name and isinstance(e, dict) and 'name' in e:
+                    nd = e.get('name')
+                    if isinstance(nd, dict) and nd.get('full'):
+                        full_name = nd.get('full')
+                if not team_abbr and isinstance(e, dict) and 'editorial_team_abbr' in e:
+                    team_abbr = e.get('editorial_team_abbr') or team_abbr
+                if not positions and isinstance(e, dict) and 'eligible_positions' in e:
+                    eps = e.get('eligible_positions', [])
+                    if isinstance(eps, list):
+                        for pos_data in eps:
+                            if isinstance(pos_data, dict) and pos_data.get('position'):
+                                positions.append(pos_data['position'])
+
+            if not player_key or not full_name:
+                return None
+
+            return {
+                'player_key': player_key,
+                'player_id': player_id,
+                'name': full_name,
+                'team': team_abbr or '',
+                'positions': positions,
+                'primary_position': positions[0] if positions else 'Unknown'
+            }
+
         if isinstance(players_container, dict):
             for key, player_container in players_container.items():
-                if not key.isdigit():  # Skip metadata keys like "count"
+                if not str(key).isdigit():
                     continue
-                
-                # Extract player data using simplified approach
-                player_info = player_container.get('player', [])
-                if not isinstance(player_info, list) or len(player_info) == 0:
-                    continue
-                
-                # Get basic player data (first element in nested structure)
-                player_data_list = player_info[0]
-                if not isinstance(player_data_list, list) or len(player_data_list) == 0:
-                    continue
-                
-                player_basic = player_data_list[0]
-                
-                # Extract required fields with defaults
-                player_key = player_basic.get('player_key', '')
-                name_data = player_basic.get('name', {})
-                full_name = name_data.get('full', '') if isinstance(name_data, dict) else str(name_data or '')
-                
-                # Only process players with minimum required data
-                if not player_key or not full_name:
-                    continue
-                
-                # Extract additional fields
-                positions = []
-                for pos_data in player_basic.get('eligible_positions', []):
-                    if isinstance(pos_data, dict) and pos_data.get('position'):
-                        positions.append(pos_data['position'])
-                
-                available_players.append({
-                    'player_key': player_key,
-                    'player_id': player_basic.get('player_id', ''),
-                    'name': full_name,
-                    'team': player_basic.get('editorial_team_abbr', ''),
-                    'positions': positions,
-                    'primary_position': positions[0] if positions else 'Unknown'
-                })
+                extracted = _extract_from_player_container(player_container)
+                if extracted:
+                    available_players.append(extracted)
+        elif isinstance(players_container, list):
+            for entry in players_container:
+                # entries might be dicts containing 'player'
+                if isinstance(entry, dict):
+                    extracted = _extract_from_player_container(entry)
+                    if extracted:
+                        available_players.append(extracted)
         
         print(f"DEBUG: Successfully parsed {len(available_players)} available players")
         return available_players
@@ -3649,6 +3797,123 @@ def get_yahoo_league_context():
         return jsonify({"error": "Failed to connect to Yahoo API"}), 500
     except Exception as e:
         print(f"ERROR: Unexpected error in yahoo league context: {e}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/diagnostics/yahoo-data-health')
+def yahoo_data_health():
+    """
+    Diagnostics for Yahoo + CSV integration.
+    Inputs: league_key (required), team_key (optional), Authorization Bearer token required.
+    Returns: roster/waiver counts, enrichment match rates, CSV modified times, and quick notes.
+    """
+    try:
+        league_key = request.args.get('league_key')
+        team_key = request.args.get('team_key')
+        if not league_key:
+            return jsonify({"error": "league_key parameter is required"}), 400
+        
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Valid Authorization header with Bearer token is required"}), 401
+        access_token = auth_header.split(' ')[1]
+
+        yahoo_headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Accept': 'application/json'
+        }
+        params_json = {'format': 'json'}
+
+        # 1) Roster metrics (if team_key provided)
+        roster_count = None
+        roster_match = None
+        if team_key:
+            try:
+                url_primary = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster/players?format=json'
+                resp = requests.get(url_primary, headers=yahoo_headers, timeout=10)
+                if resp.status_code == 404:
+                    url_fallback = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster?format=json'
+                    resp = requests.get(url_fallback, headers=yahoo_headers, timeout=10)
+                resp.raise_for_status()
+                raw = resp.json()
+                roster_players = parse_yahoo_roster_response(raw)
+                roster_players = roster_players or []
+                roster_count = len(roster_players)
+                m = 0
+                for p in roster_players:
+                    name = p.get('name')
+                    if not name:
+                        continue
+                    if combined_player_data_cache.get(normalize_player_name(name)):
+                        m += 1
+                roster_match = {
+                    'matched': m,
+                    'total': roster_count,
+                    'match_rate': round((m/roster_count)*100, 1) if roster_count else 0.0
+                }
+            except Exception as e:
+                print(f"ERROR: diagnostics roster fetch failed: {e}")
+                roster_count = -1
+                roster_match = {'matched': 0, 'total': 0, 'match_rate': 0.0}
+
+        # 2) Waiver metrics (A status, first two pages)
+        try:
+            base = 'https://fantasysports.yahooapis.com/fantasy/v2'
+            total_available = 0
+            matched = 0
+            for start in (0, 50):
+                url = f"{base}/league/{league_key}/players;status=A;start={start};count=50"
+                r = requests.get(url, headers=yahoo_headers, params=params_json, timeout=10)
+                r.raise_for_status()
+                data = r.json()
+                players = parse_yahoo_waiver_response(data) or []
+                total_available += len(players)
+                for p in players:
+                    nm = p.get('name')
+                    if nm and combined_player_data_cache.get(normalize_player_name(nm)):
+                        matched += 1
+            waiver_match = {
+                'matched': matched,
+                'total': total_available,
+                'match_rate': round((matched/total_available)*100, 1) if total_available else 0.0
+            }
+        except Exception as e:
+            print(f"ERROR: diagnostics waiver fetch failed: {e}")
+            waiver_match = {'matched': 0, 'total': 0, 'match_rate': 0.0}
+
+        # 3) CSV freshness
+        csv_files = [
+            ('db_fpecr_latest.csv', os.path.join(basedir, 'db_fpecr_latest.csv')),
+            ('values-players.csv', os.path.join(basedir, 'values-players.csv')),
+            ('values-picks.csv', os.path.join(basedir, 'values-picks.csv')),
+            ('fp_latest_weekly.csv', os.path.join(basedir, 'fp_latest_weekly.csv')),
+        ]
+        csv_times = {}
+        for name, path in csv_files:
+            try:
+                mtime = os.path.getmtime(path)
+                csv_times[name] = {
+                    'path': path,
+                    'modified': datetime.fromtimestamp(mtime).isoformat()
+                }
+            except Exception:
+                csv_times[name] = {'path': path, 'modified': None}
+
+        return jsonify({
+            'league_key': league_key,
+            'team_key': team_key,
+            'roster': {
+                'count': roster_count,
+                'enrichment': roster_match
+            },
+            'waivers_A_first2pages': {
+                'enrichment': waiver_match
+            },
+            'csv_freshness': csv_times
+        })
+    
+    except Exception as e:
+        print(f"ERROR: data health diagnostics failed: {e}")
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
