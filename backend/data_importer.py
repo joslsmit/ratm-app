@@ -39,7 +39,9 @@ def import_data():
     files_to_download = [
         "db_fpecr_latest.csv",
         "values-players.csv",
-        "values-picks.csv"
+        "values-picks.csv",
+        # Weekly projections (FantasyPros aggregated weekly projections)
+        "fp_latest_weekly.csv",
     ]
     
     backend_dir = os.path.dirname(os.path.abspath(__file__))

@@ -131,9 +131,18 @@
     - `curl .../waiver_wire?league_key=$LEAGUE_KEY&status=A | jq -r '"available_players=\(.available_players|length) total_count=\(.total_count)'"`
   - Phase 3 (diagnostics):
     - `curl .../diagnostics/yahoo-data-health?league_key=$LEAGUE_KEY&team_key=$TEAM_KEY | jq '{roster:.roster.enrichment.match_rate, waiversA:.waivers_A_first2pages.enrichment.match_rate, csv:.csv_freshness}'`
+  - Phase 3.1 (data refresh from DynastyProcess):
+    - `bash backend/backend/tests/test_csv_sources.sh` (calls `/api/admin/refresh_data`, prints CSV sizes and modified times)
   - Phase 4 (recommendations v2):
     - `curl -sk -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"league_key":"'$LEAGUE_KEY'","team_key":"'$TEAM_KEY'","week":null,"status":"A","top_n":10}' "$BASE/api/yahoo/waiver_recommendations_v2" | jq '{count:(.recommendations|length), first:(.recommendations[0])}'`
   - Provide one-paste wrappers in docs for each phase (similar to the scripts we used today).
+
+### Calibration & Coverage Targets
+- Scoring fallback set to 0 when weekly projections are missing (prevents inflated deltas).
+- Targets after enrichment improvements and alias mapping:
+  - Roster projection coverage ≥ 90% (excluding K/DEF by default).
+  - Pool projection coverage ≥ 70% for top 120 candidates (excluding K/DEF).
+  - Typical weekly recommendation deltas in 1–15 range (position/context dependent).
 
 ## Testing Plan
 - Backend:
@@ -155,6 +164,82 @@
 - W vs FA timings affect actionability; we’ll flag claim-only with clear messaging.
 
 ## Next Steps
-- Implement `/api/yahoo/waiver_pool` and `/api/yahoo/waiver_recommendations_v2` (backend), then wire the frontend view.
+- Implement `/api/yahoo/waiver_pool` and `/api/yahoo/waiver_recommendations_v2` (backend) — IN PROGRESS.
 - Add alias mapping + diagnostics for unmatched names.
 - Tune scoring weights after initial real-league validation.
+
+## Update Log
+- 2025-09-01: Added plan to memory-bank (active file).
+- 2025-09-01: Implemented backend endpoints draft: `/api/yahoo/waiver_pool` (aggregation, enrichment, exclusions) and `/api/yahoo/waiver_recommendations_v2` (greedy optimizer + scoring). Added helper functions.
+- 2025-09-01: Added test script `backend/backend/tests/test_waiver_v2_endpoints.sh` for quick manual validation.
+- 2025-09-02: Fixed scoring fallback (0 if no weekly projections) for realistic deltas; added alias support and loading at startup/refresh; exposed coverage metrics and unmatched name lists in recommendations metadata.
+- 2025-09-02: Added scripts: `test_waiver_v2_coverage.sh` (coverage + baseline) and `test_waiver_v2_unmatched.sh` (unmatched names) to speed iteration.
+- 2025-09-02: Importer now downloads `fp_latest_weekly.csv` from DynastyProcess; added `/api/admin/refresh_data` and `test_csv_sources.sh` for on-demand refresh & inspection.
+
+## Detailed Go-Forward Plan (Comprehensive)
+
+Objectives
+- Raise waiver pool “effective coverage” using weekly projections or conservative ECR fallbacks.
+- Keep deltas realistic and maintain slot-/position-legal lineups.
+- Ensure data freshness parity (local == prod) with clear diagnostics.
+- Deliver concise, actionable recommendations with solid reasoning.
+
+Current State
+- Data refresh working: all four DynastyProcess CSVs fetched locally (ECR, weekly, values-players, values-picks).
+- Roster coverage ≈ 92% (good). Pool coverage lower due to missing weekly projections for many deep FA/W players.
+- Recommendations empty with conservative 0-scoring fallback for missing weekly.
+
+Root Causes
+- Weekly file doesn’t include every FA; many deep players lack r2p_pts.
+- Scoring falls to 0 for missing weekly, avoiding inflated deltas but limiting candidate viability.
+
+Plan: Scoring + Matching + Data Sourcing
+- Scoring fallback (position-aware ECR→points)
+  - Add small, conservative curves mapping season-long ECR to weekly points when r2p_pts is missing:
+    - QB ≈ 20 → 10 (ECR 1 → 30+)
+    - RB/WR ≈ 15 → 6
+    - TE ≈ 10 → 4
+  - Use position from combined cache + season-long ECR from db_fpecr_latest.csv.
+  - Weekly projections remain primary; ECR fallback engages only when projection missing.
+- Candidate selection bias
+  - Prefer candidates with weekly projections; fill remainder with best ECR fallback candidates.
+  - Exclude K/DEF by default.
+- Robust matching without manual aliasing
+  - Exact normalized name (primary), then Yahoo id join (ECR.yahoo_id vs Yahoo player_id) where present.
+  - Guarded fuzzy fallback (high threshold; constrained by position and team) with in-memory caching.
+  - Keep optional alias file only for rare edge cases.
+- Data sourcing parity (local == prod)
+  - Importer pulls all four CSVs from DynastyProcess (done), including fp_latest_weekly.csv.
+  - Diagnostics expose CSV sizes, last-modified, weekly scrape_date, and row count.
+  - Anchor checks (Hurts/McCaffrey/Chase/Kelce/Allen) to detect weekly gaps quickly.
+
+Diagnostics & Scripts
+- Recommendations metadata (already present): roster/pool coverage + unmatched name arrays.
+- Refresh + inspect: `/api/admin/refresh_data` + `test_csv_sources.sh` (done).
+- Coverage checks: `test_waiver_v2_coverage.sh` + `test_waiver_v2_unmatched.sh` (done).
+- Weekly freshness (to add): extend `/api/diagnostics/yahoo-data-health` with row count, scrape_date, anchor checks.
+
+AI Narrative (after coverage improves)
+- PromptBuilder + few-shots to produce 3–5 recommendations including: add/drop, weekly delta (weekly or fallback), slot impact, bye/risk/need notes; claim-only flag for W.
+- Strict JSON contract + retry on parse failure.
+
+Rollout Phases
+1) Scoring fallback + candidate bias
+   - Implement ECR→points fallback; bias towards candidates with weekly projections.
+   - Validate: effective pool coverage rises; non-empty recommendations; deltas ~1–15.
+2) Matching robustness
+   - Add id join + guarded fuzzy fallback; validate fewer unmatched names even without weekly entries.
+3) Diagnostics enhancement
+   - Weekly row count, scrape_date, anchor checks; clear red/green states.
+4) AI narrative + frontend
+   - Integrate prompt and render concise, justified add/drop recommendations.
+
+Success Criteria
+- Roster coverage ≥ 90% (excluding K/DEF).
+- Effective pool coverage ≥ 70% for top 120 candidates (projections or ECR fallback).
+- Recommendations not empty; deltas typically 1–15 points.
+- Diagnostics highlight freshness/coverage issues with actionable next steps.
+
+DynastyProcess Files: Additional Significant Value
+- Primary high-value files used: db_fpecr_latest.csv, fp_latest_weekly.csv, values-players.csv, values-picks.csv.
+- Potential incremental: ROS ECR (if available) for tie-breaks. Injury/snap/depth would be high value but are not in DP files and require separate sources.

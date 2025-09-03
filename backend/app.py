@@ -19,6 +19,7 @@ from prompt_templates import PromptBuilder
 from few_shot_examples import ExampleLibrary
 from chain_of_thought import ChainOfThoughtBuilder, ReasoningType
 from context_formatters import ContextFormatter, AnalysisType
+from typing import Optional
 
 # Get the absolute path of the directory where this file is located
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -48,6 +49,30 @@ model = genai.GenerativeModel('gemini-2.5-flash-lite-preview-06-17')
 
 # --- Data Caching ---
 player_data_cache, player_name_to_id, static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data, player_values_cache, pick_values_cache, weekly_projections_cache, combined_player_data_cache = None, None, {}, {}, {}, None, None, {}, None
+name_aliases = {}
+
+# --- Name Aliases (optional file: backend/name_aliases.json) ---
+def load_name_aliases():
+    """Load name alias map to improve CSV enrichment matching.
+
+    Expected JSON format: { "normalized_name": "normalized_alias", ... }
+    """
+    global name_aliases
+    try:
+        alias_path = os.path.join(basedir, 'name_aliases.json')
+        if os.path.exists(alias_path):
+            with open(alias_path, 'r') as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    name_aliases = {str(k): str(v) for k, v in data.items()}
+                    print(f"Loaded {len(name_aliases)} name aliases")
+                else:
+                    name_aliases = {}
+        else:
+            name_aliases = {}
+    except Exception as e:
+        print(f"WARN: Failed to load name aliases: {e}")
+        name_aliases = {}
 
 # --- Data Loading & Helper Functions ---
 def load_values_from_csv(file_path):
@@ -272,9 +297,16 @@ def get_all_players():
         player_data_cache, player_name_to_id = {}, {}
 
 def clean_numeric_value(value):
-    if isinstance(value, float) and pd.isna(value):
+    """Attempt to coerce to float; return None for missing/NaN/non-numeric."""
+    if value is None:
         return None
-    return value
+    try:
+        f = float(value)
+        if pd.isna(f):
+            return None
+        return f
+    except (ValueError, TypeError):
+        return None
 
 def create_enhanced_combined_player_data_cache():
     """
@@ -488,6 +520,11 @@ def load_all_data():
 
         # Create the combined player data cache at startup
         create_combined_player_data_cache()
+        # Load optional name aliases
+        try:
+            load_name_aliases()
+        except Exception as _e:
+            print(f"WARN: load_name_aliases failed: {_e}")
 
         print(f"Player data cache size: {len(player_data_cache) if player_data_cache else 0}")
         print(f"Static Overall ECR data size: {len(static_ecr_overall_data) if static_ecr_overall_data else 0}")
@@ -517,6 +554,10 @@ def refresh_external_data():
         pick_values_cache = load_values_from_csv(os.path.join(basedir, 'values-picks.csv'))
         weekly_projections_cache = load_weekly_projections_data(os.path.join(basedir, 'fp_latest_weekly.csv'))
         create_combined_player_data_cache()
+        try:
+            load_name_aliases()
+        except Exception as _e:
+            print(f"WARN: load_name_aliases failed (refresh): {_e}")
         print("DEBUG: External data refresh complete")
     except Exception as e:
         print(f"ERROR: External data refresh failed: {e}")
@@ -526,6 +567,59 @@ scheduler = BackgroundScheduler()
 # Run once every 24 hours
 scheduler.add_job(func=refresh_external_data, trigger="interval", hours=24)
 scheduler.start()
+
+@app.route('/api/admin/refresh_data', methods=['POST'])
+def admin_refresh_data():
+    """Force a data refresh from DynastyProcess GitHub (dev convenience).
+
+    Triggers CSV downloads and cache rebuild. Returns basic stats.
+    """
+    try:
+        refresh_external_data()
+        # Summarize file sizes
+        files = [
+            ('db_fpecr_latest.csv', os.path.join(basedir, 'db_fpecr_latest.csv')),
+            ('values-players.csv', os.path.join(basedir, 'values-players.csv')),
+            ('values-picks.csv', os.path.join(basedir, 'values-picks.csv')),
+            ('fp_latest_weekly.csv', os.path.join(basedir, 'fp_latest_weekly.csv')),
+        ]
+        stats = {}
+        for name, path in files:
+            try:
+                size = os.path.getsize(path)
+                mtime = os.path.getmtime(path)
+                stats[name] = {
+                    'exists': True,
+                    'bytes': size,
+                    'modified': datetime.fromtimestamp(mtime).isoformat()
+                }
+            except Exception:
+                stats[name] = {'exists': False}
+        return jsonify({'status': 'ok', 'files': stats}), 200
+    except Exception as e:
+        print(f"ERROR: admin_refresh_data failed: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+# --- Name Aliases (optional file: backend/name_aliases.json) ---
+def load_name_aliases():
+    global name_aliases
+    try:
+        alias_path = os.path.join(basedir, 'name_aliases.json')
+        if os.path.exists(alias_path):
+            with open(alias_path, 'r') as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    # Expect mapping from normalized_name -> normalized_alias
+                    name_aliases = {str(k): str(v) for k, v in data.items()}
+                    print(f"Loaded {len(name_aliases)} name aliases")
+                else:
+                    name_aliases = {}
+        else:
+            name_aliases = {}
+    except Exception as e:
+        print(f"WARN: Failed to load name aliases: {e}")
+        name_aliases = {}
 
 
 # --- Position Validation Helpers ---
@@ -4038,6 +4132,332 @@ def yahoo_waiver_analysis():
         print(f"ERROR: Yahoo waiver analysis failed: {e}")
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+# ---------------- Waiver Wire v2 Helpers ----------------
+def _normalize_pos(p):
+    return (p or '').upper()
+
+def _is_excluded_position(position: str, exclude_set: set) -> bool:
+    p = _normalize_pos(position)
+    return p in exclude_set
+
+def _get_combined_info_by_name(name: str) -> dict:
+    try:
+        if not name:
+            return {}
+        key = normalize_player_name(name)
+        # apply alias if available
+        alias = name_aliases.get(key)
+        lookup_key = alias if alias else key
+        return combined_player_data_cache.get(lookup_key, {}) if combined_player_data_cache else {}
+    except Exception:
+        return {}
+
+def _player_weekly_score(name: str, fallback_ecr: Optional[float]) -> float:
+    ci = _get_combined_info_by_name(name)
+    wp = ci.get('projected_points')
+    if isinstance(wp, (int, float)):
+        return float(wp)
+    # Attempt to coerce string numerics
+    try:
+        if wp is not None:
+            return float(wp)
+    except (ValueError, TypeError):
+        pass
+    # Conservative fallback: if no projection, treat as 0 for weekly scoring
+    return 0.0
+
+def _build_required_slots_from_roster(roster_players: list[str]) -> list[str]:
+    slots = []
+    for p in roster_players:
+        slot = _normalize_pos(p.get('selected_position'))
+        if not slot or slot.startswith('BN') or slot.startswith('IR'):
+            continue
+        if slot in ('K', 'DEF', 'DST'):
+            continue
+        slots.append(slot)
+    return slots
+
+def _can_fill_slot(slot: str, player_position: str) -> bool:
+    # Use existing helper when possible
+    try:
+        return is_valid_player_for_position({'position': player_position}, slot)
+    except Exception:
+        slot_u = _normalize_pos(slot)
+        pos = _normalize_pos(player_position)
+        if slot_u == 'W/T':
+            return pos in ('WR', 'TE')
+        if slot_u in ('W/R/T', 'FLEX'):
+            return pos in ('WR', 'RB', 'TE')
+        return slot_u == pos
+
+def _best_lineup(players: list, slots: list[str]) -> tuple[list, float]:
+    """Greedy lineup: fill each slot with highest score eligible player, once each."""
+    used = set()
+    lineup = []
+    total = 0.0
+    for slot in slots:
+        best_idx = -1
+        best_score = -1.0
+        for i, pl in enumerate(players):
+            if i in used:
+                continue
+            name = pl.get('name')
+            position = pl.get('position') or pl.get('primary_position')
+            if not name or not position:
+                continue
+            if not _can_fill_slot(slot, position):
+                continue
+            # compute score
+            score = _player_weekly_score(name, pl.get('ecr_overall') or pl.get('ecr'))
+            if score > best_score:
+                best_score = score
+                best_idx = i
+        if best_idx >= 0:
+            used.add(best_idx)
+            lineup.append({
+                'slot': slot,
+                'player': players[best_idx]
+            })
+            total += best_score if best_score > 0 else 0.0
+        else:
+            lineup.append({'slot': slot, 'player': None})
+    return lineup, total
+
+def _collect_enriched_pool(access_token: str, league_key: str, status: str, exclude_set: set, cap: int = 200) -> list:
+    base_url = "https://fantasysports.yahooapis.com/fantasy/v2"
+    headers = {'Authorization': f'Bearer {access_token}', 'Accept': 'application/json'}
+    players = []
+    start = 0
+    step = 25
+    while len(players) < cap:
+        url = f"{base_url}/league/{league_key}/players;status={status};start={start};count={step}"
+        resp = requests.get(url, headers=headers, params={'format': 'json'}, timeout=10)
+        if resp.status_code != 200:
+            break
+        data = resp.json()
+        page_players = parse_yahoo_waiver_response(data)
+        if not page_players:
+            break
+        for p in page_players:
+            pos_list = p.get('positions') or []
+            primary = (pos_list[0] if pos_list else p.get('primary_position'))
+            if _is_excluded_position(primary, exclude_set):
+                continue
+            name = p.get('name')
+            ci = _get_combined_info_by_name(name)
+            enriched = {
+                **p,
+                'position': ci.get('position', primary),
+                'ecr_overall': ci.get('ecr_overall') or ci.get('ecr'),
+                'sd_overall': ci.get('sd_overall') or ci.get('sd'),
+                'best_overall': ci.get('best_overall') or ci.get('best'),
+                'worst_overall': ci.get('worst_overall') or ci.get('worst'),
+                'rank_delta_overall': ci.get('rank_delta_overall') or ci.get('rank_delta'),
+                'bye_week': ci.get('bye_week'),
+                'weekly_points': ci.get('projected_points'),
+                'weekly_ecr': ci.get('weekly_ecr'),
+                'weekly_ownership': ci.get('weekly_ownership'),
+            }
+            players.append(enriched)
+            if len(players) >= cap:
+                break
+        if len(page_players) < step:
+            break
+        start += step
+    # Sort by weekly_points desc then ECR asc
+    players.sort(key=lambda x: (-(x['weekly_points'] or -1), x['ecr_overall'] if x.get('ecr_overall') is not None else 9999))
+    return players
+
+@app.route('/api/yahoo/waiver_pool')
+def yahoo_waiver_pool():
+    try:
+        league_key = request.args.get('league_key')
+        if not league_key:
+            return jsonify({'error': 'league_key parameter is required'}), 400
+        status = request.args.get('status', 'A')
+        max_count = int(request.args.get('max', '200'))
+        exclude = request.args.get('exclude_positions', 'K,DEF')
+        exclude_set = {s.strip().upper() for s in exclude.split(',') if s.strip()}
+
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'Valid Authorization header with Bearer token is required'}), 401
+        access_token = auth_header.split(' ')[1]
+
+        pool = _collect_enriched_pool(access_token, league_key, status, exclude_set, max_count)
+        return jsonify({
+            'league_key': league_key,
+            'status_filter': status,
+            'total_count': len(pool),
+            'available_players': pool
+        })
+    except Exception as e:
+        print(f"ERROR: yahoo_waiver_pool failed: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/yahoo/waiver_recommendations_v2', methods=['POST'])
+def yahoo_waiver_recommendations_v2():
+    try:
+        payload = request.get_json(force=True, silent=True) or {}
+        league_key = payload.get('league_key')
+        team_key = payload.get('team_key')
+        week = payload.get('week')
+        status = payload.get('status', 'A')
+        top_n = int(payload.get('top_n', 10))
+        exclude = payload.get('exclude_positions', ['K', 'DEF'])
+        exclude_set = {str(s).upper() for s in exclude}
+        if not league_key or not team_key:
+            return jsonify({'error': 'league_key and team_key are required'}), 400
+
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'Valid Authorization header with Bearer token is required'}), 401
+        access_token = auth_header.split(' ')[1]
+
+        # Fetch roster from Yahoo (reuse roster endpoint logic)
+        headers = {'Authorization': f'Bearer {access_token}', 'Accept': 'application/json'}
+        if week:
+            url_primary = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster/players;week={week}?format=json'
+            url_fallback = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster;week={week}?format=json'
+        else:
+            url_primary = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster/players?format=json'
+            url_fallback = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster?format=json'
+        r = requests.get(url_primary, headers=headers, timeout=10)
+        if r.status_code == 404:
+            r = requests.get(url_fallback, headers=headers, timeout=10)
+        r.raise_for_status()
+        roster_raw = r.json()
+        roster_players = parse_yahoo_roster_response(roster_raw) or []
+        # Enrich roster players minimally
+        enriched_roster = []
+        for p in roster_players:
+            name = p.get('name')
+            if not name:
+                continue
+            ci = _get_combined_info_by_name(name)
+            pos = ci.get('position') or p.get('selected_position')
+            if _is_excluded_position(pos, exclude_set):
+                continue
+            enriched_roster.append({
+                **p,
+                'position': pos,
+                'weekly_points': ci.get('projected_points'),
+                'ecr_overall': ci.get('ecr_overall'),
+                'bye_week': ci.get('bye_week')
+            })
+
+        # Build required slots from roster
+        required_slots = _build_required_slots_from_roster(enriched_roster)
+
+        # Collect candidate pool
+        pool = _collect_enriched_pool(access_token, league_key, status, exclude_set, cap=200)
+        # Cap candidates considered for speed
+        candidates = pool[:120]
+        # Coverage metrics
+        roster_proj_total = len(enriched_roster)
+        roster_proj_have = sum(1 for rp in enriched_roster if isinstance(rp.get('weekly_points'), (int, float)))
+        pool_proj_total = len(candidates)
+        pool_proj_have = sum(1 for c in candidates if isinstance(c.get('weekly_points'), (int, float)))
+
+        # Baseline lineup
+        baseline_lineup, baseline_points = _best_lineup(enriched_roster, required_slots)
+
+        # Prepare drop candidates list (prefer bench; then weakest eligible starter by position)
+        bench = [rp for rp in enriched_roster if str(rp.get('selected_position','')).upper().startswith('BN')]
+        starters = [rp for rp in enriched_roster if rp not in bench and not str(rp.get('selected_position','')).upper().startswith('IR')]
+
+        recs = []
+        for c in candidates:
+            cpos = c.get('position') or c.get('primary_position')
+            if not cpos:
+                continue
+            # potential drops: bench first, then starters of same position group
+            potential_drops = []
+            for rp in bench:
+                potential_drops.append(rp)
+            for rp in starters:
+                if _normalize_pos(rp.get('position') or rp.get('selected_position')) == _normalize_pos(cpos):
+                    potential_drops.append(rp)
+            # limit evaluation
+            potential_drops = potential_drops[:5]
+            best_delta = 0.0
+            best_after = None
+            best_drop = None
+            for dp in potential_drops:
+                new_roster = [rp for rp in enriched_roster if rp is not dp] + [
+                    {
+                        'name': c.get('name'),
+                        'position': cpos,
+                        'selected_position': dp.get('selected_position'),
+                        'weekly_points': c.get('weekly_points'),
+                        'ecr_overall': c.get('ecr_overall'),
+                        'bye_week': c.get('bye_week'),
+                    }
+                ]
+                lineup_after, points_after = _best_lineup(new_roster, required_slots)
+                delta = points_after - baseline_points
+                if delta > best_delta:
+                    best_delta = delta
+                    best_after = lineup_after
+                    best_drop = dp
+            if best_delta > 0 and best_drop is not None:
+                recs.append({
+                    'add_player': {
+                        'name': c.get('name'),
+                        'team': c.get('team'),
+                        'position': cpos,
+                        'weekly_points': c.get('weekly_points'),
+                        'ecr_overall': c.get('ecr_overall'),
+                        'status': status
+                    },
+                    'drop_player': {
+                        'name': best_drop.get('name'),
+                        'team': best_drop.get('team'),
+                        'position': best_drop.get('position'),
+                        'weekly_points': best_drop.get('weekly_points'),
+                        'ecr_overall': best_drop.get('ecr_overall')
+                    },
+                    'delta_points': round(best_delta, 2),
+                    'lineup_delta': {
+                        'before_points': round(baseline_points, 2),
+                        'after_points': round(baseline_points + best_delta, 2)
+                    },
+                    'notes': [
+                        'Slot-aware lineup optimization for current week',
+                        'Consider waiver timing if player is on W status'
+                    ],
+                    'claim_only': (status == 'W')
+                })
+
+        recs.sort(key=lambda x: x['delta_points'], reverse=True)
+        # Unmatched diagnostics for alias improvements
+        unmatched_roster = [rp.get('name') for rp in enriched_roster if not isinstance(rp.get('weekly_points'), (int, float))][:10]
+        unmatched_pool = [c.get('name') for c in candidates if not isinstance(c.get('weekly_points'), (int, float))][:10]
+        return jsonify({'recommendations': recs[:top_n], 'metadata': {
+            'baseline_points': round(baseline_points, 2),
+            'slots': required_slots,
+            'pool_considered': len(candidates),
+            'roster_projection_coverage': {
+                'have': roster_proj_have,
+                'total': roster_proj_total,
+                'rate': round((roster_proj_have/roster_proj_total)*100, 1) if roster_proj_total else 0.0
+            },
+            'pool_projection_coverage': {
+                'have': pool_proj_have,
+                'total': pool_proj_total,
+                'rate': round((pool_proj_have/pool_proj_total)*100, 1) if pool_proj_total else 0.0
+            },
+            'unmatched_roster': unmatched_roster,
+            'unmatched_pool': unmatched_pool
+        }})
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': 'Failed to connect to Yahoo API'}), 500
+    except Exception as e:
+        print(f"ERROR: yahoo_waiver_recommendations_v2 failed: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/yahoo/league_inefficiencies', methods=['POST'])
 def yahoo_league_inefficiencies():
