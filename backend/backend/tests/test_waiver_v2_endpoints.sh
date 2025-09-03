@@ -20,5 +20,5 @@ JSON
 RSP="$(curl -sk -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "$PAYLOAD" "$BASE/api/yahoo/waiver_recommendations_v2")"
 printf "%s\n" "$RSP" | ppjson >/dev/null
 if command -v jq >/dev/null 2>&1; then
-  echo "$RSP" | jq -r '{rec_count: (.recommendations|length), first_add: (.recommendations[0].add_player.name // "N/A"), delta: (.recommendations[0].delta_points // "N/A")} '
+  echo "$RSP" | jq -r '{rec_count: (.recommendations|length), first_add: (.recommendations[0].add_player.name // "N/A"), estimated_benefit: (.recommendations[0].estimated_benefit // "N/A")} '
 fi

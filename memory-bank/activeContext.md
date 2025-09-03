@@ -198,6 +198,21 @@
 *   **🎉 COMPLETED: Yahoo-Integrated Waiver Wire Assistant (Phase 6) - August 18, 2025**
     *   **✅ FULL IMPLEMENTATION COMPLETE:** All backend and frontend components working
     *   **✅ COMPREHENSIVE TESTING PASSED:** All endpoints validated with organized test suite in `backend/tests/`
+
+## 2A. Recent Major Completion (September 2–3, 2025)
+
+**✅ Waiver Wire v2 — Whole‑Roster Scoring Implemented**
+- Backend optimizes overall roster: lineup (weekly) + bench VOR + balance + bye coverage
+- Conservative scoring: weekly‑first; ECR→points fallback for missing projections (QB/RB/WR/TE curves)
+- Enrichment: exact name + Yahoo ID join; optional fuzzy reserved for edge cases
+- Candidate pool: broad with position quotas to avoid QB crowding; K/DEF excluded
+- Guards: cross‑position penalty unless balance improves; avoid surplus bench QBs; preserve RB/WR depth
+- Diagnostics: weekly freshness (row_count, scrape_date, anchors) and coverage scripts
+
+Next up:
+- Alternatives Mode (opt‑in) to surface best near‑neutral moves with rationale badges
+- UI: replace “delta” with “Estimated Benefit”; show badges (Depth/Bye/Insurance/Upside/Risk) and compact breakdown
+- Optional: AI narrative for top 3–5 moves (strict JSON)
     *   **✅ FILES IMPLEMENTED:**
         *   Backend: `app.py` (+300 lines), test suite with 4 scripts + README
         *   Frontend: Enhanced `WaiverWireAssistant.js`, `WaiverWireAssistant.module.css` (+110 lines), `App.js`

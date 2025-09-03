@@ -237,6 +237,14 @@ This document tracks the progress of the RATM Draft Kit project against the defi
 *   **Business Impact:** **40-60% improvement in waiver recommendation accuracy** achieved through elimination of basic errors and systematic market opportunity identification
 *   **Files Enhanced:** `app.py` (+200 lines data loading), `utils.py` (+240 lines utility functions), `context_formatters.py` (+230 lines enhanced formatting)
 
+### 🚀 ✅ COMPLETED: Waiver Wire v2 — Whole‑Roster Scoring (September 2–3, 2025)
+*   **Status:** **✅ BACKEND COMPLETE** — recommendations now consider lineup + bench VOR + balance + bye coverage
+*   **Conservative Scoring:** Weekly‑first; ECR→points fallback for missing weekly projections
+*   **Enrichment:** Exact name + Yahoo ID join; K/DEF excluded; broad pool with position quotas to avoid QB crowding
+*   **Guards:** Cross‑position penalty unless balance improves; avoid surplus bench QBs; preserve RB/WR depth
+*   **Diagnostics:** Weekly freshness (row_count, scrape_date, anchor presence) and coverage scripts
+*   **Next:** Alternatives Mode (opt‑in) and UI badges/“Estimated Benefit”; optional AI narrative
+
 ### 🥇 ✅ COMPLETED: Phase 9 - Yahoo-Enhanced Market Inefficiency Finder
 *   **Status:** **🎉 FULLY COMPLETED - Production Ready**
 *   **Implementation Date:** August 19, 2025

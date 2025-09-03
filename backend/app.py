@@ -4403,6 +4403,81 @@ def _compute_bye_score(enriched_roster: list, lineup: list) -> float:
     except Exception:
         return 0.0
 
+def _starter_positions_and_byes(lineup: list) -> tuple[set, dict]:
+    positions = set()
+    pos_byes = {}
+    try:
+        for slot_entry in lineup:
+            pl = slot_entry.get('player') or {}
+            pos = (pl.get('position') or pl.get('primary_position') or '').upper()
+            if not pos:
+                continue
+            positions.add(pos)
+            bye_w = pl.get('bye_week')
+            if bye_w:
+                pos_byes.setdefault(pos, set()).add(bye_w)
+    except Exception:
+        pass
+    return positions, pos_byes
+
+def _compute_badges(add_player: dict, drop_player: dict, enriched_roster: list, baseline_lineup: list) -> list:
+    badges = []
+    try:
+        add_pos = (add_player.get('position') or add_player.get('primary_position') or '').upper()
+        drop_pos = (drop_player.get('position') or drop_player.get('primary_position') or '').upper()
+        baseline_counts = _compute_bench_counts(enriched_roster, baseline_lineup)
+        # Count after swap (approximate)
+        counts_after = dict(baseline_counts)
+        if drop_pos in counts_after:
+            counts_after[drop_pos] = max(0, counts_after.get(drop_pos, 0) - 1)
+        if add_pos in counts_after:
+            counts_after[add_pos] = counts_after.get(add_pos, 0) + 1
+
+        # Depth badge: if the add position count increases or was below target
+        targets = {'RB': 2, 'WR': 2, 'TE': 1}
+        if add_pos in targets:
+            before = baseline_counts.get(add_pos, 0)
+            after = counts_after.get(add_pos, 0)
+            if after > before or before < targets[add_pos]:
+                badges.append('Depth')
+
+        # Bye Coverage: if starters at add_pos have byes and add's bye is different
+        starter_pos, starter_byes = _starter_positions_and_byes(baseline_lineup)
+        add_bye = add_player.get('bye_week')
+        if add_pos in starter_byes and add_bye and add_bye not in starter_byes.get(add_pos, set()):
+            badges.append('Bye Coverage')
+
+        # Insurance: if any starter shares same team+position
+        add_team = (add_player.get('team') or '').upper()
+        insurance_flag = False
+        for slot_entry in baseline_lineup:
+            pl = slot_entry.get('player') or {}
+            ppos = (pl.get('position') or pl.get('primary_position') or '').upper()
+            pteam = (pl.get('team') or '').upper()
+            if ppos == add_pos and pteam and add_team and pteam == add_team:
+                insurance_flag = True
+                break
+        if insurance_flag and add_pos in ('RB','WR','TE'):
+            badges.append('Insurance')
+
+        # Upside: rookie or improving ECR (negative rank_delta)
+        if add_player.get('is_rookie'):
+            badges.append('Upside')
+        rd = add_player.get('rank_delta_overall') or add_player.get('rank_delta')
+        if isinstance(rd, (int, float)) and rd < 0:
+            if 'Upside' not in badges:
+                badges.append('Upside')
+
+        # Risk: injury/suspension or high uncertainty
+        status = (add_player.get('status') or '').upper()
+        sd = add_player.get('sd_overall') or add_player.get('sd')
+        if status in ('IR','SUSP','OUT') or (isinstance(sd, (int, float)) and sd > 20):
+            badges.append('Risk')
+
+    except Exception:
+        pass
+    return badges
+
 def _collect_enriched_pool(access_token: str, league_key: str, status: str, exclude_set: set, cap: int = 200) -> list:
     base_url = "https://fantasysports.yahooapis.com/fantasy/v2"
     headers = {'Authorization': f'Bearer {access_token}', 'Accept': 'application/json'}
@@ -4662,6 +4737,7 @@ def yahoo_waiver_recommendations_v2():
                     best_after = lineup_after
                     best_drop = dp
             if best_delta > 0 and best_drop is not None:
+                badges = _compute_badges(c, best_drop, enriched_roster, baseline_lineup)
                 recs.append({
                     'add_player': {
                         'name': c.get('name'),
@@ -4678,7 +4754,7 @@ def yahoo_waiver_recommendations_v2():
                         'weekly_points': best_drop.get('weekly_points'),
                         'ecr_overall': best_drop.get('ecr_overall')
                     },
-                    'delta_points': round(best_delta, 2),
+                    'estimated_benefit': round(best_delta, 2),
                     'score_breakdown': {
                         'baseline': {
                             'overall': baseline_overall,
@@ -4691,6 +4767,7 @@ def yahoo_waiver_recommendations_v2():
                             'overall': round(baseline_overall + best_delta, 2)
                         }
                     },
+                    'badges': badges,
                     'notes': [
                         'Slot-aware lineup optimization for current week',
                         'Whole-roster score includes bench value, balance, and bye coverage'
@@ -4698,10 +4775,82 @@ def yahoo_waiver_recommendations_v2():
                     'claim_only': (status == 'W')
                 })
 
-        recs.sort(key=lambda x: x['delta_points'], reverse=True)
+        recs.sort(key=lambda x: x['estimated_benefit'], reverse=True)
         # Unmatched diagnostics for alias improvements
         unmatched_roster = [rp.get('name') for rp in enriched_roster if not isinstance(rp.get('weekly_points'), (int, float))][:10]
         unmatched_pool = [c.get('name') for c in candidates if not isinstance(c.get('weekly_points'), (int, float))][:10]
+        # Alternatives mode: include near-neutral suggestions if requested
+        include_alts = bool(payload.get('include_alternatives', False))
+        min_benefit = float(payload.get('min_benefit', 0.0))
+        if not recs and include_alts and min_benefit < 0:
+            # Re-evaluate candidates capturing top near-neutral moves
+            alt_recs = []
+            for c in candidates:
+                cpos = c.get('position') or c.get('primary_position')
+                if not cpos:
+                    continue
+                potential_drops = []
+                for rp in bench:
+                    potential_drops.append(rp)
+                for rp in starters:
+                    if _normalize_pos(rp.get('position') or rp.get('selected_position')) == _normalize_pos(cpos):
+                        potential_drops.append(rp)
+                potential_drops = potential_drops[:8]
+                best_delta = -999.0
+                best_drop = None
+                for dp in potential_drops:
+                    new_roster = [rp for rp in enriched_roster if rp is not dp] + [{
+                        'name': c.get('name'),
+                        'position': cpos,
+                        'selected_position': dp.get('selected_position'),
+                        'weekly_points': c.get('weekly_points'),
+                        'ecr_overall': c.get('ecr_overall'),
+                        'bye_week': c.get('bye_week'),
+                    }]
+                    lineup_after, points_after = _best_lineup(new_roster, required_slots)
+                    bench_vor_after = _compute_bench_vor(new_roster, lineup_after)
+                    counts_after = _compute_bench_counts(new_roster, lineup_after)
+                    balance_after = _compute_balance_score(counts_after)
+                    bye_after = _compute_bye_score(new_roster, lineup_after)
+                    dp_pos = (dp.get('position') or dp.get('selected_position') or '').upper()
+                    cross_penalty = 0.0
+                    if (cpos or '').upper() != dp_pos:
+                        if balance_after <= baseline_balance:
+                            cross_penalty = 1.5
+                    qb_after = counts_after.get('QB', 0)
+                    qb_surplus_pen = max(0, qb_after - 1) * 2.5
+                    shortage_pen = 0.0
+                    for posx, target, pen in (('RB', 2, 2.0), ('WR', 2, 2.0)):
+                        if counts_after.get(posx, 0) < target:
+                            shortage_pen += pen
+                    extra_qb_pen = 0.0
+                    if (cpos or '').upper() == 'QB' and baseline_counts.get('QB', 0) >= 1:
+                        extra_qb_pen = 2.0
+                    overall_after = round(points_after + alpha * bench_vor_after + beta * balance_after + gamma * bye_after
+                                           - cross_penalty - qb_surplus_pen - shortage_pen - extra_qb_pen, 2)
+                    delta_overall = overall_after - baseline_overall
+                    if delta_overall > best_delta:
+                        best_delta = delta_overall
+                        best_drop = dp
+                if best_drop is not None and best_delta >= min_benefit:
+                    badges = _compute_badges(c, best_drop, enriched_roster, baseline_lineup)
+                    alt_recs.append({
+                        'add_player': {
+                            'name': c.get('name'), 'team': c.get('team'), 'position': cpos,
+                            'weekly_points': c.get('weekly_points'), 'ecr_overall': c.get('ecr_overall'), 'status': status
+                        },
+                        'drop_player': {
+                            'name': best_drop.get('name'), 'team': best_drop.get('team'), 'position': best_drop.get('position'),
+                            'weekly_points': best_drop.get('weekly_points'), 'ecr_overall': best_drop.get('ecr_overall')
+                        },
+                        'estimated_benefit': round(best_delta, 2),
+                        'badges': badges,
+                        'claim_only': (status == 'W'),
+                        'notes': ['Consider: near‑neutral move with rationale badges']
+                    })
+            alt_recs.sort(key=lambda x: x['estimated_benefit'], reverse=True)
+            recs = alt_recs[:top_n]
+
         return jsonify({'recommendations': recs[:top_n], 'metadata': {
             'baseline_points': round(baseline_points, 2),
             'baseline_bench_vor': baseline_bench_vor,
