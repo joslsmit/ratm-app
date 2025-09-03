@@ -20,6 +20,7 @@ from few_shot_examples import ExampleLibrary
 from chain_of_thought import ChainOfThoughtBuilder, ReasoningType
 from context_formatters import ContextFormatter, AnalysisType
 from typing import Optional
+import math
 
 # Get the absolute path of the directory where this file is located
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -49,6 +50,7 @@ model = genai.GenerativeModel('gemini-2.5-flash-lite-preview-06-17')
 
 # --- Data Caching ---
 player_data_cache, player_name_to_id, static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data, player_values_cache, pick_values_cache, weekly_projections_cache, combined_player_data_cache = None, None, {}, {}, {}, None, None, {}, None
+yahoo_id_to_key = {}
 name_aliases = {}
 
 # --- Name Aliases (optional file: backend/name_aliases.json) ---
@@ -154,6 +156,7 @@ def load_ecr_data_from_csv(file_path):
                     'pos': row.get('pos'),
                     'bye': row.get('bye'),
                     'team': row.get('team'),
+                    'yahoo_id': row.get('yahoo_id'),
                     'ecr_type': row.get('ecr_type') # Include ecr_type for debugging/context
                 }
             return ecr_dict
@@ -317,7 +320,7 @@ def create_enhanced_combined_player_data_cache():
     """
     
     global combined_player_data_cache, static_ecr_overall_data, static_ecr_positional_data
-    global static_ecr_rookie_data, weekly_projections_cache, player_values_cache
+    global static_ecr_rookie_data, weekly_projections_cache, player_values_cache, yahoo_id_to_key
     
     # Validation checks
     if not any([static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data]):
@@ -325,6 +328,7 @@ def create_enhanced_combined_player_data_cache():
         return
     
     temp_combined_data = {}
+    yahoo_id_to_key = {}
     
     # Get all unique player keys from all data sources
     all_player_keys = (set(static_ecr_overall_data.keys()) | 
@@ -366,6 +370,11 @@ def create_enhanced_combined_player_data_cache():
         values_data = player_values_cache.get(name_key, {}) if player_values_cache else {}
         
         # Enhanced player data structure
+        # Stitch yahoo_id if available
+        yahoo_id = (overall_data.get('yahoo_id') if overall_data else None) or \
+                   (positional_data.get('yahoo_id') if positional_data else None) or \
+                   (rookie_data.get('yahoo_id') if rookie_data else None)
+
         temp_combined_data[name_key] = {
             # Existing ECR fields (unchanged)
             'name': primary_data_source.get('name', name_key.title()),
@@ -412,6 +421,8 @@ def create_enhanced_combined_player_data_cache():
             'value_opportunity_score': None,
             'age_category': None,
             'projection_confidence': None,
+            # IDs
+            'yahoo_id': yahoo_id,
         }
     
     # Post-process calculated fields using utility functions
@@ -444,6 +455,9 @@ def create_enhanced_combined_player_data_cache():
             player_data.get('weekly_ecr')
         )
     
+        if yahoo_id and str(yahoo_id).lower() not in ('na', 'nan', ''):
+            yahoo_id_to_key[str(yahoo_id)] = name_key
+
     combined_player_data_cache = temp_combined_data
     print(f"✅ Enhanced cache created with {len(combined_player_data_cache)} players")
 
@@ -3993,6 +4007,33 @@ def yahoo_data_health():
             except Exception:
                 csv_times[name] = {'path': path, 'modified': None}
 
+        # Weekly CSV checks (row count, latest scrape_date, anchor presence)
+        weekly_path = os.path.join(basedir, 'fp_latest_weekly.csv')
+        weekly_rows = None
+        latest_scrape_date = None
+        try:
+            if os.path.exists(weekly_path):
+                with open(weekly_path, 'r') as fh:
+                    weekly_rows = sum(1 for _ in fh) - 1  # minus header
+            # derive latest scrape_date from cache
+            if isinstance(weekly_projections_cache, dict) and weekly_projections_cache:
+                dates = [v.get('projection_date') for v in weekly_projections_cache.values() if v.get('projection_date')]
+                if dates:
+                    latest_scrape_date = max(str(d) for d in dates)
+        except Exception:
+            pass
+
+        anchors = ['Jalen Hurts','Christian McCaffrey','Ja\'Marr Chase','Travis Kelce','Josh Allen']
+        def _norm(n):
+            return normalize_player_name(n)
+        anchor_presence = {}
+        try:
+            wk_keys = set(weekly_projections_cache.keys()) if isinstance(weekly_projections_cache, dict) else set()
+            for a in anchors:
+                anchor_presence[a] = (_norm(a) in wk_keys)
+        except Exception:
+            anchor_presence = {a: None for a in anchors}
+
         return jsonify({
             'league_key': league_key,
             'team_key': team_key,
@@ -4003,7 +4044,12 @@ def yahoo_data_health():
             'waivers_A_first2pages': {
                 'enrichment': waiver_match
             },
-            'csv_freshness': csv_times
+            'csv_freshness': csv_times,
+            'weekly_checks': {
+                'row_count': weekly_rows,
+                'latest_scrape_date': latest_scrape_date,
+                'anchor_presence': anchor_presence
+            }
         })
     
     except Exception as e:
@@ -4158,14 +4204,59 @@ def _player_weekly_score(name: str, fallback_ecr: Optional[float]) -> float:
     wp = ci.get('projected_points')
     if isinstance(wp, (int, float)):
         return float(wp)
-    # Attempt to coerce string numerics
     try:
         if wp is not None:
             return float(wp)
     except (ValueError, TypeError):
         pass
-    # Conservative fallback: if no projection, treat as 0 for weekly scoring
+    # Fallback: estimate from ECR by position (prefer combined cache ECR, else provided fallback_ecr)
+    pos = (ci.get('position') or '').upper()
+    ecr = ci.get('ecr_overall') if ci else None
+    if isinstance(ecr, (int, float)):
+        return _estimate_points_from_ecr(pos, ecr)
+    if isinstance(fallback_ecr, (int, float)):
+        return _estimate_points_from_ecr(pos, fallback_ecr)
     return 0.0
+
+def _estimate_points_from_ecr(position: str, ecr: Optional[float]) -> float:
+    """Conservative weekly estimate from season-long ECR.
+    Curves are intentionally modest to avoid inflated deltas.
+    """
+    if not ecr or not isinstance(ecr, (int, float)):
+        return 0.0
+    try:
+        e = float(ecr)
+    except (ValueError, TypeError):
+        return 0.0
+    pos = (position or '').upper()
+    # Simple piecewise-linear approximations
+    if pos == 'QB':
+        # ~20 at ECR 1; ~10 by ECR 30; floor at ~6
+        if e <= 1:
+            return 20.0
+        if e >= 30:
+            return 10.0
+        return 20.0 - (e - 1) * (10.0 / 29.0)
+    if pos in ('RB', 'WR'):
+        # ~15 at ECR 1; ~6 by ECR 50
+        if e <= 1:
+            return 15.0
+        if e >= 50:
+            return 6.0
+        return 15.0 - (e - 1) * (9.0 / 49.0)
+    if pos == 'TE':
+        # ~10 at ECR 1; ~4 by ECR 30
+        if e <= 1:
+            return 10.0
+        if e >= 30:
+            return 4.0
+        return 10.0 - (e - 1) * (6.0 / 29.0)
+    # Default to RB/WR-like conservative curve if position unknown
+    if e <= 1:
+        return 15.0
+    if e >= 50:
+        return 6.0
+    return 15.0 - (e - 1) * (9.0 / 49.0)
 
 def _build_required_slots_from_roster(roster_players: list[str]) -> list[str]:
     slots = []
@@ -4224,6 +4315,94 @@ def _best_lineup(players: list, slots: list[str]) -> tuple[list, float]:
             lineup.append({'slot': slot, 'player': None})
     return lineup, total
 
+# ---- Whole-roster scoring helpers ----
+def _replacement_baseline(position: str) -> float:
+    pos = (position or '').upper()
+    if pos == 'QB':
+        return 10.0
+    if pos in ('RB', 'WR'):
+        return 7.5
+    if pos == 'TE':
+        return 5.0
+    return 6.0
+
+def _effective_points_for_player(p: dict) -> float:
+    name = p.get('name')
+    ecr = p.get('ecr_overall') or p.get('ecr')
+    return _player_weekly_score(name, ecr)
+
+def _compute_bench_vor(enriched_roster: list, lineup: list) -> float:
+    """Compute bench value-over-replacement across positions using effective points (weekly or ECR fallback)."""
+    try:
+        starter_names = set()
+        for slot_entry in lineup:
+            pl = slot_entry.get('player')
+            if pl and pl.get('name'):
+                starter_names.add(pl.get('name'))
+        bench_players = [p for p in enriched_roster if p.get('name') not in starter_names and not _is_excluded_position(p.get('position'), {'K','DEF','DST'})]
+        vor_total = 0.0
+        for bp in bench_players:
+            pos = bp.get('position') or bp.get('primary_position')
+            eff = _effective_points_for_player(bp)
+            rep = _replacement_baseline(pos)
+            alpha_gain = max(0.0, eff - rep)
+            vor_total += alpha_gain
+        return round(vor_total, 2)
+    except Exception:
+        return 0.0
+
+def _bench_players(enriched_roster: list, lineup: list) -> list:
+    starter_names = set()
+    for slot_entry in lineup:
+        pl = slot_entry.get('player')
+        if pl and pl.get('name'):
+            starter_names.add(pl.get('name'))
+    return [p for p in enriched_roster if p.get('name') not in starter_names and not _is_excluded_position(p.get('position'), {'K','DEF','DST'})]
+
+def _compute_bench_counts(enriched_roster: list, lineup: list) -> dict:
+    counts = {'QB': 0, 'RB': 0, 'WR': 0, 'TE': 0}
+    for bp in _bench_players(enriched_roster, lineup):
+        pos = (bp.get('position') or bp.get('primary_position') or '').upper()
+        if pos in counts:
+            counts[pos] += 1
+    return counts
+
+def _compute_balance_score(counts: dict) -> float:
+    """Small penalty for imbalanced bench; conservative magnitudes.
+    Targets: QB<=1, RB>=2, WR>=2, TE>=1
+    """
+    score = 0.0
+    # QB surplus penalty
+    qb_extra = max(0, counts.get('QB', 0) - 1)
+    score -= 1.0 * qb_extra
+    # RB/WR shortage penalty
+    for pos, target, penalty in (('RB', 2, 0.5), ('WR', 2, 0.5), ('TE', 1, 0.3)):
+        short = max(0, target - counts.get(pos, 0))
+        score -= penalty * short
+    return round(score, 2)
+
+def _compute_bye_score(enriched_roster: list, lineup: list) -> float:
+    """Small bonus if bench covers starter byes at each position (simple heuristic)."""
+    try:
+        starter_byes = {'QB': set(), 'RB': set(), 'WR': set(), 'TE': set()}
+        for slot_entry in lineup:
+            pl = slot_entry.get('player') or {}
+            pos = (pl.get('position') or pl.get('primary_position') or '').upper()
+            if pos in starter_byes:
+                bye_w = pl.get('bye_week')
+                if bye_w:
+                    starter_byes[pos].add(bye_w)
+        bonus = 0.0
+        for bp in _bench_players(enriched_roster, lineup):
+            pos = (bp.get('position') or bp.get('primary_position') or '').upper()
+            if pos in starter_byes:
+                bye_w = bp.get('bye_week')
+                if bye_w and bye_w not in starter_byes[pos]:
+                    bonus += 0.2  # tiny per-cover bonus
+        return round(min(bonus, 2.0), 2)  # cap
+    except Exception:
+        return 0.0
+
 def _collect_enriched_pool(access_token: str, league_key: str, status: str, exclude_set: set, cap: int = 200) -> list:
     base_url = "https://fantasysports.yahooapis.com/fantasy/v2"
     headers = {'Authorization': f'Bearer {access_token}', 'Accept': 'application/json'}
@@ -4246,6 +4425,11 @@ def _collect_enriched_pool(access_token: str, league_key: str, status: str, excl
                 continue
             name = p.get('name')
             ci = _get_combined_info_by_name(name)
+            if (not ci) and p.get('player_id'):
+                # Try Yahoo ID join
+                joined_key = yahoo_id_to_key.get(str(p.get('player_id')))
+                if joined_key and combined_player_data_cache:
+                    ci = combined_player_data_cache.get(joined_key, {})
             enriched = {
                 **p,
                 'position': ci.get('position', primary),
@@ -4265,8 +4449,14 @@ def _collect_enriched_pool(access_token: str, league_key: str, status: str, excl
         if len(page_players) < step:
             break
         start += step
-    # Sort by weekly_points desc then ECR asc
-    players.sort(key=lambda x: (-(x['weekly_points'] or -1), x['ecr_overall'] if x.get('ecr_overall') is not None else 9999))
+    # Sort by effective weekly score (weekly_points or estimated) then ECR
+    def _eff_score(c):
+        wp = c.get('weekly_points')
+        if isinstance(wp, (int, float)):
+            return float(wp)
+        return _estimate_points_from_ecr((c.get('position') or c.get('primary_position') or ''), c.get('ecr_overall'))
+
+    players.sort(key=lambda x: (-_eff_score(x), x['ecr_overall'] if x.get('ecr_overall') is not None else 9999))
     return players
 
 @app.route('/api/yahoo/waiver_pool')
@@ -4337,6 +4527,10 @@ def yahoo_waiver_recommendations_v2():
             if not name:
                 continue
             ci = _get_combined_info_by_name(name)
+            if (not ci) and p.get('player_id'):
+                joined_key = yahoo_id_to_key.get(str(p.get('player_id')))
+                if joined_key and combined_player_data_cache:
+                    ci = combined_player_data_cache.get(joined_key, {})
             pos = ci.get('position') or p.get('selected_position')
             if _is_excluded_position(pos, exclude_set):
                 continue
@@ -4352,17 +4546,48 @@ def yahoo_waiver_recommendations_v2():
         required_slots = _build_required_slots_from_roster(enriched_roster)
 
         # Collect candidate pool
-        pool = _collect_enriched_pool(access_token, league_key, status, exclude_set, cap=200)
-        # Cap candidates considered for speed
-        candidates = pool[:120]
+        pool = _collect_enriched_pool(access_token, league_key, status, exclude_set, cap=300)
+        # Bias candidate selection by position to avoid QB crowding the pool
+        def _eff_score_local(c):
+            wp = c.get('weekly_points')
+            if isinstance(wp, (int, float)):
+                return float(wp)
+            return _estimate_points_from_ecr((c.get('position') or c.get('primary_position') or ''), c.get('ecr_overall'))
+        buckets = {'QB': [], 'RB': [], 'WR': [], 'TE': []}
+        for c in pool:
+            pos = (c.get('position') or c.get('primary_position') or '').upper()
+            if pos in buckets:
+                buckets[pos].append(c)
+        for pos in buckets:
+            buckets[pos].sort(key=lambda x: -_eff_score_local(x))
+        # Quotas to reach ~120
+        quotas = {'QB': 10, 'RB': 40, 'WR': 50, 'TE': 20}
+        candidates = []
+        for pos, limit in quotas.items():
+            candidates.extend(buckets.get(pos, [])[:limit])
+        # If short of 120, fill with best remaining from pool not yet selected
+        if len(candidates) < 120:
+            selected_ids = set(id(x) for x in candidates)
+            remainder = [c for c in pool if id(c) not in selected_ids]
+            remainder.sort(key=lambda x: -_eff_score_local(x))
+            candidates.extend(remainder[:(120 - len(candidates))])
         # Coverage metrics
         roster_proj_total = len(enriched_roster)
         roster_proj_have = sum(1 for rp in enriched_roster if isinstance(rp.get('weekly_points'), (int, float)))
         pool_proj_total = len(candidates)
         pool_proj_have = sum(1 for c in candidates if isinstance(c.get('weekly_points'), (int, float)))
 
-        # Baseline lineup
+        # Baseline lineup and whole-roster score
         baseline_lineup, baseline_points = _best_lineup(enriched_roster, required_slots)
+        baseline_bench_vor = _compute_bench_vor(enriched_roster, baseline_lineup)
+        baseline_counts = _compute_bench_counts(enriched_roster, baseline_lineup)
+        baseline_balance = _compute_balance_score(baseline_counts)
+        baseline_bye = _compute_bye_score(enriched_roster, baseline_lineup)
+        # Conservative weights
+        alpha = 0.7  # bench VOR weight
+        beta = 0.3   # balance weight (small)
+        gamma = 0.3  # bye coverage weight (small)
+        baseline_overall = round(baseline_points + alpha * baseline_bench_vor + beta * baseline_balance + gamma * baseline_bye, 2)
 
         # Prepare drop candidates list (prefer bench; then weakest eligible starter by position)
         bench = [rp for rp in enriched_roster if str(rp.get('selected_position','')).upper().startswith('BN')]
@@ -4397,9 +4622,43 @@ def yahoo_waiver_recommendations_v2():
                     }
                 ]
                 lineup_after, points_after = _best_lineup(new_roster, required_slots)
-                delta = points_after - baseline_points
-                if delta > best_delta:
-                    best_delta = delta
+                bench_vor_after = _compute_bench_vor(new_roster, lineup_after)
+                counts_after = _compute_bench_counts(new_roster, lineup_after)
+                balance_after = _compute_balance_score(counts_after)
+                bye_after = _compute_bye_score(new_roster, lineup_after)
+
+                # Cross-position penalty unless move improves balance
+                dp_pos = (dp.get('position') or dp.get('selected_position') or '').upper()
+                cross_penalty = 0.0
+                if (cpos or '').upper() != dp_pos:
+                    # If after balance improves over baseline, waive penalty; else apply small penalty
+                    if balance_after <= baseline_balance:
+                        cross_penalty = 1.5
+
+                # Bench composition penalties/guards
+                # 1) Surplus QB penalty (prefer max 1 QB on bench in 1QB leagues)
+                qb_after = counts_after.get('QB', 0)
+                qb_surplus_pen = max(0, qb_after - 1) * 2.5
+                # 2) RB/WR shortage penalty: avoid dropping below 2 on bench
+                shortage_pen = 0.0
+                for posx, target, pen in (('RB', 2, 2.0), ('WR', 2, 2.0)):
+                    if counts_after.get(posx, 0) < target:
+                        shortage_pen += pen
+                # 3) Adding second QB when one already on bench: extra penalty
+                add_pos_u = (cpos or '').upper()
+                dp_pos_u = dp_pos
+                extra_qb_pen = 0.0
+                if add_pos_u == 'QB' and baseline_counts.get('QB', 0) >= 1:
+                    extra_qb_pen = 2.0
+
+                overall_after = round(
+                    points_after + alpha * bench_vor_after + beta * balance_after + gamma * bye_after
+                    - cross_penalty - qb_surplus_pen - shortage_pen - extra_qb_pen,
+                    2
+                )
+                delta_overall = overall_after - baseline_overall
+                if delta_overall > best_delta:
+                    best_delta = delta_overall
                     best_after = lineup_after
                     best_drop = dp
             if best_delta > 0 and best_drop is not None:
@@ -4420,13 +4679,21 @@ def yahoo_waiver_recommendations_v2():
                         'ecr_overall': best_drop.get('ecr_overall')
                     },
                     'delta_points': round(best_delta, 2),
-                    'lineup_delta': {
-                        'before_points': round(baseline_points, 2),
-                        'after_points': round(baseline_points + best_delta, 2)
+                    'score_breakdown': {
+                        'baseline': {
+                            'overall': baseline_overall,
+                            'lineup': round(baseline_points, 2),
+                            'bench_vor': baseline_bench_vor,
+                            'balance': baseline_balance,
+                            'bye': baseline_bye
+                        },
+                        'after': {
+                            'overall': round(baseline_overall + best_delta, 2)
+                        }
                     },
                     'notes': [
                         'Slot-aware lineup optimization for current week',
-                        'Consider waiver timing if player is on W status'
+                        'Whole-roster score includes bench value, balance, and bye coverage'
                     ],
                     'claim_only': (status == 'W')
                 })
@@ -4437,6 +4704,10 @@ def yahoo_waiver_recommendations_v2():
         unmatched_pool = [c.get('name') for c in candidates if not isinstance(c.get('weekly_points'), (int, float))][:10]
         return jsonify({'recommendations': recs[:top_n], 'metadata': {
             'baseline_points': round(baseline_points, 2),
+            'baseline_bench_vor': baseline_bench_vor,
+            'baseline_overall': baseline_overall,
+            'baseline_balance': baseline_balance,
+            'baseline_bye': baseline_bye,
             'slots': required_slots,
             'pool_considered': len(candidates),
             'roster_projection_coverage': {

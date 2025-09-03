@@ -175,6 +175,30 @@
 - 2025-09-02: Fixed scoring fallback (0 if no weekly projections) for realistic deltas; added alias support and loading at startup/refresh; exposed coverage metrics and unmatched name lists in recommendations metadata.
 - 2025-09-02: Added scripts: `test_waiver_v2_coverage.sh` (coverage + baseline) and `test_waiver_v2_unmatched.sh` (unmatched names) to speed iteration.
 - 2025-09-02: Importer now downloads `fp_latest_weekly.csv` from DynastyProcess; added `/api/admin/refresh_data` and `test_csv_sources.sh` for on-demand refresh & inspection.
+- 2025-09-03: Implemented whole‑roster scoring in backend: lineup points + bench VOR + balance + bye coverage; ID join enrichment; cross‑position penalties and bench composition guards (avoid surplus QBs, preserve RB/WR depth). Recommendations now realistic and balanced.
+
+## UI & Display Notes (Badges + Clarity)
+- Replace raw “delta” wording with clearer copy like “Estimated Benefit” (overall roster score gain).
+- Show compact component breakdown for the top few recs:
+  - Lineup: +X.X pts, Bench: +Y.Y VOR (vs replacement), Balance/Bye: small modifiers.
+- Badges (icons/colors) for rationale:
+  - Depth: strengthens [RB/WR/TE] bench
+  - Bye Coverage: covers [position] in Week N
+  - Insurance: handcuff/next‑up depth behind [starter]
+  - Upside: rookie/positive trend
+  - Risk: injury/uncertainty (SD/injury flag)
+- Alternatives mode (opt‑in) when strict mode yields few ideas: present best neutral/near‑neutral suggestions with rationale badges.
+
+## Current Status (Backend)
+- Implemented:
+  - Whole‑roster scoring with lineup + bench VOR + balance + bye coverage
+  - Conservative ECR→points fallback (weekly-first)
+  - Position quotas to prevent QB crowding; broad candidate pool otherwise
+  - ID-based enrichment (Yahoo `player_id` ↔ ECR `yahoo_id`)
+  - Weekly diagnostics (row_count, scrape_date, anchor presence)
+- Next:
+  - Alternatives mode (opt‑in) and UI badges wiring
+  - AI narrative integration and frontend rendering per badges and breakdown
 
 ## Detailed Go-Forward Plan (Comprehensive)
 
@@ -238,6 +262,40 @@ Success Criteria
 - Roster coverage ≥ 90% (excluding K/DEF).
 - Effective pool coverage ≥ 70% for top 120 candidates (projections or ECR fallback).
 - Recommendations not empty; deltas typically 1–15 points.
+
+## Whole‑Roster Objective Update (Bench Value Included)
+
+Revision
+- Optimize for the entire roster, not only the weekly starting lineup. Bench upgrades matter for depth, bye coverage, insurance and upside.
+
+Scoring Objective
+- overall_score = lineup_week_points + α·bench_value + β·roster_balance + γ·bye_coverage + δ·insurance + ε·upside − risk
+  - lineup_week_points: best weekly lineup (existing component).
+  - bench_value: VOR for bench (conservative ROS ECR→points curves vs replacement baselines by position).
+  - roster_balance: encourages healthy positional distribution on bench; penalizes lopsided benches.
+  - bye_coverage: rewards bench covering upcoming starter byes.
+  - insurance: small bonus for handcuff/next‑up proxy depth behind fragile starters.
+  - upside/risk: rookie/positive trend vs high SD/injury status.
+  - Initial weights: α=0.7, β=0.2, γ=0.2, δ=0.2, ε=0.1 (conservative; tune after observation).
+
+Candidate Pool Breadth
+- Do NOT restrict N candidates/M drops for performance; maintain position quotas to prevent QB crowding, then include broad sets ranked by effective score (weekly or ECR fallback). Exclude K/DEF by default.
+
+Fallbacks
+- Weekly projections remain primary. If missing, estimate from position‑aware ECR curves. Use weekly ECR and positional ECR as secondary sources when overall ECR missing.
+- Matching: exact normalized name → Yahoo id join → guarded fuzzy (position/team constrained, high threshold) only if needed.
+
+Recommendations Output
+- Strict mode: return only positive overall_score deltas.
+- Alternatives mode (opt‑in): if strict yields 0, return top K within a safe band (e.g., ≥ −1.0) with rationale badges (bye/insurance/depth/upside).
+
+Diagnostics
+- Continue reporting coverage/unmatched; add component breakdown in metadata (lineup points, bench VOR, balance/bye, etc.) and an explain block when 0 recs.
+
+Phases
+1) Implement bench VOR + overall_score; validate positive deltas for true bench upgrades.
+2) Add alternatives mode; small matching enhancements if needed.
+3) AI narrative + UI.
 - Diagnostics highlight freshness/coverage issues with actionable next steps.
 
 DynastyProcess Files: Additional Significant Value
