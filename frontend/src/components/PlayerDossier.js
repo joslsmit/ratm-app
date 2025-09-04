@@ -856,6 +856,12 @@ export default function PlayerDossier({
             </div>
           </div>
 
+          {/* AI Analysis moved up: after Quick Scan + Player Overview */}
+          <div className={`${styles.card} ${styles.aiAnalysisCard}`}>
+            <h3>AI Analysis</h3>
+            <div id="dossier-result" className={styles.resultBox} dangerouslySetInnerHTML={{ __html: converter.makeHtml(dossierResult.analysis) }}></div>
+          </div>
+
           <div className={`${styles.card} ${styles.ecrDataCard} ${styles.priorityStandard}`}>
             <div className={styles.sectionPriorityIndicator}></div>
             <h3>Expert Consensus & Rankings</h3>
@@ -1378,10 +1384,6 @@ export default function PlayerDossier({
             </div>
           )}
 
-          <div className={`${styles.card} ${styles.aiAnalysisCard}`}>
-            <h3>AI Analysis</h3>
-            <div id="dossier-result" className={styles.resultBox} dangerouslySetInnerHTML={{ __html: converter.makeHtml(dossierResult.analysis) }}></div>
-          </div>
         </div>
       )}
       {dossierResult && dossierResult.error && (

@@ -142,6 +142,11 @@
 - Prompt: Includes legend, starters (wp/ecr/sched), bench (wp/ecr/sched), and up to 15 candidate moves with component deltas.
 - Frontend: Recommendations‑first UI, “Why” bullets default, “AI” vs “Deterministic” source chip, Dossier links, Browse Pool fixed.
 
+### ✅ Player Dossier UX — Section Reorder (September 4, 2025)
+- Adjusted section order to improve scanability and keep AI context near top:
+  - Quick Scan → Player Overview → Expert Consensus & Rankings → AI Analysis → Weekly Outlook → Market Analysis → Age/Trajectory.
+- Important: This order is controlled by CSS flex `order` rules in `PlayerDossier.module.css`. JSX order does not affect render order if CSS assigns `order` values.
+
 ### **✅ RESOLVED: WAIVER WIRE BENCH ANALYSIS COMPLETE (August 20, 2025)**
 **Resolution Status**: **🎉 CRITICAL ISSUE FULLY RESOLVED - COMPREHENSIVE IMPLEMENTATION COMPLETE**
 

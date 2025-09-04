@@ -14,6 +14,7 @@ The application provides a suite of tools categorized for player analysis and te
 
 ### Player Analysis Tools:
 *   **Player Dossier:** Provides in-depth analysis for individual players, including their Expert Consensus Rankings (ECR), Standard Deviation (SD) in rankings, best/worst ranks, and AI-generated insights (depth chart role, value analysis, risk factors, outlook, and final verdict). Features player lookup with autocomplete.
+    - Layout order (Sept 4, 2025): Quick Scan → Player Overview → Expert Consensus & Rankings → AI Analysis → Weekly Outlook → Market Analysis → Age/Trajectory. Ordering is enforced via CSS flex `order` in `PlayerDossier.module.css` and will override JSX order.
 *   **Rookie Rankings:** Offers ranked lists of rookies, sortable by position, with AI-generated analysis.
 *   **Positional Tiers:** Groups players into tiers by position (e.g., QB, RB, WR, TE) based on ECR, providing a visual and analytical understanding of player value within their position.
 *   **Market Inefficiency Finder (Yahoo Enhanced):** ✅ Identifies potential "sleepers" and "busts" with two modes: (1) Traditional mode for general market analysis, and (2) Yahoo mode for authenticated users providing league-specific inefficiency analysis based on actual ownership patterns and league characteristics.
