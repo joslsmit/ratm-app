@@ -2,7 +2,7 @@
 
 > **File Type**: GO-FORWARD  
 > **Review Priority**: High  
-> **Last Updated**: August 20, 2025 (Waiver Wire Bench Analysis Complete - Critical Issue Resolved)  
+> **Last Updated**: September 4, 2025 (Week 1 priorities captured; Dossier & Waiver v3 updates)  
 > **Purpose**: Overall project progress and current development phase
 
 This document tracks the progress of the RATM Draft Kit project against the defined deployment and integration plan.
@@ -182,9 +182,21 @@ This document tracks the progress of the RATM Draft Kit project against the defi
 *   **Business Impact:** Keeper analysis now provides strategic, accurate recommendations with optimal roster construction guidance
 *   **Files Updated:** `/backend/app.py` (keeper calculation + AI methodology), `/frontend/src/components/KeeperEvaluator.js` (complete UX overhaul)
 
-## 🎯 DEVELOPMENT SEQUENCE - PRIORITIZED ROADMAP
+## 🎯 DEVELOPMENT SEQUENCE - PRIORITIZED ROADMAP (Week 1)
 
-### 🏆 ALL PRIORITY PHASES COMPLETE! 🎉
+### P0 — Ship before lineups lock
+1) Yahoo‑Integrated Market Inefficiency Finder (sleepers/busts, league‑aware)
+2) Yahoo‑Roster Sit/Start Optimizer (deterministic lineup + optional AI note)
+3) Waiver v3 Stability QA (invalid AI moves already guarded; verify in live leagues)
+
+### P1 — After kickoff (1–3 days)
+- Waiver v3 Alternatives mode polish; add small dossier extras to AI prompt (ownership %, schedule difficulty)
+- Market Inefficiency UX polish and Dossier links
+
+### P2 — Next sprint
+- Trade Analyzer weekly data overlay + concise AI verdicts
+- Token security (cookie/server exchange) and short‑TTL caching for roster/pool
+- Settings “Data Health” card (CSV freshness, coverage)
 
 ### 🥇 ✅ COMPLETED: Phase 6 - AI-Powered Waiver Wire Assistant (Yahoo Integrated)
 *   **Status:** **🎉 FULLY COMPLETED - Ready for Post-Draft Testing**
