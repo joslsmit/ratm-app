@@ -136,6 +136,12 @@
 3. **✅ Priority 2**: Enhanced Player Dossier Data Integration (**COMPLETED AUGUST 23, 2025**)
 4. **🔥 Priority 3**: Enhanced Trade Analysis Data Integration (**CURRENT HIGHEST PRIORITY**)
 
+### ✅ Waiver Wire v3 — AI‑First UX (September 3, 2025)
+- Backend: Added `/api/yahoo/waiver_recommendations_ai` (AI‑authority). Debug mode returns full prompt and diagnostics.
+- Deterministic: Calibrated QB replacement baseline to 12.0 for 6‑pt passing TD leagues (RB/WR 7.5; TE 5.0 unchanged).
+- Prompt: Includes legend, starters (wp/ecr/sched), bench (wp/ecr/sched), and up to 15 candidate moves with component deltas.
+- Frontend: Recommendations‑first UI, “Why” bullets default, “AI” vs “Deterministic” source chip, Dossier links, Browse Pool fixed.
+
 ### **✅ RESOLVED: WAIVER WIRE BENCH ANALYSIS COMPLETE (August 20, 2025)**
 **Resolution Status**: **🎉 CRITICAL ISSUE FULLY RESOLVED - COMPREHENSIVE IMPLEMENTATION COMPLETE**
 

@@ -41,6 +41,11 @@ This document outlines the key architectural patterns, design patterns, and codi
 *   **Description:** Interactions with the Google Gemini API are abstracted into a dedicated function (`make_gemini_request` in `utils.py`). This function handles API key configuration and the actual content generation request.
 *   **Benefits:** Centralizes AI interaction logic, makes it easier to swap out AI models or providers in the future, and separates AI-specific logic from core application business logic.
 
+### E. Hybrid Deterministic + AI Pattern (Waiver v3)
+*   **Description:** Deterministic engine explores the full waiver pool and computes legal add/drop pairs with a whole‑roster objective; AI ranks and explains among the top N (now up to 15 passed in) using a rich prompt (starters, bench, components, legend).
+*   **Benefits:** Guarantees legality and speed while delivering human‑readable, opinionated recommendations.
+*   **Debuggability:** `/api/yahoo/waiver_recommendations_ai?debug=1` returns full prompt and diagnostics; frontend exposes a toggle to view it.
+
 ## 3. Coding Conventions & Practices
 
 ### A. Python (`backend/`)

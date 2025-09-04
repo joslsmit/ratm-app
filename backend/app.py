@@ -4319,7 +4319,8 @@ def _best_lineup(players: list, slots: list[str]) -> tuple[list, float]:
 def _replacement_baseline(position: str) -> float:
     pos = (position or '').upper()
     if pos == 'QB':
-        return 10.0
+        # Calibrated for 6-pt passing TD leagues
+        return 12.0
     if pos in ('RB', 'WR'):
         return 7.5
     if pos == 'TE':
@@ -4878,6 +4879,437 @@ def yahoo_waiver_recommendations_v2():
         print(f"ERROR: yahoo_waiver_recommendations_v2 failed: {e}")
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/yahoo/waiver_recommendations_ai', methods=['POST'])
+def yahoo_waiver_recommendations_ai():
+    """
+    AI-authority waiver recommendations.
+    - Computes deterministic recommendations (v2 logic) to get metadata and candidate recs
+    - Builds a strict JSON prompt and calls Gemini to synthesize top 3–5 moves
+    - Returns: { summary, moves, metadata, recommendations }
+    """
+    try:
+        user_key = request.headers.get('X-API-Key')
+        debug_flag = str(request.args.get('debug', '0')).lower() in ('1', 'true', 'yes')
+        payload = request.get_json(force=True, silent=True) or {}
+        league_key = payload.get('league_key')
+        team_key = payload.get('team_key')
+        week = payload.get('week')
+        status = payload.get('status', 'A')
+        top_n = int(payload.get('top_n', 10))
+        include_alts = bool(payload.get('include_alternatives', False))
+        min_benefit = float(payload.get('min_benefit', 0.0))
+        exclude = payload.get('exclude_positions', ['K', 'DEF'])
+        exclude_set = {str(s).upper() for s in exclude}
+
+        if not league_key or not team_key:
+            return jsonify({'error': 'league_key and team_key are required'}), 400
+        if not user_key:
+            return jsonify({'error': 'X-API-Key is required for AI recommendations'}), 400
+
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'Valid Authorization header with Bearer token is required'}), 401
+        access_token = auth_header.split(' ')[1]
+
+        # ==== Deterministic core (reuse logic from v2) ====
+        headers = {'Authorization': f'Bearer {access_token}', 'Accept': 'application/json'}
+        if week:
+            url_primary = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster/players;week={week}?format=json'
+            url_fallback = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster;week={week}?format=json'
+        else:
+            url_primary = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster/players?format=json'
+            url_fallback = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster?format=json'
+        r = requests.get(url_primary, headers=headers, timeout=10)
+        if r.status_code == 404:
+            r = requests.get(url_fallback, headers=headers, timeout=10)
+        r.raise_for_status()
+        roster_raw = r.json()
+        roster_players = parse_yahoo_roster_response(roster_raw) or []
+        # Enrich roster players minimally
+        enriched_roster = []
+        for p in roster_players:
+            name = p.get('name')
+            if not name:
+                continue
+            ci = _get_combined_info_by_name(name)
+            if (not ci) and p.get('player_id'):
+                joined_key = yahoo_id_to_key.get(str(p.get('player_id')))
+                if joined_key and combined_player_data_cache:
+                    ci = combined_player_data_cache.get(joined_key, {})
+            pos = ci.get('position') or p.get('selected_position')
+            if _is_excluded_position(pos, exclude_set):
+                continue
+            enriched_roster.append({
+                **p,
+                'position': pos,
+                'weekly_points': ci.get('projected_points'),
+                'ecr_overall': ci.get('ecr_overall'),
+                'bye_week': ci.get('bye_week')
+            })
+
+        required_slots = _build_required_slots_from_roster(enriched_roster)
+        pool = _collect_enriched_pool(access_token, league_key, status, exclude_set, cap=300)
+        def _eff_score_local(c):
+            wp = c.get('weekly_points')
+            if isinstance(wp, (int, float)):
+                return float(wp)
+            return _estimate_points_from_ecr((c.get('position') or c.get('primary_position') or ''), c.get('ecr_overall'))
+        buckets = {'QB': [], 'RB': [], 'WR': [], 'TE': []}
+        for c in pool:
+            pos = (c.get('position') or c.get('primary_position') or '').upper()
+            if pos in buckets:
+                buckets[pos].append(c)
+        for pos in buckets:
+            buckets[pos].sort(key=lambda x: -_eff_score_local(x))
+        quotas = {'QB': 10, 'RB': 40, 'WR': 50, 'TE': 20}
+        candidates = []
+        for pos, limit in quotas.items():
+            candidates.extend(buckets.get(pos, [])[:limit])
+        if len(candidates) < 120:
+            selected_ids = set(id(x) for x in candidates)
+            remainder = [c for c in pool if id(c) not in selected_ids]
+            remainder.sort(key=lambda x: -_eff_score_local(x))
+            candidates.extend(remainder[:(120 - len(candidates))])
+
+        roster_proj_total = len(enriched_roster)
+        roster_proj_have = sum(1 for rp in enriched_roster if isinstance(rp.get('weekly_points'), (int, float)))
+        pool_proj_total = len(candidates)
+        pool_proj_have = sum(1 for c in candidates if isinstance(c.get('weekly_points'), (int, float)))
+
+        baseline_lineup, baseline_points = _best_lineup(enriched_roster, required_slots)
+        baseline_bench_vor = _compute_bench_vor(enriched_roster, baseline_lineup)
+        baseline_counts = _compute_bench_counts(enriched_roster, baseline_lineup)
+        baseline_balance = _compute_balance_score(baseline_counts)
+        baseline_bye = _compute_bye_score(enriched_roster, baseline_lineup)
+        alpha, beta, gamma = 0.7, 0.3, 0.3
+        baseline_overall = round(baseline_points + alpha * baseline_bench_vor + beta * baseline_balance + gamma * baseline_bye, 2)
+
+        bench = [rp for rp in enriched_roster if str(rp.get('selected_position','')).upper().startswith('BN')]
+        starters = [rp for rp in enriched_roster if rp not in bench and not str(rp.get('selected_position','')).upper().startswith('IR')]
+
+        recs = []
+        for c in candidates:
+            cpos = c.get('position') or c.get('primary_position')
+            if not cpos:
+                continue
+            potential_drops = list(bench)
+            for rp in starters:
+                if _normalize_pos(rp.get('position') or rp.get('selected_position')) == _normalize_pos(cpos):
+                    potential_drops.append(rp)
+            potential_drops = potential_drops[:5]
+            best_delta = 0.0
+            best_drop = None
+            best_details = None
+            for dp in potential_drops:
+                new_roster = [rp for rp in enriched_roster if rp is not dp] + [{
+                    'name': c.get('name'), 'position': cpos, 'selected_position': dp.get('selected_position'),
+                    'weekly_points': c.get('weekly_points'), 'ecr_overall': c.get('ecr_overall'), 'bye_week': c.get('bye_week'),
+                }]
+                lineup_after, points_after = _best_lineup(new_roster, required_slots)
+                bench_vor_after = _compute_bench_vor(new_roster, lineup_after)
+                counts_after = _compute_bench_counts(new_roster, lineup_after)
+                balance_after = _compute_balance_score(counts_after)
+                bye_after = _compute_bye_score(new_roster, lineup_after)
+                dp_pos = (dp.get('position') or dp.get('selected_position') or '').upper()
+                cross_penalty = 0.0
+                if (cpos or '').upper() != dp_pos and balance_after <= baseline_balance:
+                    cross_penalty = 1.5
+                qb_after = counts_after.get('QB', 0)
+                qb_surplus_pen = max(0, qb_after - 1) * 2.5
+                shortage_pen = 0.0
+                for posx, target, pen in (('RB', 2, 2.0), ('WR', 2, 2.0)):
+                    if counts_after.get(posx, 0) < target:
+                        shortage_pen += pen
+                extra_qb_pen = 0.0
+                if (cpos or '').upper() == 'QB' and baseline_counts.get('QB', 0) >= 1:
+                    extra_qb_pen = 2.0
+                overall_after = round(points_after + alpha * bench_vor_after + beta * balance_after + gamma * bye_after
+                                       - cross_penalty - qb_surplus_pen - shortage_pen - extra_qb_pen, 2)
+                delta_overall = overall_after - baseline_overall
+                if delta_overall > best_delta:
+                    best_delta = delta_overall
+                    best_drop = dp
+                    best_details = {
+                        'lineup_delta': round(points_after - baseline_points, 2),
+                        'bench_vor_delta': round(bench_vor_after - baseline_bench_vor, 2),
+                        'balance_delta': round(balance_after - baseline_balance, 2),
+                        'bye_delta': round(bye_after - baseline_bye, 2),
+                        'after_overall': overall_after
+                    }
+            if best_delta > 0 and best_drop is not None:
+                badges = _compute_badges(c, best_drop, enriched_roster, baseline_lineup)
+                recs.append({
+                    'add_player': {'name': c.get('name'), 'team': c.get('team'), 'position': cpos,
+                                   'weekly_points': c.get('weekly_points'), 'ecr_overall': c.get('ecr_overall'), 'status': status},
+                    'drop_player': {'name': best_drop.get('name'), 'team': best_drop.get('team'), 'position': best_drop.get('position'),
+                                    'weekly_points': best_drop.get('weekly_points'), 'ecr_overall': best_drop.get('ecr_overall')},
+                    'estimated_benefit': round(best_delta, 2),
+                    'badges': badges,
+                    'claim_only': (status == 'W'),
+                    'components': best_details or {}
+                })
+
+        recs.sort(key=lambda x: x['estimated_benefit'], reverse=True)
+        if not recs and include_alts and min_benefit < 0:
+            # near-neutral alternatives
+            alt_recs = []
+            for c in candidates:
+                cpos = c.get('position') or c.get('primary_position')
+                if not cpos:
+                    continue
+                potential_drops = list(bench)
+                for rp in starters:
+                    if _normalize_pos(rp.get('position') or rp.get('selected_position')) == _normalize_pos(cpos):
+                        potential_drops.append(rp)
+                potential_drops = potential_drops[:5]
+                best_delta = -999
+                best_drop = None
+                for dp in potential_drops:
+                    new_roster = [rp for rp in enriched_roster if rp is not dp] + [{
+                        'name': c.get('name'), 'position': cpos, 'selected_position': dp.get('selected_position'),
+                        'weekly_points': c.get('weekly_points'), 'ecr_overall': c.get('ecr_overall'), 'bye_week': c.get('bye_week'),
+                    }]
+                    lineup_after, points_after = _best_lineup(new_roster, required_slots)
+                    bench_vor_after = _compute_bench_vor(new_roster, lineup_after)
+                    counts_after = _compute_bench_counts(new_roster, lineup_after)
+                    balance_after = _compute_balance_score(counts_after)
+                    bye_after = _compute_bye_score(new_roster, lineup_after)
+                    dp_pos = (dp.get('position') or dp.get('selected_position') or '').upper()
+                    cross_penalty = 0.0
+                    if (cpos or '').upper() != dp_pos and balance_after <= baseline_balance:
+                        cross_penalty = 1.5
+                    qb_after = counts_after.get('QB', 0)
+                    qb_surplus_pen = max(0, qb_after - 1) * 2.5
+                    shortage_pen = 0.0
+                    for posx, target, pen in (('RB', 2, 2.0), ('WR', 2, 2.0)):
+                        if counts_after.get(posx, 0) < target:
+                            shortage_pen += pen
+                    extra_qb_pen = 0.0
+                    if (cpos or '').upper() == 'QB' and baseline_counts.get('QB', 0) >= 1:
+                        extra_qb_pen = 2.0
+                    overall_after = round(points_after + alpha * bench_vor_after + beta * balance_after + gamma * bye_after
+                                           - cross_penalty - qb_surplus_pen - shortage_pen - extra_qb_pen, 2)
+                    delta_overall = overall_after - baseline_overall
+                    if delta_overall > best_delta:
+                        best_delta = delta_overall
+                        best_drop = dp
+                if best_drop is not None and best_delta >= min_benefit:
+                    badges = _compute_badges(c, best_drop, enriched_roster, baseline_lineup)
+                    alt_recs.append({
+                        'add_player': {'name': c.get('name'), 'team': c.get('team'), 'position': cpos,
+                                       'weekly_points': c.get('weekly_points'), 'ecr_overall': c.get('ecr_overall'), 'status': status},
+                        'drop_player': {'name': best_drop.get('name'), 'team': best_drop.get('team'), 'position': best_drop.get('position'),
+                                        'weekly_points': best_drop.get('weekly_points'), 'ecr_overall': best_drop.get('ecr_overall')},
+                        'estimated_benefit': round(best_delta, 2),
+                        'badges': badges,
+                        'claim_only': (status == 'W')
+                    })
+            alt_recs.sort(key=lambda x: x['estimated_benefit'], reverse=True)
+            recs = alt_recs[:top_n]
+
+        metadata = {
+            'baseline_points': round(baseline_points, 2),
+            'baseline_bench_vor': baseline_bench_vor,
+            'baseline_overall': baseline_overall,
+            'baseline_balance': baseline_balance,
+            'baseline_bye': baseline_bye,
+            'slots': required_slots,
+            'pool_considered': len(candidates),
+            'roster_projection_coverage': {
+                'have': roster_proj_have,
+                'total': roster_proj_total,
+                'rate': round((roster_proj_have/roster_proj_total)*100, 1) if roster_proj_total else 0.0
+            },
+            'pool_projection_coverage': {
+                'have': pool_proj_have,
+                'total': pool_proj_total,
+                'rate': round((pool_proj_have/pool_proj_total)*100, 1) if pool_proj_total else 0.0
+            }
+        }
+
+        # ==== AI synthesis ====
+        # Build concise context listing top deterministic candidates for AI ranking
+        # Provide a broader candidate set to the AI (up to 15) while it still selects the top 3–5
+        top_for_ai = recs[:min(15, len(recs))]
+        lines = []
+        for r in top_for_ai:
+            add = r['add_player']; drop = r['drop_player']
+            comp = r.get('components', {})
+            parts = [
+                f"Add: {add.get('name')} ({add.get('position')}, {add.get('team')}; wp={add.get('weekly_points') or 'N/A'}; ecr={add.get('ecr_overall') or 'N/A'})",
+                f"Drop: {drop.get('name')} ({drop.get('position')}; wp={drop.get('weekly_points') or 'N/A'}; ecr={drop.get('ecr_overall') or 'N/A'})",
+                f"Benefit: {r.get('estimated_benefit')}",
+                f"Components: lineup={comp.get('lineup_delta', 0)}, bench={comp.get('bench_vor_delta', 0)}, balance={comp.get('balance_delta', 0)}, bye={comp.get('bye_delta', 0)}",
+                f"Flags: claim_only={(r.get('claim_only') is True)}",
+                f"Badges: {', '.join(r.get('badges', []))}"
+            ]
+            lines.append(" - " + "; ".join(parts))
+
+        # Build roster snapshot for additional context
+        starters_lines = []
+        for se in baseline_lineup:
+            slot = se.get('slot')
+            pl = se.get('player') or {}
+            name = pl.get('name') or '—'
+            pos = pl.get('position') or pl.get('primary_position') or ''
+            # pull extra context if available
+            ci_pl = _get_combined_info_by_name(name) if name and name != '—' else {}
+            swp = pl.get('weekly_points') if isinstance(pl.get('weekly_points'), (int, float)) else (ci_pl.get('projected_points') if isinstance(ci_pl.get('projected_points'), (int, float)) else 'N/A')
+            secr = pl.get('ecr_overall') if isinstance(pl.get('ecr_overall'), (int, float)) else (ci_pl.get('ecr_overall') if isinstance(ci_pl.get('ecr_overall'), (int, float)) else 'N/A')
+            sched = ci_pl.get('opponent') or ci_pl.get('weekly_opponent') or 'N/A'
+            starters_lines.append(f"{slot}: {name} ({pos}; wp={swp}; ecr={secr}; sched={sched})")
+        bench_counts_str = ", ".join([f"{k}:{v}" for k,v in baseline_counts.items()])
+        # Bench details (names/positions are important for AI reasoning)
+        bench_players_list = _bench_players(enriched_roster, baseline_lineup)
+        bench_lines = []
+        for bp in bench_players_list:
+            bname = bp.get('name') or '—'
+            bpos = bp.get('position') or bp.get('primary_position') or ''
+            bwp = bp.get('weekly_points') if isinstance(bp.get('weekly_points'), (int, float)) else 'N/A'
+            becr = bp.get('ecr_overall') if isinstance(bp.get('ecr_overall'), (int, float)) else 'N/A'
+            ci_bp = _get_combined_info_by_name(bname) if bname and bname != '—' else {}
+            bsched = ci_bp.get('opponent') or ci_bp.get('weekly_opponent') or 'N/A'
+            bench_lines.append(f"{bname} ({bpos}; wp={bwp}; ecr={becr}; sched={bsched})")
+        system = (
+            "You are a concise fantasy football analyst. Recommend the best add/drop moves for this roster in this specific league week. "
+            "Be opinionated, practical, and brief. Lead with the recommendation, and keep rationale to short bullets focused on roster impact. "
+            "Return strict JSON only."
+        )
+        schema = (
+            "Return JSON with { moves: [ { add, drop, confidence in ['High','Medium','Low'], estimated_benefit (number), rationale_bullets: string[], badges: string[], candidate_id (integer, optional) } ] }"
+        )
+        user_lines = []
+        user_lines.append(f"Context (League {league_key})")
+        user_lines.append(f"- Baseline overall: {metadata['baseline_overall']} (Lineup: {metadata['baseline_points']}, Bench VOR: {metadata['baseline_bench_vor']}, Balance: {metadata['baseline_balance']}, Bye: {metadata['baseline_bye']})")
+        # Legend so the model understands fields
+        user_lines.append("Legend: wp = weekly projected points; ecr = Expert Consensus Rank (lower is better);")
+        user_lines.append("Benefit = overall roster score gain = Lineup + 0.7*BenchVOR + 0.3*Balance + 0.3*Bye")
+        qb_base = _replacement_baseline('QB')
+        user_lines.append(f"BenchVOR = sum over bench max(0, wp_or_ecr_points - replacement_baseline); baselines: QB {qb_base}, RB/WR 7.5, TE 5.0")
+        user_lines.append("Balance = small bench-composition score (target QB<=1, RB>=2, WR>=2, TE>=1). Bye = small coverage bonus.")
+        user_lines.append("Components listed per candidate are deltas relative to baseline for that move (lineup/bench/balance/bye).")
+        user_lines.append("")
+        user_lines.append("Starters:")
+        user_lines.extend(["- " + s for s in starters_lines])
+        user_lines.append(f"Bench counts: {bench_counts_str}")
+        if bench_lines:
+            user_lines.append("")
+            user_lines.append("Bench:")
+            user_lines.extend(["- " + b for b in bench_lines])
+        user_lines.append("")
+        user_lines.append("Top deterministic candidates:")
+        user_lines.extend(["- " + l for l in lines])
+        user_lines.append("")
+        user_lines.append("Instructions:\n1) Select the best 3–5 moves.\n2) 2–4 short bullets per move.\n3) Confidence based on benefit and signal quality.\n4) Output strict JSON only.\n5) IMPORTANT: Only choose from the listed candidates. Do not invent new players. If you return candidate_id, it must match one of the listed ids.")
+        user = "\n".join(user_lines)
+
+        full_prompt = f"System:\n{system}\n\nSchema:\n{schema}\n\nUser:\n{user}"
+        ai_text = make_gemini_request(full_prompt, user_key)
+        # Extract strict JSON with 'moves' array; avoid generic processors expecting 'confidence'/'analysis'
+        raw = (ai_text or '').strip()
+        # Strip common markdown fences
+        if raw.startswith('```'):
+            raw = raw.strip('`')
+        start_idx = raw.find('{')
+        end_idx = raw.rfind('}') + 1
+        ai_parsed = {}
+        if start_idx != -1 and end_idx > start_idx:
+            try:
+                ai_parsed = json.loads(raw[start_idx:end_idx])
+            except Exception as _:
+                ai_parsed = {}
+
+        # Optional short summary headline
+        summary = ''
+        try:
+            moves_list = ai_parsed.get('moves') if isinstance(ai_parsed, dict) else []
+            max_b = max([float((m.get('estimated_benefit', 0))) for m in (moves_list or [])] or [0])
+            if max_b < 0.3:
+                summary = 'No clear upgrades this week — small, balance-only gains.'
+            elif moves_list:
+                first = moves_list[0]
+                summary = f"Do this: Add {first.get('add')} • Drop {first.get('drop')}"
+        except Exception:
+            pass
+
+        # Validate AI moves strictly against deterministic candidates and roster/pool
+        from utils import normalize_player_name as _norm_name
+        def _norm(n):
+            try:
+                return _norm_name(n or '')
+            except Exception:
+                return None
+        roster_name_set = {_norm(p.get('name')) for p in enriched_roster if p.get('name')}
+        pool_name_set = {_norm(c.get('name')) for c in pool if c.get('name')}
+        valid_moves = []
+        ai_moves_raw = (ai_parsed.get('moves') if isinstance(ai_parsed, dict) else []) or []
+        for m in ai_moves_raw:
+            if not isinstance(m, dict):
+                continue
+            cid = m.get('candidate_id')
+            chosen = None
+            if isinstance(cid, int) and 0 <= cid < len(top_for_ai):
+                chosen = top_for_ai[cid]
+            else:
+                add_n = _norm(m.get('add'))
+                drop_n = _norm(m.get('drop'))
+                for r in top_for_ai:
+                    r_add = _norm(r['add_player'].get('name'))
+                    r_drop = _norm(r['drop_player'].get('name'))
+                    if (add_n and add_n == r_add) and (drop_n and drop_n == r_drop):
+                        chosen = r
+                        break
+            if not chosen:
+                continue
+            add_name = _norm(chosen['add_player'].get('name'))
+            drop_name = _norm(chosen['drop_player'].get('name'))
+            if not add_name or not drop_name:
+                continue
+            if add_name in roster_name_set:
+                continue
+            if add_name not in pool_name_set:
+                continue
+            if drop_name not in roster_name_set:
+                continue
+            valid_moves.append({
+                'add': chosen['add_player'].get('name'),
+                'drop': chosen['drop_player'].get('name'),
+                'confidence': m.get('confidence', 'Medium'),
+                'estimated_benefit': chosen.get('estimated_benefit', 0),
+                'rationale_bullets': (m.get('rationale_bullets') or [])[:4],
+                'badges': chosen.get('badges', [])
+            })
+
+        resp = {
+            'summary': summary,
+            'moves': valid_moves,
+            'metadata': metadata,
+            'recommendations': recs[:top_n]
+        }
+        # Optional debug payload
+        if debug_flag:
+            resp['debug'] = {
+                'ai_used': True,
+                'ai_moves_count': len(((ai_parsed.get('moves') if isinstance(ai_parsed, dict) else []) or [])),
+                'ai_response_chars': len(ai_text or ''),
+                'prompt': full_prompt,
+                'prompt_length': len(full_prompt),
+                'pool_coverage': metadata.get('pool_projection_coverage', {}),
+                'roster_coverage': metadata.get('roster_projection_coverage', {})
+            }
+        return jsonify(resp)
+
+    except requests.exceptions.RequestException:
+        return jsonify({'error': 'Failed to connect to Yahoo API'}), 500
+    except Exception as e:
+        print(f"ERROR: yahoo_waiver_recommendations_ai failed: {e}")
+        traceback.print_exc()
+        # Return deterministic fallback with debug marker so UI can surface the reason
+        try:
+            return jsonify({'error': str(e), 'debug': {'ai_used': False, 'error': str(e)}}), 500
+        except Exception:
+            return jsonify({'error': str(e)}), 500
 
 @app.route('/api/yahoo/league_inefficiencies', methods=['POST'])
 def yahoo_league_inefficiencies():

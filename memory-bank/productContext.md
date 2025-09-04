@@ -25,6 +25,9 @@ The application provides a suite of tools categorized for player analysis and te
 *   **Draft Assistant:** Supports users during live drafts by providing real-time pick evaluations, suggesting optimal positions to target based on roster composition, and offering overall roster balance analysis.
 *   **Target List:** Allows users to maintain a personalized list of players they want to target, enabling quick access to their data and analysis.
 *   **Waiver Wire Assistant (Yahoo Enhanced):** ✅ Aids in making informed waiver wire claims with two modes: (1) Traditional mode for manual roster input, and (2) Yahoo mode for authenticated users showing actual league free agents and personalized AI recommendations based on real roster and available players.
+    - Recommendations‑first UX with concise “Why” bullets by default; numbers on demand.
+    - Source chip indicates whether a card is AI‑ranked or deterministic fallback.
+    - Player names link to Player Dossier for deeper research.
 *   **Market Inefficiency Finder (Yahoo Enhanced):** ✅ Identifies undervalued and overvalued players with two modes: (1) Traditional mode for general market analysis, and (2) Yahoo mode for league-specific analysis incorporating ownership patterns, league size, competitive level, and personalized player recommendations.
 
 ### Utility Features:

@@ -727,7 +727,7 @@ function App() {
       }
 
       // Fetch roster data
-      const rosterResponse = await fetch(`${API_BASE_URL}/api/yahoo/roster?team_key=${teamKey}`, {
+      const rosterResponse = await fetch(`${API_BASE_URL}/yahoo/roster?team_key=${teamKey}`, {
         headers: {
           'Authorization': authHeader,
           'Content-Type': 'application/json'
@@ -741,7 +741,7 @@ function App() {
       const rosterData = await rosterResponse.json();
 
       // Fetch available players data
-      const waiverResponse = await fetch(`${API_BASE_URL}/api/yahoo/waiver_wire?league_key=${leagueKey}&status=A`, {
+      const waiverResponse = await fetch(`${API_BASE_URL}/yahoo/waiver_wire?league_key=${leagueKey}&status=A`, {
         headers: {
           'Authorization': authHeader,
           'Content-Type': 'application/json'

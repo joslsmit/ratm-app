@@ -43,7 +43,10 @@ This document provides detailed technical information about the RATM Draft Kit p
 *   **Frontend `API_BASE_URL`:** Configured in `frontend/src/context/AppContext.js`.
     *   Local: `https://localhost:5000/api` (using `mkcert` for HTTPS)
     *   Production: `https://ratm-app.onrender.com/api`
-*   **Backend `/api/*` endpoints:** All API endpoints are prefixed with `/api/` (e.g., `/api/player_dossier`, `/api/rookie_rankings`).
+*   **Backend `/api/*` endpoints:** All API endpoints are prefixed with `/api/` (e.g., `/api/player_dossier`, `/api/rookie_rankings`). Key waiver endpoints:
+    - `GET /api/yahoo/waiver_pool`
+    - `POST /api/yahoo/waiver_recommendations_v2`
+    - `POST /api/yahoo/waiver_recommendations_ai` — AI‑authority, supports `?debug=1` to return full prompt and diagnostics
 
 ### C. CORS Configuration
 *   **Location:** `backend/app.py`
@@ -82,7 +85,7 @@ This document provides detailed technical information about the RATM Draft Kit p
 *   **Build & Start Commands:** Vercel automatically detects React projects and handles these.
 *   **Production URL:** `https://ratm-app.vercel.app`
 
-## 5. Production Deployment (Updated August 27, 2025)
+## 5. Production Deployment (Updated September 3, 2025)
 
 ### ✅ Current Production Status
 *   **Frontend:** Successfully deployed at `https://ratm-app.vercel.app`
@@ -141,3 +144,13 @@ This document provides detailed technical information about the RATM Draft Kit p
 *   **Usage:** Run from `backend/tests/` with activated virtual environment
 *   **Purpose:** Validate Yahoo implementations (waiver wire, market inefficiency) structure and error handling
 *   **Current Status:** ✅ All priority Yahoo implementations tested and validated
+
+## 7. Waiver Wire v3 — Implementation Notes (Sept 3)
+- AI‑first endpoint `/api/yahoo/waiver_recommendations_ai` combines deterministic candidate generation with Gemini ranking/explanation.
+- Debug: `?debug=1` returns full prompt, prompt length, coverage, and AI response meta.
+- Deterministic baselines calibrated for 6‑pt passing TD leagues (QB 12.0; RB/WR 7.5; TE 5.0).
+- Frontend shows “AI” vs “Deterministic” source chip on each recommendation card; “Why” bullets shown by default; details collapsed.
+
+### League Scoring Reference
+- Offensive scoring settings documented in `records/league_scoring_offense.md`.
+- Bench VOR baselines are aligned to these rules; projections consumed are PPR (r2p_pts).
