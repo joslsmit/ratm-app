@@ -16,17 +16,16 @@ const Documentation = () => {
   return (
     <div className="documentation-container">
       <h1>App Documentation</h1>
-      <p>Welcome to the documentation for the Fantasy Football App. This guide explains how to use each section of the application to enhance your fantasy football experience.</p>
+      <p>Welcome to RATM. This guide explains how to use each tool at a glance. It focuses on what you do and what the AI shows, without going into distracting detail.</p>
 
       <section id="player-dossier" className="doc-section">
         <h2>Player Dossier</h2>
-        <p>The Player Dossier provides a comprehensive analysis of individual players. Enter a player's name to get detailed insights, including their Expert Consensus Ranking (ECR), positional tiers, and other relevant data points. This tool helps you quickly assess a player's value and potential.</p>
+        <p>The Player Dossier gives a fast, structured view of a player, plus a concise AI take. Sections appear in this order: Quick Scan → Player Overview → Expert Consensus & Rankings → AI Analysis → Weekly Outlook → Market/Ownership → Age/Trajectory.</p>
         <h3>How to Use:</h3>
         <ol>
-          <li>Navigate to the "Player Dossier" section.</li>
-          <li>Type the player's name into the search bar.</li>
-          <li>Click "Generate Dossier" to view the analysis.</li>
-          <li>You can also add players directly to your Target List from here.</li>
+          <li>Type a player name and click Generate.</li>
+          <li>Skim Quick Scan and the AI Analysis for the takeaways; open details only if needed.</li>
+          <li>Use the Add to Target List button to save players you’re tracking.</li>
         </ol>
       </section>
 
@@ -65,12 +64,11 @@ const Documentation = () => {
 
       <section id="market-inefficiency-finder" className="doc-section">
         <h2>Market Inefficiency Finder</h2>
-        <p>Identify players who are undervalued (sleepers) or overvalued (busts) by the market. This tool leverages data to highlight discrepancies between expert consensus and potential performance, giving you an edge.</p>
+        <p>Identify sleepers and busts. In Yahoo‑enhanced mode (when authenticated), results reflect your league context.</p>
         <h3>How to Use:</h3>
         <ol>
-          <li>Select a position to analyze.</li>
-          <li>Click "Find Inefficiencies" to see potential sleepers and busts.</li>
-          <li>Use this information to find value picks or avoid overpaying for players.</li>
+          <li>Select a position and run the analysis.</li>
+          <li>Review the concise notes to spot value or avoid traps.</li>
         </ol>
       </section>
 
@@ -98,45 +96,43 @@ const Documentation = () => {
 
       <section id="draft-assistant" className="doc-section">
         <h2>Draft Assistant</h2>
-        <p>Your real-time companion during the draft. The Draft Assistant helps you make optimal picks by providing recommendations based on your league settings, roster needs, and player availability.</p>
+        <p>Use during drafts to stay organized and make optimal picks based on roster needs and tiers.</p>
         <h3>How to Use:</h3>
         <ol>
-          <li>Set up your league details and draft board.</li>
-          <li>As players are drafted, input them into the assistant.</li>
-          <li>Receive real-time recommendations for your next pick.</li>
+          <li>Set up the board and update picks as the draft progresses.</li>
+          <li>Use tiers and roster indicators to guide each selection.</li>
         </ol>
       </section>
 
       <section id="trending-players" className="doc-section">
         <h2>Trending Players</h2>
-        <p>Stay updated on players whose stock is rising or falling. This section shows recent trends in player interest, often reflecting news, injuries, or performance changes.</p>
+        <p>Quickly see who’s being added/dropped — a simple pulse on market moves to inform waivers and trades.</p>
         <h3>How to Use:</h3>
         <ol>
-          <li>View the list of trending players.</li>
-          <li>Sort by different metrics (e.g., adds, drops) to see what's hot or not.</li>
-          <li>Use this information to make timely waiver wire claims or trade offers.</li>
+          <li>Scan the list and sort by adds/drops to spot momentum.</li>
         </ol>
       </section>
 
       <section id="waiver-wire-assistant" className="doc-section">
         <h2>Waiver Wire Assistant</h2>
-        <p>Optimize your waiver wire claims. This tool helps you decide which players to drop and which to add, providing analysis on the impact of potential roster changes.</p>
+        <p>Make add/drop decisions with recommendations first. In Yahoo mode (default if authenticated), suggestions reflect your actual roster and available players.</p>
         <h3>How to Use:</h3>
         <ol>
-          <li>Input your current roster.</li>
-          <li>Specify the player you want to add from waivers.</li>
-          <li>Click "Analyze Waiver Swap" to get a recommendation.</li>
+          <li>(Yahoo mode) Click “Refresh Recommendations”. Select a league if needed.</li>
+          <li>Review cards: Add/Drop with a small benefit pill and “Why” bullets by default.</li>
+          <li>Open “Show details” to see Estimated Benefit (overall roster score gain) and other numbers.</li>
+          <li>Use “Alternatives” to see near‑neutral, context‑driven ideas; “Browse Pool” to explore manually.</li>
         </ol>
       </section>
 
       <section id="settings" className="doc-section">
         <h2>Settings</h2>
-        <p>Manage your application preferences, including your Google Gemini API key, theme settings, and options to reset your saved data.</p>
+        <p>Manage your preferences. Set your Gemini API key (for AI), switch themes, and reset local data. Yahoo login is available from the sidebar.</p>
         <h3>How to Use:</h3>
         <ol>
-          <li>Access this section to update your API key.</li>
-          <li>Toggle between dark and light themes.</li>
-          <li>Use the "Reset Application" button to clear all local data (use with caution).</li>
+          <li>Enter your Gemini API key to enable richer AI analysis.</li>
+          <li>Toggle dark/light theme as preferred.</li>
+          <li>Use Reset to clear local storage (API key, targets, etc.).</li>
         </ol>
       </section>
     </div>
