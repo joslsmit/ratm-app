@@ -147,6 +147,17 @@
   - Quick Scan → Player Overview → Expert Consensus & Rankings → AI Analysis → Weekly Outlook → Market Analysis → Age/Trajectory.
 - Important: This order is controlled by CSS flex `order` rules in `PlayerDossier.module.css`. JSX order does not affect render order if CSS assigns `order` values.
 
+### 🚧 Sit/Start Optimizer — Current Status (September 4–5, 2025)
+- Backend endpoint `/api/optimize_lineup` (Yahoo mode) implemented:
+  - Uses projections (PPR) and slot rules; excludes BYE/OUT, flags Q/D; fills strict slots before flex; preserves duplicate slots (RB, RB2, WR, WR2).
+  - Opponent-aware tie-breakers in close calls only: tiny penalty for opponent DEF clash; slight variance bias if trailing/favored.
+  - Diff filters out cosmetic slot shuffles.
+- Analyst’s Note: Upgraded to structured JSON (`ai_note_json`) with headline, confidence, up to 3 grounded reasons (Projection/Matchup/Status/Variance/Correlation/Consensus/Usage/Confidence/Context), tags, and score_breakdown (projection + small adjustments). UI now renders only the structured card; legacy markdown hidden.
+- ECR semantics enforced: use overall ECR (season‑long) for cross‑position comparisons; use weekly positional rank only when both players share the same position; never compare positional ranks across positions. When overall ECR exists but the gap is below threshold, show a neutral “Overall ECR” context line instead of a consensus claim.
+- Matchup signal: always shows opponent + HOME/AWAY context; when categorical difficulty differs by ≥1 step (Easy/Moderate/Tough), surface “Easier/Tougher matchup” and apply a numeric nudge in score_breakdown (`matchup` ±0.10) with explicit annotation. Correlation and variance remain small nudges for close calls.
+- Debug & testing: `?debug=1` (or body `{debug:true}`) returns `debug.lineup_note` with consensus and matchup inputs. Headless tester `./test_script` added; accepts `TOKEN` and optional `GEMINI_KEY`.
+- Open item: Reasons feel too factual/obvious in some cases. See records/sit_start_optimizer_status.md for the refined plan to make analysis more insightful while staying grounded.
+
 ### **✅ RESOLVED: WAIVER WIRE BENCH ANALYSIS COMPLETE (August 20, 2025)**
 **Resolution Status**: **🎉 CRITICAL ISSUE FULLY RESOLVED - COMPREHENSIVE IMPLEMENTATION COMPLETE**
 

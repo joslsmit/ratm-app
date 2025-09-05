@@ -49,6 +49,9 @@ const Sidebar = ({ activeTool, targetList, navSections, toggleNavSection, setEcr
               {localStorage.getItem('yahoo_token') && (
                 <li><a href="#my-team" className={activeTool === 'my-team' ? 'active' : ''}>My Team</a></li>
               )}
+              {localStorage.getItem('yahoo_token') && (
+                <li><a href="#lineup" className={activeTool === 'lineup' ? 'active' : ''}>Sit/Start Optimizer</a></li>
+              )}
               <li><a href="#keeper" className={activeTool === 'keeper' ? 'active' : ''}>Keeper Evaluator</a></li>
               <li><a href="#trade" className={activeTool === 'trade' ? 'active' : ''}>Trade Analyzer</a></li>
               <li><a href="#draft" className={activeTool === 'draft' ? 'active' : ''}>Draft Assistant</a></li>

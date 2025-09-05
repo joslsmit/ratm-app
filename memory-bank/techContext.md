@@ -47,6 +47,7 @@ This document provides detailed technical information about the RATM Draft Kit p
     - `GET /api/yahoo/waiver_pool`
     - `POST /api/yahoo/waiver_recommendations_v2`
     - `POST /api/yahoo/waiver_recommendations_ai` — AI‑authority, supports `?debug=1` to return full prompt and diagnostics
+    - `POST /api/optimize_lineup` — Yahoo lineup optimizer: returns `suggested_lineup`, `diff`, `eligibility_info`, plus `ai_note_json` with `{ confidence, headline, reasons[], tags[], score_breakdown{} }`. Supports `?debug=1` (or body `{debug:true}`) to include `consensus_inputs` and `matchup_inputs` for transparency.
 
 ### C. CORS Configuration
 *   **Location:** `backend/app.py`
@@ -154,3 +155,10 @@ This document provides detailed technical information about the RATM Draft Kit p
 ### League Scoring Reference
 - Offensive scoring settings documented in `records/league_scoring_offense.md`.
 - Bench VOR baselines are aligned to these rules; projections consumed are PPR (r2p_pts).
+## 8. Sit/Start Optimizer — Implementation Notes (Sept 4–5)
+- Yahoo‑only endpoint implemented; deterministic selection driven by weekly projections; excludes BYE/OUT; Q/D flagged.
+- Structured AI note: up to 3 grounded reasons (Projection/Matchup/Status/Variance/Correlation/Consensus/Usage/Confidence/Context) with canonical tags and a score breakdown (projection plus small nudges: matchup ±0.10, correlation/variance in close calls).
+- ECR: overall ECR used for cross‑position; weekly positional rank only for same‑position; neutral Overall ECR context when gaps are small.
+- Matchup: opponent + HOME/AWAY always shown; categorical difficulty (Easy/Moderate/Tough) mapped and surfaced when meaningful with a small numeric nudge.
+- UI renders structured card only; markdown hidden.
+- Test script: project root `./test_script` — set `TOKEN` (Yahoo), optional `GEMINI_KEY`; add `INSECURE=1` if using mkcert locally.

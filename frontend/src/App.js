@@ -13,6 +13,7 @@ import DraftAssistant from './components/DraftAssistant'; // Import DraftAssista
 import TargetList from './components/TargetList'; // Import TargetList
 import Settings from './components/Settings'; // Import Settings
 import Documentation from './components/Documentation'; // Import Documentation
+import SitStartOptimizer from './components/SitStartOptimizer';
 import YahooLeagues from './components/YahooLeagues'; // Import YahooLeagues
 import MyTeam from './components/MyTeam'; // Import MyTeam
 import Sidebar from './components/Sidebar'; // Import Sidebar
@@ -1069,6 +1070,10 @@ function App() {
               analysisResult={waiverSwapResult}
               isLoading={isWaiverSwapLoading}
             />
+          )}
+
+          {activeTool === 'lineup' && (
+            <SitStartOptimizer />
           )}
 
           {activeTool === 'settings' && (

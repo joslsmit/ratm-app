@@ -3220,6 +3220,798 @@ def get_yahoo_roster_debug():
         traceback.print_exc()
         return jsonify({"error": "Failed to process roster data.", "details": str(e)}), 500
 
+@app.route('/api/optimize_lineup', methods=['POST'])
+def optimize_lineup():
+    """
+    Suggest an optimal starting lineup for the current week (Yahoo-aware).
+    Body: { mode: 'yahoo', team_key, league_key?, week? }
+    Returns: { suggested_lineup{slot->name}, bench[], total_projected_points, diff[], eligibility_info{excluded[], flagged[]}, ai_note? }
+    """
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        mode = data.get('mode', 'yahoo')
+        team_key = data.get('team_key')
+        league_key = data.get('league_key')
+        week = data.get('week')
+        if mode != 'yahoo':
+            return jsonify({'error': 'Only yahoo mode is currently supported'}), 400
+        if not team_key:
+            return jsonify({'error': 'team_key is required'}), 400
+
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'Valid Authorization header with Bearer token is required'}), 401
+        access_token = auth_header.split(' ')[1]
+
+        # Fetch roster from Yahoo (reuse routes above)
+        headers = {'Authorization': f'Bearer {access_token}', 'Accept': 'application/json'}
+        if week:
+            url_primary = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster/players;week={week}?format=json'
+            url_fallback = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster;week={week}?format=json'
+        else:
+            url_primary = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster/players?format=json'
+            url_fallback = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster?format=json'
+        r = requests.get(url_primary, headers=headers, timeout=10)
+        if r.status_code == 404:
+            r = requests.get(url_fallback, headers=headers, timeout=10)
+        r.raise_for_status()
+        roster_raw = r.json()
+        roster_players = parse_yahoo_roster_response(roster_raw) or []
+
+        # Enrich roster and build slot list from actual selected positions (include K/DEF)
+        enriched = []
+        slots = []
+        slot_counts = {}
+        for p in roster_players:
+            name = p.get('name')
+            if not name:
+                continue
+            ci = _get_combined_info_by_name(name)
+            pos = ci.get('position') or p.get('selected_position')
+            status = p.get('status', '')
+            bye_week = ci.get('bye_week')
+            blocked = False
+            if str(status).upper() in ('OUT', 'IR'):
+                blocked = True
+            if week and bye_week and str(bye_week) == str(week):
+                blocked = True
+            enriched.append({
+                'name': name,
+                'position': pos,
+                'selected_position': p.get('selected_position'),
+                'weekly_points': ci.get('projected_points'),
+                'ecr_overall': ci.get('ecr_overall'),
+                'bye_week': bye_week,
+                'status': status,
+                'blocked': blocked
+            })
+            sp = p.get('selected_position')
+            if sp and not str(sp).upper().startswith(('BN', 'IR')):
+                base = str(sp).upper()
+                # Number duplicate starting slots (e.g., RB, RB -> RB1, RB2)
+                slot_counts[base] = slot_counts.get(base, 0) + 1
+                label = f"{base}{slot_counts[base]}" if slot_counts[base] > 1 else base
+                slots.append(label)
+        # Preserve all starting slots from Yahoo (including duplicates like RB, RB and WR, WR)
+        # Do not deduplicate: counts matter for lineup construction.
+        # Reorder slots: fill strict positions first, then flex, to avoid no-op swaps
+        def _slot_priority(s: str) -> int:
+            base = re.sub(r'\d+$', '', str(s).upper())
+            if base == 'QB': return 0
+            if base == 'RB': return 1
+            if base == 'WR': return 2
+            if base == 'TE': return 3
+            if base == 'K': return 4
+            if base in ('DEF','DST'): return 5
+            if base in ('W/T','WT'): return 6
+            if base in ('W/R/T','FLEX','WRT'): return 7
+            return 8
+        slots_with_idx = list(enumerate(slots))
+        slots_sorted = [s for _, s in sorted(slots_with_idx, key=lambda x: (_slot_priority(x[1]), x[0]))]
+
+        # Attempt to derive opponent context (DEF team and projected total) for tie-breakers
+        opponent_def_teams = set()
+        opponent_projection = None
+        try:
+            mu_url = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/matchups' + (f';week={week}' if week else '') + '?format=json'
+            mr = requests.get(mu_url, headers=headers, timeout=10)
+            if mr.ok:
+                mjson = mr.json()
+                def _find_opp_key(obj):
+                    try:
+                        s = json.dumps(obj)
+                        keys = re.findall(r'"team_key":"([^"]+)"', s)
+                        for k in keys:
+                            if k != team_key and '.t.' in k:
+                                return k
+                    except Exception:
+                        return None
+                    return None
+                opp_key = _find_opp_key(mjson)
+                if opp_key:
+                    if week:
+                        oup = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{opp_key}/roster/players;week={week}?format=json'
+                        ouf = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{opp_key}/roster;week={week}?format=json'
+                    else:
+                        oup = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{opp_key}/roster/players?format=json'
+                        ouf = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{opp_key}/roster?format=json'
+                    orsp = requests.get(oup, headers=headers, timeout=10)
+                    if orsp.status_code == 404:
+                        orsp = requests.get(ouf, headers=headers, timeout=10)
+                    if orsp.ok:
+                        oraw = orsp.json()
+                        oroster = parse_yahoo_roster_response(oraw) or []
+                        o_total = 0.0
+                        for op in oroster:
+                            sp = op.get('selected_position') or ''
+                            if str(sp).upper().startswith(('BN','IR')):
+                                continue
+                            oname = op.get('name')
+                            if not oname:
+                                continue
+                            ci_o = _get_combined_info_by_name(oname)
+                            opos = (ci_o.get('position') or op.get('selected_position') or '').upper()
+                            if opos in ('DEF','DST') and ci_o.get('team'):
+                                opponent_def_teams.add(str(ci_o.get('team')).upper())
+                            o_total += _player_weekly_score(oname, ci_o.get('ecr_overall'))
+                        opponent_projection = o_total
+        except Exception:
+            pass
+
+        # Baseline lineup to estimate favored/trailing state
+        lineup_base, total_base = _best_lineup(enriched, slots_sorted)
+        bias = 'neutral'
+        if opponent_projection is not None:
+            if total_base < opponent_projection - 5.0:
+                bias = 'trailing'
+            elif total_base > opponent_projection + 5.0:
+                bias = 'favored'
+
+        # Adjusted selection to resolve close calls using opponent DEF clash and variance bias
+        def _adjusted_best_lineup(players, slots, opp_def_set, bias_state):
+            used = set()
+            out = []
+            total_pts = 0.0
+            for slot in slots:
+                # get top base for closeness
+                top_base = -1.0
+                bases = []
+                elig = []
+                for i, pl in enumerate(players):
+                    if i in used or pl.get('blocked'):
+                        continue
+                    pos = pl.get('position') or pl.get('primary_position')
+                    if not _can_fill_slot(slot, pos):
+                        continue
+                    base = _player_weekly_score(pl.get('name'), pl.get('ecr_overall'))
+                    bases.append(base)
+                    elig.append((i, pl, base))
+                if bases:
+                    top_base = max(bases)
+                best_idx = -1
+                best_score = -1e9
+                for i, pl, base in elig:
+                    adj = 0.0
+                    team = (pl.get('team') or '').upper()
+                    if team and team in opp_def_set and base >= top_base - 1.0:
+                        adj -= 0.1
+                    sd = 0.0
+                    try:
+                        ci_pl = _get_combined_info_by_name(pl.get('name'))
+                        sd = float(ci_pl.get('sd_overall') or 0.0)
+                    except Exception:
+                        sd = 0.0
+                    if bias_state == 'trailing' and base >= top_base - 1.0:
+                        adj += min(0.1, 0.02 + 0.001 * sd)
+                    elif bias_state == 'favored' and base >= top_base - 1.0:
+                        adj -= min(0.1, 0.02 + 0.001 * sd)
+                    score = base + adj
+                    if score > best_score:
+                        best_score = score
+                        best_idx = i
+                if best_idx >= 0:
+                    used.add(best_idx)
+                    out.append({'slot': slot, 'player': players[best_idx]})
+                    total_pts += max(0.0, best_score)
+                else:
+                    out.append({'slot': slot, 'player': None})
+            return out, total_pts
+
+        lineup, total = _adjusted_best_lineup(enriched, slots_sorted, opponent_def_teams, bias)
+
+        # Build suggested mapping and diff
+        suggested = {}
+        for se in lineup:
+            slot = se.get('slot')
+            pl = se.get('player') or {}
+            suggested[slot] = pl.get('name') or ''
+        # Current mapping from Yahoo response (numbered to align with slots)
+        current = {}
+        cnts = {}
+        for p in roster_players:
+            sp = p.get('selected_position')
+            if sp and not str(sp).upper().startswith(('BN', 'IR')):
+                base = str(sp).upper()
+                cnts[base] = cnts.get(base, 0) + 1
+                label = f"{base}{cnts[base]}" if cnts[base] > 1 else base
+                current[label] = p.get('name') or ''
+        # Compute diff
+        diff = []
+        for slot in slots_sorted:
+            before = current.get(slot, '')
+            after = suggested.get(slot, '')
+            if (before or after) and before != after:
+                diff.append({'slot': slot, 'from': before, 'to': after})
+
+        # Bench & flags
+        starter_names = {suggested[s] for s in suggested if suggested[s]}
+        bench = [p.get('name') for p in enriched if p.get('name') not in starter_names]
+        excluded = [p.get('name') for p in enriched if p.get('blocked')]
+        flagged = [p.get('name') for p in enriched if str(p.get('status','')).upper() in ('Q','D')]
+
+        # Filter out no-op swaps (both players remain starters, just different labeled slots)
+        starters_before = {name for name in current.values() if name}
+        starters_after = {name for name in suggested.values() if name}
+        diff = [d for d in diff if not (d.get('from') in starters_after and d.get('to') in starters_before)]
+
+        resp = {
+            'suggested_lineup': suggested,
+            'bench': bench,
+            'total_projected_points': round(total, 2),
+            'diff': diff,
+            'eligibility_info': {
+                'excluded': excluded,
+                'flagged': flagged
+            }
+        }
+
+        # Optional AI note — structured JSON with deterministic reasons, plus safe paraphrase
+        user_key = request.headers.get('X-API-Key')
+        if diff:
+            try:
+                allowed_status = {'OUT','IR','Q','D'}
+                def _find_info(name: str):
+                    for pl in enriched:
+                        if pl.get('name') == name:
+                            ci = _get_combined_info_by_name(name)
+                            return {
+                                'name': name,
+                                'pos': (pl.get('position') or '').upper(),
+                                'team': (ci.get('team') or pl.get('team') or ''),
+                                'status': (pl.get('status') or ''),
+                                'bye': pl.get('bye_week'),
+                                'wp': _player_weekly_score(name, pl.get('ecr_overall')),
+                                'opponent': ci.get('opponent') or ci.get('weekly_opponent') or '',
+                                'home_away': (ci.get('home_away') or ''),
+                                'matchup_difficulty': ci.get('matchup_difficulty'),
+                                'sd_overall': ci.get('sd_overall'),
+                                'ecr_overall': ci.get('ecr_overall'),
+                                'ecr_positional': ci.get('ecr_positional'),
+                                'weekly_ecr': ci.get('weekly_ecr'),
+                                'start_sit_grade': ci.get('start_sit_grade'),
+                                'grade_confidence_score': ci.get('grade_confidence_score'),
+                                'projection_confidence': ci.get('projection_confidence'),
+                                'target_share': ci.get('target_share'),
+                                'snap_percentage': ci.get('snap_percentage'),
+                                'depth_chart_position': ci.get('depth_chart_position')
+                            }
+                    return None
+
+                # Pick the most impactful change for the note
+                best = None; best_delta = -999.0
+                for dch in diff:
+                    fr = _find_info(dch.get('from')) if dch.get('from') else None
+                    to = _find_info(dch.get('to')) if dch.get('to') else None
+                    if to:
+                        delta = round((to.get('wp') or 0) - (fr.get('wp') if fr else 0), 1)
+                        if delta > best_delta:
+                            best_delta = delta; best = {'slot': dch.get('slot'), 'from': fr, 'to': to}
+
+                if best:
+                    fr = best.get('from'); to = best.get('to')
+                    headline = f"Start {to['name']} over {fr['name'] if fr else 'bench'} at {best['slot']} (+{best_delta} pts)"
+
+                    # Build structured reason candidates from deterministic evidence
+                    reason_candidates = []
+                    matchup_bonus = 0.0  # small numeric nudge shown in score_breakdown when easier matchup is detected
+                    # Projection
+                    reason_candidates.append({
+                        'type': 'Projection',
+                        'text': f"Projection edge of +{best_delta} points.",
+                        'evidence': { 'delta_points': best_delta }
+                    })
+                    # Expert consensus (ECR) — lower is better. Use comparable ranks.
+                    try:
+                        same_pos = bool(fr and to and (to.get('pos') == fr.get('pos')))
+                        # Prefer overall ECR for cross-position comparisons; use weekly/positional when same position
+                        overall_to = to.get('ecr_overall')
+                        overall_fr = fr.get('ecr_overall') if fr else None
+                        weekly_to = to.get('weekly_ecr')
+                        weekly_fr = fr.get('weekly_ecr') if fr else None
+                        pos_to = to.get('pos') or ''
+                        pos_fr = fr.get('pos') or ''
+
+                        if same_pos and isinstance(weekly_to, (int,float)) and isinstance(weekly_fr, (int,float)):
+                            pos_delta = round(weekly_fr - weekly_to, 1)  # positive => TO better within position
+                            thresh = 6.0
+                            if pos_delta >= thresh:
+                                reason_candidates.append({
+                                    'type': 'Consensus',
+                                    'text': f"Experts rank {to['name']} higher at {pos_to} this week (weekly rank {int(weekly_to)} vs {int(weekly_fr)}; lower is better).",
+                                    'evidence': { 'type': 'weekly_positional', 'pos': pos_to, 'to_rank': weekly_to, 'from_rank': weekly_fr, 'delta': pos_delta, 'supports': True }
+                                })
+                            elif pos_delta <= -thresh:
+                                reason_candidates.append({
+                                    'type': 'Consensus',
+                                    'text': f"Experts rank {fr['name']} higher at {pos_fr} this week (weekly rank {int(weekly_fr)} vs {int(weekly_to)}), but projection favors {to['name']} this week (+{best_delta} pts).",
+                                    'evidence': { 'type': 'weekly_positional', 'pos': pos_fr, 'to_rank': weekly_to, 'from_rank': weekly_fr, 'delta': pos_delta, 'supports': False }
+                                })
+                        elif isinstance(overall_to, (int,float)) and isinstance(overall_fr, (int,float)):
+                            overall_delta = round(overall_fr - overall_to, 1)  # positive => TO better overall
+                            thresh_overall = 10.0
+                            if overall_delta >= thresh_overall:
+                                reason_candidates.append({
+                                    'type': 'Consensus',
+                                    'text': f"Experts rank {to['name']} higher by overall ECR (overall ECR {int(overall_to)} vs {int(overall_fr)}; lower is better).",
+                                    'evidence': { 'type': 'overall', 'to_ecr': overall_to, 'from_ecr': overall_fr, 'delta': overall_delta, 'supports': True }
+                                })
+                            elif overall_delta <= -thresh_overall:
+                                reason_candidates.append({
+                                    'type': 'Consensus',
+                                    'text': f"Experts rank {fr['name']} higher by overall ECR (overall ECR {int(overall_fr)} vs {int(overall_to)}; lower is better), but projection favors {to['name']} this week (+{best_delta} pts).",
+                                    'evidence': { 'type': 'overall', 'to_ecr': overall_to, 'from_ecr': overall_fr, 'delta': overall_delta, 'supports': False }
+                                })
+                            else:
+                                # Both overall ECR values exist but gap is small — add neutral context line
+                                reason_candidates.append({
+                                    'type': 'Context',
+                                    'text': f"Season-long overall ECR: {to['name']} {int(overall_to)} vs {fr['name']} {int(overall_fr)} (lower is better).",
+                                    'evidence': { 'type': 'overall', 'to_ecr': overall_to, 'from_ecr': overall_fr }
+                                })
+                        # Else: skip consensus to avoid cross-position positional-rank comparisons
+                    except Exception:
+                        pass
+                    # Matchup
+                    to_opp = (to.get('opponent') or '').upper()
+                    fr_opp = (fr.get('opponent') or '').upper() if fr else ''
+                    to_ha = (to.get('home_away') or '').upper()
+                    fr_ha = (fr.get('home_away') or '').upper() if fr else ''
+                    if to_opp or fr_opp:
+                        reason_candidates.append({
+                            'type': 'Matchup',
+                            'text': f"{to['name']} versus {to_opp or 'TBD'}{(' ('+to_ha+')') if to_ha in ('HOME','AWAY') else ''} • {fr['name'] if fr else 'bench'} versus {fr_opp or 'TBD'}{(' ('+fr_ha+')') if fr_ha in ('HOME','AWAY') else ''}.",
+                            'evidence': { 'to_opp': to_opp, 'from_opp': fr_opp, 'to_ha': to_ha, 'from_ha': fr_ha }
+                        })
+                    # Matchup difficulty (if available on both)
+                    try:
+                        def _md_score(v):
+                            if v is None:
+                                return None
+                            s = str(v).strip().lower()
+                            if s.startswith('easy'):
+                                return 1.0
+                            if s.startswith('moderate') or s.startswith('medium'):
+                                return 2.0
+                            if s.startswith('tough') or s.startswith('hard'):
+                                return 3.0
+                            try:
+                                return float(v)
+                            except Exception:
+                                return None
+                        md_to_raw = to.get('matchup_difficulty')
+                        md_fr_raw = fr.get('matchup_difficulty') if fr else None
+                        md_to = _md_score(md_to_raw)
+                        md_fr = _md_score(md_fr_raw)
+                        if md_to is not None and md_fr is not None and abs(md_fr - md_to) >= 1.0:
+                            if md_to < md_fr:
+                                reason_candidates.append({
+                                    'type': 'Matchup',
+                                    'text': f"Easier matchup this week: {str(md_to_raw)} vs {str(md_fr_raw)} [matchup +0.10].",
+                                    'evidence': { 'to_matchup_difficulty': md_to_raw, 'from_matchup_difficulty': md_fr_raw }
+                                })
+                                matchup_bonus = 0.10
+                            else:
+                                reason_candidates.append({
+                                    'type': 'Matchup',
+                                    'text': f"Tougher matchup this week: {str(md_to_raw)} vs {str(md_fr_raw)} [matchup -0.10].",
+                                    'evidence': { 'to_matchup_difficulty': md_to_raw, 'from_matchup_difficulty': md_fr_raw }
+                                })
+                                matchup_bonus = -0.10
+                    except Exception:
+                        pass
+                    # Status / Bye
+                    if fr and str(fr.get('status','')).upper() in allowed_status:
+                        reason_candidates.append({
+                            'type': 'Status',
+                            'text': f"{fr['name']} status: {str(fr.get('status')).upper()}.",
+                            'evidence': { 'from_status': str(fr.get('status')).upper() }
+                        })
+                    if fr and fr.get('bye') and week and str(fr.get('bye')) == str(week):
+                        reason_candidates.append({
+                            'type': 'Status',
+                            'text': f"{fr['name']} is on BYE in week {week}.",
+                            'evidence': { 'from_bye_week': fr.get('bye') }
+                        })
+                    # Usage (targets/snap) if present
+                    try:
+                        ts_to = float(to.get('target_share')) if to.get('target_share') is not None else None
+                        ts_fr = float(fr.get('target_share')) if (fr and fr.get('target_share') is not None) else None
+                        sn_to = float(to.get('snap_percentage')) if to.get('snap_percentage') is not None else None
+                        sn_fr = float(fr.get('snap_percentage')) if (fr and fr.get('snap_percentage') is not None) else None
+                        if ts_to is not None and ts_fr is not None and abs(ts_to - ts_fr) >= 3:
+                            reason_candidates.append({
+                                'type': 'Usage',
+                                'text': f"Higher involvement: target share {ts_to:.0f}% vs {ts_fr:.0f}%.",
+                                'evidence': { 'to_target_share': ts_to, 'from_target_share': ts_fr }
+                            })
+                        elif sn_to is not None and sn_fr is not None and abs(sn_to - sn_fr) >= 5:
+                            reason_candidates.append({
+                                'type': 'Usage',
+                                'text': f"More snaps: {sn_to:.0f}% vs {sn_fr:.0f}%.",
+                                'evidence': { 'to_snap_pct': sn_to, 'from_snap_pct': sn_fr }
+                            })
+                    except Exception:
+                        pass
+                    # Grade / confidence deltas if present
+                    try:
+                        gc_to = float(to.get('grade_confidence_score')) if to.get('grade_confidence_score') is not None else None
+                        gc_fr = float(fr.get('grade_confidence_score')) if (fr and fr.get('grade_confidence_score') is not None) else None
+                        if gc_to is not None and gc_fr is not None and abs(gc_to - gc_fr) >= 0.1:
+                            reason_candidates.append({
+                                'type': 'Confidence',
+                                'text': f"Higher analyst confidence: {gc_to:.2f} vs {gc_fr:.2f}.",
+                                'evidence': { 'to_conf': gc_to, 'from_conf': gc_fr }
+                            })
+                        ss_to = (to.get('start_sit_grade') or '').upper()
+                        ss_fr = (fr.get('start_sit_grade') or '').upper() if fr else ''
+                        if ss_to and ss_fr and ss_to != ss_fr:
+                            reason_candidates.append({
+                                'type': 'Confidence',
+                                'text': f"Start/sit grade: {ss_to} vs {ss_fr}.",
+                                'evidence': { 'to_grade': ss_to, 'from_grade': ss_fr }
+                            })
+                    except Exception:
+                        pass
+                    # Flex allocation: lead over next best eligible alternative for this slot
+                    try:
+                        slot_name = str(best.get('slot') or '')
+                        # Compute eligible pool for this slot among non-blocked players
+                        pool_alt = []
+                        for pl in enriched:
+                            if pl.get('name') == to['name']:
+                                continue
+                            if pl.get('blocked'):
+                                continue
+                            ppos = (pl.get('position') or '').upper()
+                            if not _can_fill_slot(slot_name, ppos):
+                                continue
+                            pool_alt.append({'name': pl.get('name'), 'base': _player_weekly_score(pl.get('name'), pl.get('ecr_overall'))})
+                        alt = None
+                        if pool_alt:
+                            pool_alt.sort(key=lambda x: x['base'], reverse=True)
+                            alt = pool_alt[0]
+                        if alt and isinstance(alt.get('base'), (int,float)):
+                            flex_delta = round((to.get('wp') or 0) - float(alt.get('base') or 0), 1)
+                            if flex_delta >= 0.5:
+                                reason_candidates.append({
+                                    'type': 'FlexAllocation',
+                                    'text': f"Beats next best eligible ({alt.get('name')} at {slot_name}) by +{flex_delta} pts.",
+                                    'evidence': { 'slot': slot_name, 'alt': alt.get('name'), 'delta_vs_alt': flex_delta }
+                                })
+                    except Exception:
+                        pass
+
+                    # Correlation risk (opponent DEF clash) — close call only
+                    corr_applied = False
+                    if to.get('team') and to['team'].upper() in opponent_def_teams and best_delta <= 1.0:
+                        corr_applied = True
+                        reason_candidates.append({
+                            'type': 'Correlation',
+                            'text': f"Opponent starts {', '.join(sorted(opponent_def_teams))} — correlation risk.",
+                            'evidence': { 'opponent_def': sorted([t for t in opponent_def_teams]) }
+                        })
+                    # Variance preference (trailing/favored) — close call only
+                    var_applied = False
+                    if (bias and bias != 'neutral') and best_delta <= 1.0:
+                        var_applied = True
+                        reason_candidates.append({
+                            'type': 'Variance',
+                            'text': f"Bias: {bias} — slight variance preference.",
+                            'evidence': { 'bias': bias, 'sd_overall_to': to.get('sd_overall') }
+                        })
+                    # Positive QB stack (close call)
+                    try:
+                        qb_name = None
+                        qb_team = None
+                        for se in lineup:
+                            if se.get('slot','').upper().startswith('QB'):
+                                qb_name = (se.get('player') or {}).get('name'); break
+                        if qb_name:
+                            ci_qb = _get_combined_info_by_name(qb_name)
+                            qb_team = (ci_qb.get('team') or '').upper()
+                        if qb_team and to.get('team') and to['team'].upper() == qb_team and best_delta <= 1.0:
+                            reason_candidates.append({
+                                'type': 'Correlation',
+                                'text': "Stacks with your QB — higher ceiling if the game shoots out.",
+                                'evidence': { 'qb': qb_name, 'team': qb_team }
+                            })
+                    except Exception:
+                        pass
+
+                    # Confidence and tags
+                    conf = 'High' if best_delta >= 2.0 else 'Medium' if best_delta >= 0.5 else 'Low'
+                    # Slightly reduce confidence for Q/D
+                    if fr and str(fr.get('status','')).upper() in ('Q','D') and conf == 'High':
+                        conf = 'Medium'
+                    # Slightly reduce if consensus strongly disagrees and projection edge is modest
+                    try:
+                        cons = next((rc for rc in reason_candidates if rc.get('type') == 'Consensus' and rc.get('evidence') and rc['evidence'].get('supports') is False), None)
+                        if cons and best_delta < 2.0 and conf != 'Low':
+                            conf = 'Medium' if conf == 'High' else 'Low'
+                    except Exception:
+                        pass
+
+                    tags = []
+                    if best_delta >= 0.5:
+                        tags.append('Projection Edge')
+                    # Tag by available supporting factors
+                    try:
+                        if any(rc.get('type') == 'Consensus' and rc.get('evidence') and rc['evidence'].get('supports') for rc in reason_candidates):
+                            tags.append('Consensus')
+                        if any(rc.get('type') == 'Consensus' and rc.get('evidence') and rc['evidence'].get('supports') is False for rc in reason_candidates):
+                            tags.append('Consensus Diff')
+                    except Exception:
+                        pass
+                    if to_opp or fr_opp:
+                        tags.append('Favorable Matchup')
+                    if corr_applied:
+                        tags.append('Correlation Risk')
+                    if var_applied:
+                        tags.append('Variance Bias')
+                    if any(rc.get('type') == 'Usage' for rc in reason_candidates):
+                        tags.append('Usage')
+                    if any(rc.get('type') == 'Confidence' for rc in reason_candidates):
+                        tags.append('Confidence')
+                    if any(rc.get('type') == 'FlexAllocation' for rc in reason_candidates):
+                        tags.append('Flex Fit')
+
+                    # Score breakdown: projection plus small adjustments mirroring selection heuristics
+                    score_breakdown = {
+                        'projection': round(best_delta, 2),
+                        'matchup': round(matchup_bonus, 2),
+                        'correlation': -0.1 if corr_applied else 0.0,
+                        'variance': (0.05 if (bias=='trailing' and var_applied) else (-0.05 if (bias=='favored' and var_applied) else 0.0))
+                    }
+
+                    # Rank reasons by crude strength to pick up to 3 distinct insights
+                    def _reason_strength(rc):
+                        try:
+                            t = rc.get('type')
+                            if t == 'Projection':
+                                return abs(float(rc.get('evidence', {}).get('delta_points') or 0))
+                            if t == 'Consensus':
+                                return abs(float(rc.get('evidence', {}).get('delta') or 0)) / 10.0
+                            if t == 'Usage':
+                                ev = rc.get('evidence', {})
+                                dv = (ev.get('to_target_share') or ev.get('to_snap_pct') or 0) - (ev.get('from_target_share') or ev.get('from_snap_pct') or 0)
+                                return abs(float(dv)) / 10.0
+                            if t == 'Confidence':
+                                ev = rc.get('evidence', {})
+                                if 'to_conf' in ev and 'from_conf' in ev:
+                                    return abs(float(ev.get('to_conf') - ev.get('from_conf')))
+                                return 0.2
+                            if t == 'Matchup':
+                                ev = rc.get('evidence', {})
+                                if 'to_matchup_difficulty' in ev and 'from_matchup_difficulty' in ev:
+                                    def _md_val(x):
+                                        if x is None: return None
+                                        s = str(x).strip().lower()
+                                        if s.startswith('easy'): return 1.0
+                                        if s.startswith('moderate') or s.startswith('medium'): return 2.0
+                                        if s.startswith('tough') or s.startswith('hard'): return 3.0
+                                        try:
+                                            return float(x)
+                                        except Exception:
+                                            return None
+                                    a = _md_val(ev.get('from_matchup_difficulty'))
+                                    b = _md_val(ev.get('to_matchup_difficulty'))
+                                    if a is not None and b is not None:
+                                        return abs(a - b) / 5.0
+                                return 0.1
+                            if t == 'FlexAllocation':
+                                ev = rc.get('evidence', {})
+                                return abs(float(ev.get('delta_vs_alt') or 0))
+                            if t == 'Correlation' or t == 'Variance':
+                                return 0.05
+                        except Exception:
+                            return 0.0
+                        return 0.0
+
+                    # Deduplicate by type and pick top 3
+                    seen_types = set()
+                    ranked = []
+                    for rc in sorted(reason_candidates, key=_reason_strength, reverse=True):
+                        tp = rc.get('type')
+                        if tp in seen_types:
+                            continue
+                        ranked.append(rc)
+                        seen_types.add(tp)
+                        if len(ranked) >= 3:
+                            break
+
+                    default_json = {
+                        'confidence': conf,
+                        'headline': headline,
+                        'reasons': ranked[:3],
+                        'tags': tags,
+                        'score_breakdown': score_breakdown
+                    }
+
+                    final_json = default_json
+
+                    # Attempt safe paraphrase via Gemini if API key present
+                    if user_key:
+                        try:
+                            allowed_tokens = [to['name']] + ([fr['name']] if fr else [])
+                            rtoks = []
+                            if to_opp: rtoks.append(to_opp)
+                            if fr_opp: rtoks.append(fr_opp)
+                            if bias and bias != 'neutral': rtoks.append(bias)
+                            rtoks += list(opponent_def_teams)
+                            allowed_tokens += rtoks + [best.get('slot')]
+                            try:
+                                for rc in ranked:
+                                    ev = rc.get('evidence') or {}
+                                    for k in ('alt','qb'):
+                                        if ev.get(k):
+                                            allowed_tokens.append(str(ev.get(k)))
+                            except Exception:
+                                pass
+                            schema = (
+                                '{"confidence":"High|Medium|Low","headline":"string",'
+                                '"reasons":[{"type":"Projection|Matchup|Status|Variance|Correlation|FlexAllocation|Consensus|Usage|Confidence","text":"string","evidence":{}}],'
+                                '"tags":["string"],"score_breakdown":{"projection":0,"matchup":0,"correlation":0,"variance":0}}'
+                            )
+                            user_lines = [
+                                f"Headline: {headline}",
+                                f"Confidence: {conf}",
+                                f"Allowed tokens: {', '.join([t for t in allowed_tokens if t])}",
+                                "Candidate reasons (choose up to 2; you may paraphrase but add no new facts):"
+                            ]
+                            for rc in ranked or reason_candidates:
+                                try:
+                                    user_lines.append(f"- {rc['type']}: {rc['text']} :: evidence={json.dumps(rc.get('evidence') or {})}")
+                                except Exception:
+                                    user_lines.append(f"- {rc.get('type','Reason')}: {rc.get('text','')}")
+                            system = (
+                                "You are a rewriting assistant. Return ONLY strict JSON with the schema provided. "
+                                "Select up to two reasons from the list. You may lightly paraphrase but must not introduce new facts or tokens not in Allowed tokens."
+                            )
+                            full_prompt = f"System:\n{system}\n\nSchema:\n{schema}\n\nUser:\n" + "\n".join(user_lines)
+                            ai_text = make_gemini_request(full_prompt, user_key)
+                            raw = (ai_text or '').strip()
+                            if raw.startswith('```'):
+                                raw = raw.strip('`')
+                            s = raw.find('{'); e = raw.rfind('}') + 1
+                            cand = json.loads(raw[s:e]) if s != -1 and e > s else {}
+                            # Minimal validation
+                            if isinstance(cand, dict) and 'headline' in cand and 'reasons' in cand and 'confidence' in cand:
+                                # Cap reasons to 2 and ensure types/texts present
+                                rs = [r for r in (cand.get('reasons') or []) if isinstance(r, dict) and r.get('text')]
+                                # Keep unique by type in order returned
+                                seen = set(); uniq = []
+                                for r in rs:
+                                    tp = r.get('type') or 'Reason'
+                                    if tp in seen:
+                                        continue
+                                    uniq.append(r); seen.add(tp)
+                                cand['reasons'] = uniq[:3]
+                                # Keep our score_breakdown if missing
+                                if not isinstance(cand.get('score_breakdown'), dict):
+                                    cand['score_breakdown'] = score_breakdown
+                                # Preserve our confidence if invalid
+                                if cand.get('confidence') not in ('High','Medium','Low'):
+                                    cand['confidence'] = conf
+                                # Enforce deterministic headline with points
+                                cand['headline'] = headline
+                                # Merge: if fewer than 3 reasons, append from ranked (by type) to reach up to 3
+                                if len(cand['reasons']) < 3:
+                                    have_types = { (r.get('type') or 'Reason') for r in cand['reasons'] }
+                                    for r in ranked:
+                                        tp = r.get('type') or 'Reason'
+                                        if tp in have_types:
+                                            continue
+                                        cand['reasons'].append(r)
+                                        have_types.add(tp)
+                                        if len(cand['reasons']) >= 3:
+                                            break
+                                final_json = cand
+                        except Exception:
+                            final_json = default_json
+
+                    # Optional debug payload to aid testing
+                    try:
+                        debug_flag = False
+                        # Accept body debug=true or query param debug=1
+                        if isinstance(data, dict) and data.get('debug'):
+                            debug_flag = True
+                        if str(request.args.get('debug','')).strip() in ('1','true','True'):
+                            debug_flag = True
+                        if debug_flag:
+                            # Build consensus debug snapshot if variables are in scope
+                            cons_dbg = {}
+                            try:
+                                cons_dbg = {
+                                    'same_pos': same_pos if 'same_pos' in locals() else None,
+                                    'overall_to': overall_to if 'overall_to' in locals() else None,
+                                    'overall_fr': overall_fr if 'overall_fr' in locals() else None,
+                                    'weekly_to': weekly_to if 'weekly_to' in locals() else None,
+                                    'weekly_fr': weekly_fr if 'weekly_fr' in locals() else None,
+                                    'pos_to': pos_to if 'pos_to' in locals() else None,
+                                    'pos_fr': pos_fr if 'pos_fr' in locals() else None,
+                                }
+                            except Exception:
+                                cons_dbg = {}
+                            # Include matchup inputs if available
+                            mu_dbg = {}
+                            try:
+                                mu_dbg = {
+                                    'to': {
+                                        'name': to.get('name'), 'pos': to.get('pos'),
+                                        'opponent': to_opp, 'home_away': to_ha,
+                                        'matchup_difficulty': (md_to_raw if 'md_to_raw' in locals() else None),
+                                    },
+                                    'from': {
+                                        'name': fr.get('name') if fr else None, 'pos': fr.get('pos') if fr else None,
+                                        'opponent': fr_opp, 'home_away': fr_ha,
+                                        'matchup_difficulty': (md_fr_raw if 'md_fr_raw' in locals() else None),
+                                    },
+                                    'matchup_bonus': matchup_bonus
+                                }
+                            except Exception:
+                                mu_dbg = {}
+                            resp.setdefault('debug', {})['lineup_note'] = {
+                                'best_delta': best_delta,
+                                'bias': bias,
+                                'opponent_def_teams': sorted(list(opponent_def_teams)),
+                                'headline': headline,
+                                'reason_candidates': reason_candidates,
+                                'ranked_reasons': ranked,
+                                'consensus_inputs': cons_dbg,
+                                'matchup_inputs': mu_dbg
+                            }
+                    except Exception:
+                        pass
+
+                    # Always use canonical server-computed tags; avoid model-provided names/slots
+                    try:
+                        final_json['tags'] = tags or (['Projection Edge'] if best_delta >= 0.5 else [])
+                    except Exception:
+                        pass
+
+                    # Attach JSON and markdown rendering for current UI
+                    # Ensure score_breakdown reflects computed values (projection + matchup + adjustments)
+                    try:
+                        final_json['score_breakdown'] = score_breakdown
+                    except Exception:
+                        pass
+                    resp['ai_note_json'] = final_json
+                    # Render markdown for backward compatibility
+                    conf_emoji = '✅' if final_json.get('confidence') == 'High' else ('🤔' if final_json.get('confidence') == 'Medium' else '⚠️')
+                    lines = [f"**Confidence: {conf_emoji} {final_json.get('confidence','Medium')}**", "", "---", ""]
+                    lines.append(f"- {final_json.get('headline')}")
+                    for r in (final_json.get('reasons') or [])[:3]:
+                        lines.append(f"- {r.get('text')}")
+                    resp['ai_note'] = "\n".join(lines)
+            except Exception:
+                pass
+
+        return jsonify(resp)
+    except requests.exceptions.RequestException:
+        return jsonify({'error': 'Failed to connect to Yahoo API'}), 500
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 def parse_yahoo_roster_response(data):
     """
     Parse Yahoo API roster response with defensive JSON parsing.
@@ -4272,9 +5064,12 @@ def _build_required_slots_from_roster(roster_players: list[str]) -> list[str]:
 def _can_fill_slot(slot: str, player_position: str) -> bool:
     # Use existing helper when possible
     try:
-        return is_valid_player_for_position({'position': player_position}, slot)
+        # Strip numeric suffixes from slots like WR1/WR2/RB1/RB2
+        base_slot = re.sub(r'\d+$', '', str(slot)) if slot else slot
+        return is_valid_player_for_position({'position': player_position}, base_slot)
     except Exception:
-        slot_u = _normalize_pos(slot)
+        base_slot = re.sub(r'\d+$', '', str(slot)) if slot else slot
+        slot_u = _normalize_pos(base_slot)
         pos = _normalize_pos(player_position)
         if slot_u == 'W/T':
             return pos in ('WR', 'TE')
@@ -4292,6 +5087,9 @@ def _best_lineup(players: list, slots: list[str]) -> tuple[list, float]:
         best_score = -1.0
         for i, pl in enumerate(players):
             if i in used:
+                continue
+            # allow callers to block certain players from being selected (e.g., BYE/OUT)
+            if pl.get('blocked'):
                 continue
             name = pl.get('name')
             position = pl.get('position') or pl.get('primary_position')

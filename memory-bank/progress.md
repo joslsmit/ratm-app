@@ -186,7 +186,7 @@ This document tracks the progress of the RATM Draft Kit project against the defi
 
 ### P0 — Ship before lineups lock
 1) Yahoo‑Integrated Market Inefficiency Finder (sleepers/busts, league‑aware)
-2) Yahoo‑Roster Sit/Start Optimizer (deterministic lineup + optional AI note)
+2) Yahoo‑Roster Sit/Start Optimizer (deterministic lineup + structured AI note)
 3) Waiver v3 Stability QA (invalid AI moves already guarded; verify in live leagues)
 
 ### P1 — After kickoff (1–3 days)
@@ -407,3 +407,10 @@ This document tracks the progress of the RATM Draft Kit project against the defi
 *   **✅ Local Development with mkcert:** Successfully implemented local HTTPS development using `mkcert` instead of `ngrok`. SSL certificates are generated in `backend/certs/` directory. This provides a stable, secure local development environment for Yahoo OAuth testing.
 *   **✅ Yahoo OAuth Flow:** Complete authentication flow working locally with proper token storage and endpoint protection.
 *   **✅ API Integration:** Successfully integrated with Yahoo Fantasy Sports API with proper defensive JSON parsing patterns.
+### ✅ Sit/Start Optimizer Enhancements (Sept 4–5)
+- Structured AI note with headline, confidence, up to 3 grounded reasons, canonical tags, and score breakdown.
+- ECR semantics fixed: overall ECR for cross‑position; weekly positional only within same position; neutral “Overall ECR” context when under threshold.
+- Matchup difficulty (Easy/Moderate/Tough) mapped to a small numeric nudge (±0.10) with explicit reason; opponent/Home‑Away always shown.
+- UI: Structured card renders chips + score row + typed reasons; legacy markdown hidden.
+- Debug: `?debug=1` exposes `consensus_inputs` and `matchup_inputs` for verification.
+- Test script: `./test_script` for headless verification (TOKEN required; optional GEMINI_KEY).

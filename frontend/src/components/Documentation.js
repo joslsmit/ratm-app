@@ -125,6 +125,31 @@ const Documentation = () => {
         </ol>
       </section>
 
+      <section id="sit-start-optimizer" className="doc-section">
+        <h2>Sit/Start Optimizer (Yahoo)</h2>
+        <p>Optimize your weekly lineup using deterministic projections and grounded AI notes. Requires Yahoo login so we can read your roster.</p>
+        <h3>How to Use:</h3>
+        <ol>
+          <li>Login with Yahoo in the sidebar. Open “Sit/Start Optimizer”. Pick a league and (optionally) a week.</li>
+          <li>Click “Optimize My Lineup”. We suggest a starter for each slot and show any changes.</li>
+          <li>Read the structured note: headline, reason bullets with chips (e.g., Projection, Matchup, Overall ECR), and a small score breakdown row.</li>
+        </ol>
+        <h3>What the Note Means</h3>
+        <ul>
+          <li><strong>Headline:</strong> The key change and estimated points gained.</li>
+          <li><strong>Reasons:</strong> Up to three grounded bullets — examples: Projection edge, Easier/Tougher matchup (by opponent vs position), Overall ECR context, Usage (targets/snaps), Confidence (grades), Flex Fit.</li>
+          <li><strong>Tags:</strong> Quick chips summarizing the signals (Projection Edge, Favorable Matchup, Consensus, etc.).</li>
+          <li><strong>Score breakdown:</strong> Projection plus small nudges for matchup (±0.10), correlation, and variance where applicable.</li>
+        </ul>
+        <h3>How Data Is Used</h3>
+        <ul>
+          <li><strong>Projections:</strong> Weekly PPR projections drive selection. We exclude BYE/OUT; Q/D are allowed but flagged.</li>
+          <li><strong>Matchup:</strong> Opponent and home/away are shown. If the opponent’s defense rates easier or tougher for the player’s position (Easy/Moderate/Tough), we add a small numeric nudge and a clear reason (e.g., Easier matchup this week: WR vs ARI (Easy)).</li>
+          <li><strong>ECR semantics:</strong> Lower rank is better. For cross‑position decisions (flex), we compare overall ECR; for same‑position decisions, we compare weekly positional rank. We never compare positional ranks across positions.</li>
+        </ul>
+        <p>Notes are strictly grounded. If a field isn’t available (e.g., usage), we omit that reason rather than guessing.</p>
+      </section>
+
       <section id="settings" className="doc-section">
         <h2>Settings</h2>
         <p>Manage your preferences. Set your Gemini API key (for AI), switch themes, and reset local data. Yahoo login is available from the sidebar.</p>

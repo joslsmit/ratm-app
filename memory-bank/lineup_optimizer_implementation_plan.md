@@ -1,7 +1,7 @@
 # Lineup Optimizer Implementation Plan — Hybrid (Deterministic + AI)
 
 > Priority: HIGH — In‑Season Functionality Enhancement  
-> Status: READY FOR IMPLEMENTATION  
+> Status: PARTIALLY IMPLEMENTED (Yahoo mode live)  
 > Last Updated: August 31, 2025  
 > Estimated Effort: 12–16 hours dev + 4–6 hours testing  
 > Complexity: MEDIUM (reuses existing infra)  
@@ -98,9 +98,12 @@ Success Response (common):
     "excluded": ["Player X (OUT)", "Player Y (IR)", "Defense Z (BYE)"],
     "flagged": ["Player Q (Questionable)", "Player D (Doubtful)"]
   },
-  "ai_note": {
+  "ai_note_json": {
     "confidence": "High|Medium|Low",
-    "analysis": "markdown string"
+    "headline": "string",
+    "reasons": [{"type":"Projection|Matchup|Status|Variance|Correlation|FlexAllocation|Consensus|Usage|Confidence|Context","text":"string","evidence":{}}],
+    "tags": ["string"],
+    "score_breakdown": { "projection": number, "matchup": number, "correlation": number, "variance": number }
   }
 }
 ```
@@ -152,24 +155,20 @@ Notes:
 - If we later add an ILP/Hungarian solver, this interface remains stable.
 
 ## 6. AI “Analyst’s Note” (Concise Narrative)
-- Purpose: Explain the most impactful 1–2 lineup changes in 1–3 short paragraphs max.
+- Purpose: Explain the most impactful change in up to three grounded bullets, with small score chips.
 - Prompting:
   - System: "You are a fantasy football analyst. Explain the key lineup change(s) succinctly and data‑driven."
   - User context includes: player_in/out, projections, opponent, status flags, and why the optimizer preferred one over the other (projection delta, slot scarcity, matchup).
 - Implementation:
   - Use `PromptBuilder` (extend with `build_lineup_note_prompt`), then call Gemini with user `X-API-Key`.
-  - Process via `process_ai_response_v2` with expected `{ confidence, analysis }`.
+- Process via `process_ai_response_v2` or strict JSON parse; attach `ai_note_json` with `{ confidence, headline, reasons[], tags[], score_breakdown{} }`.
 - Failure mode: If AI call fails, omit `ai_note` and still return deterministic result.
 
 ## 7. Frontend UI/UX
 - Mode toggle: Reuse Waiver Wire Assistant component; add `assistantMode = 'waiver' | 'lineup'`.
 - Action button: “Optimize My Lineup” (Yahoo mode) or “Analyze Current Lineup” (traditional mode).
-- Side‑by‑side view: Current vs Suggested with:
-  - Green up arrow for bench→starter, red down arrow for starter→bench.
-  - Status chips (Q/D) and BYE/OUT badges.
-  - Total projected points delta.
-- Loader and errors: Reuse existing loader styling and error box patterns.
-- Markdown render: Display `ai_note.analysis` below results as “Analyst’s Note.”
+- Side‑by‑side view: Current vs Suggested with changes and points total.
+- Structured note card: tags (chips), score breakdown chips (projection, matchup ±0.10, etc.), headline, and typed reason bullets. Legacy markdown hidden.
 
 ## 8. Security & Config
 - Yahoo OAuth: Reuse existing header/token flow; do not persist tokens server‑side.
@@ -192,6 +191,7 @@ Notes:
   - Yahoo mode: Mock Yahoo roster and league slots; verify optimizer output and `diff` correctness.
   - Traditional mode: Provide manual roster payload; verify same core results.
   - Error paths: Missing token, empty roster, no eligible players, AI failure (still returns deterministic result).
+  - Debug: Use `?debug=1` to inspect `consensus_inputs` and `matchup_inputs` (raw values and applied bonus) for transparency.
 - Frontend:
   - Render tests for mode toggle, loader, error display, and side‑by‑side diff.
   - Snapshot test for result rendering with `ai_note` present/absent.
@@ -249,4 +249,3 @@ Phase F — Tests & Polish (3–4h)
 ---
 
 This plan merges deterministic optimization for correctness and speed with concise AI explanations for user trust and clarity. It reuses your existing Yahoo integration, data enrichment, PromptBuilder, and response processing, minimizing risk and time‑to‑ship while ensuring a professional, testable implementation.
-

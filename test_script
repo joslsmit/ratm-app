@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+
+# Simple tester for /api/optimize_lineup
+# Usage:
+#   export TOKEN="<Yahoo OAuth access token>"
+#   export GEMINI_KEY="<optional Gemini API key>"
+#   export BACKEND="http://localhost:5000/api"   # optional; defaults to localhost
+#   export LEAGUE_KEY="461.l.42889"               # optional; defaults to sample
+#   export TEAM_KEY="461.l.42889.t.8"             # optional; defaults to sample
+#   export WEEK=1                                  # optional
+#   bash test_script
+
+set -euo pipefail
+
+if [[ -z "${TOKEN:-}" ]]; then
+  echo "ERROR: TOKEN env var not set. Run: export TOKEN='your yahoo token'" >&2
+  exit 1
+fi
+
+# Default to HTTPS localhost (mkcert dev) per project docs
+BACKEND_URL=${BACKEND:-"https://localhost:5000/api"}
+LEAGUE_KEY=${LEAGUE_KEY:-"461.l.42889"}
+TEAM_KEY=${TEAM_KEY:-"461.l.42889.t.8"}
+WEEK_VAL=${WEEK:-""}
+
+BODY=$(jq -n \
+  --arg mode "yahoo" \
+  --arg team "$TEAM_KEY" \
+  --arg league "$LEAGUE_KEY" \
+  --argjson debug true \
+  --arg weekStr "${WEEK_VAL}" \
+  '{mode:$mode, team_key:$team, league_key:$league, debug:$debug} + ( ($weekStr|length)>0 ? {week: ($weekStr|tonumber)} : {} )' 2>/dev/null || true)
+
+if [[ -z "$BODY" ]]; then
+  # Fallback if jq is unavailable
+  if [[ -n "$WEEK_VAL" ]]; then
+    BODY="{\"mode\":\"yahoo\",\"team_key\":\"$TEAM_KEY\",\"league_key\":\"$LEAGUE_KEY\",\"week\":$WEEK_VAL,\"debug\":true}"
+  else
+    BODY="{\"mode\":\"yahoo\",\"team_key\":\"$TEAM_KEY\",\"league_key\":\"$LEAGUE_KEY\",\"debug\":true}"
+  fi
+fi
+
+echo "POST $BACKEND_URL/optimize_lineup"
+echo "League: $LEAGUE_KEY"
+echo "Team:   $TEAM_KEY"
+if [[ -n "${WEEK_VAL}" ]]; then echo "Week:   $WEEK_VAL"; fi
+if [[ -z "${GEMINI_KEY:-}" ]]; then
+  echo "Note: No GEMINI_KEY in env; proceeding without X-API-Key header." >&2
+  echo "      The frontend uses localStorage for this header; curl cannot access browser storage." >&2
+fi
+
+HDR_X_API=""
+if [[ -n "${GEMINI_KEY:-}" ]]; then
+  HDR_X_API=( -H "X-API-Key: $GEMINI_KEY" )
+fi
+
+args=( -sS -X POST "$BACKEND_URL/optimize_lineup?debug=1" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "$BODY" )
+
+if [[ -n "${GEMINI_KEY:-}" ]]; then
+  args+=( -H "X-API-Key: $GEMINI_KEY" )
+fi
+
+# If hitting local HTTPS with self-signed/trust chain issues, allow opting out of cert verification
+# export INSECURE=1 to add -k automatically; or it will be added if BACKEND_URL targets https://localhost
+if [[ "${INSECURE:-}" == "1" ]] || [[ "$BACKEND_URL" =~ ^https://localhost ]]; then
+  args=( -k "${args[@]}" )
+fi
+
+RESP=$(curl "${args[@]}")
+
+if command -v jq >/dev/null 2>&1; then
+  echo "$RESP" | jq .
+else
+  echo "$RESP"
+fi
+
+echo
+echo "--- Summary ---"
+if command -v jq >/dev/null 2>&1; then
+  echo "$RESP" | jq -r '
+    "Headline: \(.ai_note_json.headline // "(none)")",
+    "Confidence: \(.ai_note_json.confidence // "(none)")",
+    "Reasons:",
+    (.ai_note_json.reasons // [] | map("- " + (.text // "")) | .[]),
+    "Tags: \((.ai_note_json.tags // []) | join(", "))",
+    "Score: \((.ai_note_json.score_breakdown // {} ) | to_entries | map(.key + ": " + (if (.value|tonumber) >= 0 then "+" else "" end) + ((.value|tonumber)|tostring)) | join(" | "))"
+  '
+else
+  echo "Enable jq for a summarized view."
+fi

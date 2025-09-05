@@ -29,6 +29,10 @@ The application provides a suite of tools categorized for player analysis and te
     - Recommendations‑first UX with concise “Why” bullets by default; numbers on demand.
     - Source chip indicates whether a card is AI‑ranked or deterministic fallback.
     - Player names link to Player Dossier for deeper research.
+*   **Sit/Start Optimizer (Yahoo):** ✅ Optimizes weekly lineup from deterministic projections with grounded AI notes.
+    - Structured card shows: tags (Projection Edge, Favorable Matchup, etc.), numeric score chips (projection, matchup ±0.10), headline, and up to 3 typed reasons.
+    - ECR semantics enforced: overall ECR used for cross‑position decisions; weekly positional rank only within same position; neutral “Overall ECR” context when gaps are small.
+    - Matchup uses opponent + HOME/AWAY context; categorical difficulty (Easy/Moderate/Tough) adds a small numeric nudge when meaningful.
 *   **Market Inefficiency Finder (Yahoo Enhanced):** ✅ Identifies undervalued and overvalued players with two modes: (1) Traditional mode for general market analysis, and (2) Yahoo mode for league-specific analysis incorporating ownership patterns, league size, competitive level, and personalized player recommendations.
 
 ### Utility Features:
