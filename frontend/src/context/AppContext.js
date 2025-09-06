@@ -29,7 +29,6 @@ export const AppProvider = ({ children }) => {
   // States for list-based tools
   const [targetList, setTargetList] = useState([]);
 
-  const [ecrTypePreference, setEcrTypePreference] = useState('overall');
 
   const converter = useMemo(() => new showdown.Converter({ simplifiedAutoLink: true, tables: true, strikethrough: true }), []);
 
@@ -89,8 +88,7 @@ export const AppProvider = ({ children }) => {
     setLastUpdateDate,
     targetList,
     setTargetList,
-    ecrTypePreference,
-    setEcrTypePreference,
+    // ecrTypePreference removed: default to overall semantics everywhere
     converter,
     API_BASE_URL,
     setShowApiKeyModal

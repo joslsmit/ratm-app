@@ -9,7 +9,6 @@ function DraftAssistant({
   handleGlobalSearch,
   converter,
   activeTool,
-  ecrTypePreference,
   getOverallSdLabel,
   getPositionalSdLabel,
   normalizePlayerName
@@ -192,7 +191,6 @@ function DraftAssistant({
               allPlayers={allPlayers}
               handleGlobalSearch={handleGlobalSearch}
               initialPlayerName={draftBoard[round]}
-              ecrTypePreference={ecrTypePreference}
               getOverallSdLabel={getOverallSdLabel}
               getPositionalSdLabel={getPositionalSdLabel}
               normalizePlayerName={normalizePlayerName}

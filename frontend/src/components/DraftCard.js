@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import autoComplete from '@tarekraafat/autocomplete.js';
 
-function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handleGlobalSearch, initialPlayerName, ecrTypePreference, getOverallSdLabel, getPositionalSdLabel, normalizePlayerName }) {
+function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handleGlobalSearch, initialPlayerName, getOverallSdLabel, getPositionalSdLabel, normalizePlayerName }) {
     const [isEditing, setIsEditing] = useState(false);
     const [playerName, setPlayerName] = useState(initialPlayerName || '');
     const autoCompleteRef = useRef(null);
@@ -64,8 +64,7 @@ function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handle
     const playerData = playerName ? staticPlayerData[normalizePlayerName(playerName)] : null;
     const position = playerData?.position;
 
-    // Determine which ECR to display based on the global preference
-
+    // Determine consensus labels — default to overall
     const getSdConsensus = (ecrType) => {
         if (!playerData) return { label: 'N/A', icon: '' };
         const sdValue = playerData[`sd_${ecrType}`];
@@ -93,7 +92,7 @@ function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handle
         return playerData[`worst_${ecrType}`] || 'N/A';
     };
 
-    const sdConsensus = getSdConsensus(ecrTypePreference);
+    const sdConsensus = getSdConsensus('overall');
 
     return (
         <div className={`round-card pos-${position?.toLowerCase()}`}>
@@ -115,8 +114,8 @@ function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handle
             {playerData && (
                 <div className="draft-card-details">
                     <div className="detail-row">
-                        <span>ECR ({ecrTypePreference === 'overall' ? 'Overall' : 'Positional'}):</span>
-                        <span>{displayEcr(ecrTypePreference)}</span>
+                        <span>ECR (Overall):</span>
+                        <span>{displayEcr('overall')}</span>
                     </div>
                     <div className="detail-row">
                         <span>Consensus:</span>
@@ -124,11 +123,11 @@ function DraftCard({ round, staticPlayerData, saveDraftBoard, allPlayers, handle
                     </div>
                     <div className="detail-row">
                         <span>Best:</span>
-                        <span>{displayBest(ecrTypePreference)}</span>
+                        <span>{displayBest('overall')}</span>
                     </div>
                     <div className="detail-row">
                         <span>Worst:</span>
-                        <span>{displayWorst(ecrTypePreference)}</span>
+                        <span>{displayWorst('overall')}</span>
                     </div>
                     <div className="detail-row">
                         <span>Bye:</span>

@@ -49,8 +49,6 @@ function App() {
     setLastUpdateDate,
     targetList,
     setTargetList,
-    ecrTypePreference,
-    setEcrTypePreference,
     converter,
     API_BASE_URL,
     setShowApiKeyModal
@@ -58,10 +56,7 @@ function App() {
 
   const { makeApiRequest, get } = useApi();
 
-  const [navSections, setNavSections] = useState({
-    playerAnalysis: false,
-    teamManagement: false,
-  });
+  // Legacy navSections removed; sidebar now groups by season mode internally
 
   const [sortDirection, setSortDirection] = useState({ name: 'asc', position: 'asc', adds: 'desc', team: 'asc', ecr: 'asc' });
   const [keeperList, setKeeperList] = useState([]);
@@ -228,6 +223,14 @@ function App() {
       .then(data => {
         if (data) {
           setDossierResult(data);
+          // Record recent player for quick access in sidebar
+          try {
+            const key = 'recentDossierPlayers';
+            const arr = JSON.parse(localStorage.getItem(key) || '[]');
+            const nm = nameToFetch.trim();
+            const next = [nm, ...arr.filter(x => x.toLowerCase() !== nm.toLowerCase())].slice(0,3);
+            localStorage.setItem(key, JSON.stringify(next));
+          } catch (_) {}
         } else {
           setDossierResult({ error: 'The Analyst returned an empty response.' });
         }
@@ -954,9 +957,6 @@ function App() {
       <Sidebar
         activeTool={activeTool}
         targetList={targetList}
-        navSections={navSections}
-        toggleNavSection={toggleNavSection}
-        setEcrTypePreference={setEcrTypePreference}
       />
 
       <div className="main-content">
@@ -1046,7 +1046,6 @@ function App() {
               handleGlobalSearch={handleGlobalSearch}
               converter={converter}
               activeTool={activeTool}
-              ecrTypePreference={ecrTypePreference}
               getOverallSdLabel={getOverallSdLabel}
               getPositionalSdLabel={getPositionalSdLabel}
               normalizePlayerName={normalizePlayerName}

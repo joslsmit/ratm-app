@@ -2,7 +2,7 @@ import { useState, useCallback, useContext } from 'react';
 import { AppContext } from '../context/AppContext';
 
 export const useApi = () => {
-  const { userApiKey, ecrTypePreference, API_BASE_URL, setShowApiKeyModal } = useContext(AppContext);
+  const { userApiKey, API_BASE_URL, setShowApiKeyModal } = useContext(AppContext);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -28,7 +28,7 @@ export const useApi = () => {
           'Content-Type': 'application/json',
           'X-API-Key': userApiKey
         },
-        body: JSON.stringify({ ...body, ecr_type_preference: ecrTypePreference }),
+        body: JSON.stringify({ ...body }),
       });
       
       if (!response.ok) {
@@ -45,7 +45,7 @@ export const useApi = () => {
       setIsLoading(false);
       throw err;
     }
-  }, [userApiKey, ecrTypePreference, API_BASE_URL, setShowApiKeyModal]);
+  }, [userApiKey, API_BASE_URL, setShowApiKeyModal]);
 
   const get = useCallback(async (endpoint, options = {}) => {
     setIsLoading(true);
