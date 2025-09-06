@@ -337,3 +337,7 @@ Next up:
 - ✅ Endpoints: `/api/yahoo/roster` and `/api/yahoo/roster_debug` hardened; explicit Bearer auth + JSON accept
 - ✅ Frontend: My Team shows accurate roster slot badge (Starter/Flex/Bench/IR) and explicit slot line
 - 🎯 Outcome: Correct names + slot codes (e.g., BN, W/T, W/R/T) displayed; verified via roster_debug `slot_samples`
+### ✅ Player Dossier UX — Phases A + B Complete (September 6, 2025)
+- Interpreted badges and concise guidance standardized across Weekly Outlook, Market/Ownership, and Age/Trajectory; unified chip style ensures consistent visuals.
+- Responsive layout: Weekly and Market sections use 2‑column grids on desktop, stack on mobile; section order remains CSS‑controlled for stability.
+- Backend dossier test suite green; defensive rendering patterns preserved; no regressions introduced.

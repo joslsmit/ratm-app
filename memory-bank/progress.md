@@ -2,7 +2,7 @@
 
 > **File Type**: GO-FORWARD  
 > **Review Priority**: High  
-> **Last Updated**: September 4, 2025 (Week 1 priorities captured; Dossier & Waiver v3 updates)  
+> **Last Updated**: September 6, 2025 (Player Dossier UX complete; Week 1 priorities)  
 > **Purpose**: Overall project progress and current development phase
 
 This document tracks the progress of the RATM Draft Kit project against the defined deployment and integration plan.
@@ -414,3 +414,8 @@ This document tracks the progress of the RATM Draft Kit project against the defi
 - UI: Structured card renders chips + score row + typed reasons; legacy markdown hidden.
 - Debug: `?debug=1` exposes `consensus_inputs` and `matchup_inputs` for verification.
 - Test script: `./test_script` for headless verification (TOKEN required; optional GEMINI_KEY).
+### Phase 7: Player Dossier UX Enhancement (Phases A + B)
+*   **Status:** **✅ COMPLETED (September 2025)**
+*   **Outcome:** Interpreted badges and concise guidance across Weekly Outlook, Market/Ownership, and Age/Trajectory; unified chip styling; responsive 2‑column Weekly/Market grids; CSS‑controlled section order preserved.
+*   **Quality:** Backend dossier test suite (6/6) passing; null‑safe rendering; no regression to existing flows.
+*   **Docs:** See `PLAYER_DOSSIER_UX_ENHANCEMENT_STATUS.md` for final plan/outcomes and run instructions.
