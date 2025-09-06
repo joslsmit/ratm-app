@@ -131,7 +131,7 @@ const Sidebar = ({ activeTool, targetList }) => {
               {(seasonMode === 'in' ? inSeason : preSeason).map(item => (
                 <li key={item.key}>
                   <a href={`#${item.key}`} className={activeTool === item.key ? 'active' : ''}>
-                    <span className="nav-icon" aria-hidden>{item.icon}</span> {item.label}
+                    {item.label}
                     {item.yahoo && <span className="badge" title="Yahoo"><span>Y</span></span>}
                     {typeof item.badge === 'number' ? <span className="badge">{item.badge}</span> : null}
                   </a>

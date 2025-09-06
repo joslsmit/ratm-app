@@ -43,11 +43,13 @@ This document provides detailed technical information about the RATM Draft Kit p
 *   **Frontend `API_BASE_URL`:** Configured in `frontend/src/context/AppContext.js`.
     *   Local: `https://localhost:5000/api` (using `mkcert` for HTTPS)
     *   Production: `https://ratm-app.onrender.com/api`
-*   **Backend `/api/*` endpoints:** All API endpoints are prefixed with `/api/` (e.g., `/api/player_dossier`, `/api/rookie_rankings`). Key waiver endpoints:
+*   **Backend `/api/*` endpoints:** All API endpoints are prefixed with `/api/` (e.g., `/api/player_dossier`, `/api/rookie_rankings`). Key endpoints:
     - `GET /api/yahoo/waiver_pool`
     - `POST /api/yahoo/waiver_recommendations_v2`
     - `POST /api/yahoo/waiver_recommendations_ai` — AI‑authority, supports `?debug=1` to return full prompt and diagnostics
-    - `POST /api/optimize_lineup` — Yahoo lineup optimizer: returns `suggested_lineup`, `diff`, `eligibility_info`, plus `ai_note_json` with `{ confidence, headline, reasons[], tags[], score_breakdown{} }`. Supports `?debug=1` (or body `{debug:true}`) to include `consensus_inputs` and `matchup_inputs` for transparency.
+    - `POST /api/optimize_lineup` — Yahoo lineup optimizer: returns `suggested_lineup`, `diff`, `eligibility_info`, plus `ai_note_json` with `{ confidence, headline, reasons[], tags[], score_breakdown{} }`. Supports `?debug=1` (or body `{debug:true}`) to include `consensus_inputs`, `matchup_inputs`, `opponent_projection`, and `slots_filled`.
+    - `GET /api/diagnostics/yahoo-data-health` — League diagnostics (CSV freshness, enrichment coverage); requires Yahoo Authorization and `league_key`.
+    - `POST /api/admin/refresh_data` — Admin/developer CSV refresh that rebuilds caches.
 
 ### C. CORS Configuration
 *   **Location:** `backend/app.py`
@@ -59,9 +61,10 @@ This document provides detailed technical information about the RATM Draft Kit p
 *   **Purpose:** Ensures the browser allows the frontend to make requests to the backend API.
 *   **Production Issue Resolution (August 27, 2025):** Added `https://ratm-app.vercel.app` to CORS origins to resolve "Access-Control-Allow-Origin" errors when frontend deployed to production.
 
-### D. Data Paths
+### D. Data & Navigation
 *   **`basedir`:** Defined in `backend/app.py` to correctly resolve paths to local data files.
 *   **CSV Files:** `db_fpecr_latest.csv`, `values-players.csv`, `values-picks.csv` are expected to be present in the `backend/` directory.
+*   **Navigation:** Sidebar uses a Season Mode switch (In‑Season / Pre‑Season) with a Show All toggle; quick actions provide direct access to common in‑season tools.
 
 ## 3. Tool-Specific Context
 
@@ -174,4 +177,4 @@ This document provides detailed technical information about the RATM Draft Kit p
 - ECR: overall ECR used for cross‑position; weekly positional rank only for same‑position; neutral Overall ECR context when gaps are small.
 - Matchup: opponent + HOME/AWAY always shown; categorical difficulty (Easy/Moderate/Tough) mapped and surfaced when meaningful with a small numeric nudge.
 - UI renders structured card only; markdown hidden.
-- Test script: project root `./test_script` — set `TOKEN` (Yahoo), optional `GEMINI_KEY`; add `INSECURE=1` if using mkcert locally.
+- Test script: project root `./test_script` — set `TOKEN` (Yahoo), optional `GEMINI_KEY`; add `INSECURE=1` if using mkcert locally. Smoketest also available at `scripts/test_lineup_optimizer.zsh`.

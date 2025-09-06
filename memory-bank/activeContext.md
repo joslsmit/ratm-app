@@ -71,6 +71,22 @@
     *   Responsive design with CSS variables and theming support
     *   All Yahoo API foundation work completed and tested
 
+### September 6, 2025 — Navigation, Optimizer, and Settings Updates
+
+**✅ Sidebar — Season Mode + Cleanup**
+- Added Season Mode filter: In‑Season vs Pre‑Season with a Show All toggle.
+- Quick actions row: Player search (Dossier), Sit/Start, Waiver, plus Yahoo status chip.
+- Removed ECR Type toggle app‑wide (default to overall semantics), and removed decorative icons for a clean, modern look.
+- Recent Dossier chips deep‑link directly to Dossier (pre‑filled and executed).
+
+**✅ Sit/Start (Yahoo) — UX + Micro‑fixes**
+- Frontend: “Include debug” checkbox, confidence chip, delta points pill, ordered tags.
+- Backend: Confidence downgrade applies when chosen starter is Q/D; matchup tag gated to categorical changes; debug payload includes opponent_projection and slots_filled.
+
+**✅ Settings — Data Health Card**
+- Shows CSV freshness, weekly projections row count/latest scrape date, and enrichment coverage (roster and first 100 A‑status waivers).
+- “Refresh Data (Admin)” triggers CSV re‑download + cache rebuild and rechecks diagnostics.
+
 ## 4. Current Implementation Status
 *   **📋 Documentation Phase Complete:** Comprehensive implementation documentation created
     *   Complete step-by-step implementation guide with exact code changes

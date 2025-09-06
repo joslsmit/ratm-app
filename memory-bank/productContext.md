@@ -38,17 +38,18 @@ The application provides a suite of tools categorized for player analysis and te
 ### Utility Features:
 *   **API Key Management:** Users provide their own Google Gemini API key, stored locally in their browser for privacy and security.
 *   **Yahoo API Integration:** ✅ OAuth authentication with Yahoo Fantasy Sports for personalized league data, roster analysis, and waiver wire recommendations.
+*   **Data Health (Settings):** ✅ Diagnostics card shows CSV freshness and enrichment coverage; supports an admin refresh action to rebuild data caches.
 *   **Data Refresh:** Backend data (ECR, player values) is periodically refreshed to ensure up-to-date information.
 *   **Theme Toggle:** Users can switch between dark and light themes.
 *   **Application Reset:** Option to clear all local data (API key, saved lists, draft board).
 *   **Documentation:** Provides information on how to use the application and its features.
 
 ## 3. User Experience & Interaction
-*   **Intuitive Navigation:** A sidebar allows easy switching between different tools.
+*   **Season‑Aware Navigation:** The sidebar groups tools by Season Mode (In‑Season vs Pre‑Season) with a Show All toggle. A quick actions row exposes Player Dossier search, Sit/Start, and Waiver, plus a Yahoo status chip. Recent Dossier chips deep‑link to player dossiers.
 *   **Player Search:** Global search and tool-specific autocomplete fields facilitate quick player lookups.
 *   **Data Visualization:** ECR data, standard deviations, and other metrics are presented clearly to aid user understanding.
 *   **AI Integration:** AI analysis is integrated directly into tool results, providing narrative insights alongside raw data.
-*   **Configurability:** Users can adjust settings like ECR type preference (overall, positional, rookie) to tailor analysis to their needs.
+*   **Configurability:** ECR Type toggle removed; the app defaults to overall ECR semantics and uses positional ranks only for within‑position comparisons.
 
 ## 4. Key Data & Insights
 The application leverages various data points to generate its insights:

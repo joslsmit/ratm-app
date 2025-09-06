@@ -198,6 +198,18 @@ This document tracks the progress of the RATM Draft Kit project against the defi
 - Token security (cookie/server exchange) and short‑TTL caching for roster/pool
 - Settings “Data Health” card (CSV freshness, coverage)
 
+### Phase 7: Settings — Data Health Card
+*   **Status:** ✅ COMPLETED (September 6, 2025)
+*   **Details:** Added diagnostics to Settings showing CSV freshness, weekly projections row counts/latest scrape date, and enrichment coverage (roster and waivers). Includes an admin refresh action to re‑download CSVs and rebuild caches.
+
+### Phase 8: Sit/Start Optimizer — Yahoo‑Only UX + Micro‑Fixes
+*   **Status:** ✅ COMPLETED (September 6, 2025)
+*   **Details:** Frontend added Include debug checkbox, confidence chip, delta pill, and ordered tags. Backend adjusted confidence for Q/D on chosen starter, gated matchup tags to categorical differences, and added richer debug meta.
+
+### Phase 9: Sidebar — Season Mode & Cleanup
+*   **Status:** ✅ COMPLETED (September 6, 2025)
+*   **Details:** Added Season Mode (In‑Season/Pre‑Season) and Show All toggle; quick actions row; Yahoo status chip; removed ECR Type toggle; removed icons for a cleaner look; Dossier recents deep‑link to players.
+
 ### 🥇 ✅ COMPLETED: Phase 6 - AI-Powered Waiver Wire Assistant (Yahoo Integrated)
 *   **Status:** **🎉 FULLY COMPLETED - Ready for Post-Draft Testing**
 *   **Implementation Date:** August 18, 2025
