@@ -18,6 +18,15 @@ const Documentation = () => {
       <h1>App Documentation</h1>
       <p>Welcome to RATM. This guide explains how to use each tool at a glance. It focuses on what you do and what the AI shows, without going into distracting detail.</p>
 
+      <section id="navigation" className="doc-section">
+        <h2>Navigation & Modes</h2>
+        <ul>
+          <li><strong>Season Mode:</strong> Use the sidebar switch to view <em>In‑Season</em> or <em>Pre‑Season</em> tools. Turn on “Show All” to see both groups at once.</li>
+          <li><strong>Quick Actions:</strong> At the top of the sidebar, use the Dossier search box and shortcut chips for <em>Sit/Start</em> and <em>Waiver</em>. A Yahoo status chip indicates if you’re connected.</li>
+          <li><strong>Recent Dossiers:</strong> The last few players you looked up appear as chips; click one to open the Player Dossier for that player immediately.</li>
+        </ul>
+      </section>
+
       <section id="player-dossier" className="doc-section">
         <h2>Player Dossier</h2>
         <p>The Player Dossier gives a fast, structured view of a player, plus a concise AI take. Sections appear in this order: Quick Scan → Player Overview → Expert Consensus & Rankings → AI Analysis → Weekly Outlook → Market/Ownership → Age/Trajectory.</p>
@@ -159,6 +168,11 @@ const Documentation = () => {
           <li>Toggle dark/light theme as preferred.</li>
           <li>Use Reset to clear local storage (API key, targets, etc.).</li>
         </ol>
+        <h3>Data Health</h3>
+        <ul>
+          <li><strong>Diagnostics:</strong> Shows CSV freshness, weekly projections latest scrape, and match rates for roster and waivers.</li>
+          <li><strong>Refresh Data (Admin):</strong> For local/dev, re‑download CSVs and rebuild caches, then re‑check diagnostics.</li>
+        </ul>
       </section>
     </div>
   );
