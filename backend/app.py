@@ -3758,9 +3758,12 @@ def optimize_lineup():
 
                     # Confidence and tags
                     conf = 'High' if best_delta >= 2.0 else 'Medium' if best_delta >= 0.5 else 'Low'
-                    # Slightly reduce confidence for Q/D
-                    if fr and str(fr.get('status','')).upper() in ('Q','D') and conf == 'High':
-                        conf = 'Medium'
+                    # Slightly reduce confidence when the chosen starter is Questionable/Doubtful
+                    try:
+                        if to and str(to.get('status','')).upper() in ('Q','D') and conf == 'High':
+                            conf = 'Medium'
+                    except Exception:
+                        pass
                     # Slightly reduce if consensus strongly disagrees and projection edge is modest
                     try:
                         cons = next((rc for rc in reason_candidates if rc.get('type') == 'Consensus' and rc.get('evidence') and rc['evidence'].get('supports') is False), None)
@@ -3780,8 +3783,11 @@ def optimize_lineup():
                             tags.append('Consensus Diff')
                     except Exception:
                         pass
-                    if to_opp or fr_opp:
+                    # Only tag matchup when categorical difference triggered a nudge
+                    if matchup_bonus >= 0.1:
                         tags.append('Favorable Matchup')
+                    elif matchup_bonus <= -0.1:
+                        tags.append('Tough Matchup')
                     if corr_applied:
                         tags.append('Correlation Risk')
                     if var_applied:
@@ -3988,7 +3994,8 @@ def optimize_lineup():
                                 }
                             except Exception:
                                 mu_dbg = {}
-                            resp.setdefault('debug', {})['lineup_note'] = {
+                            dbg = resp.setdefault('debug', {})
+                            dbg['lineup_note'] = {
                                 'best_delta': best_delta,
                                 'bias': bias,
                                 'opponent_def_teams': sorted(list(opponent_def_teams)),
@@ -3998,6 +4005,15 @@ def optimize_lineup():
                                 'consensus_inputs': cons_dbg,
                                 'matchup_inputs': mu_dbg
                             }
+                            # Additional high-level debug fields
+                            try:
+                                dbg['opponent_projection'] = opponent_projection
+                            except Exception:
+                                pass
+                            try:
+                                dbg['slots_filled'] = slots_sorted
+                            except Exception:
+                                pass
                     except Exception:
                         pass
 

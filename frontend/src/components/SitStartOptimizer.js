@@ -13,6 +13,7 @@ export default function SitStartOptimizer() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [includeDebug, setIncludeDebug] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('yahoo_token');
@@ -43,7 +44,7 @@ export default function SitStartOptimizer() {
     try {
       const tokenObj = JSON.parse(localStorage.getItem('yahoo_token') || '{}');
       const auth = `Bearer ${tokenObj.access_token}`;
-      const body = { mode: 'yahoo', team_key: teamKey, league_key: leagueKey || undefined, week: week || undefined };
+      const body = { mode: 'yahoo', team_key: teamKey, league_key: leagueKey || undefined, week: week || undefined, ...(includeDebug ? { debug: true } : {}) };
       const rsp = await fetch(`${API_BASE_URL}/optimize_lineup`, { method: 'POST', headers: { 'Authorization': auth, 'Content-Type': 'application/json', 'X-API-Key': localStorage.getItem('geminiApiKey') || '' }, body: JSON.stringify(body) });
       if (!rsp.ok) { const e = await rsp.json().catch(()=>({})); throw new Error(e.error || `HTTP ${rsp.status}`); }
       const data = await rsp.json();
@@ -78,6 +79,9 @@ export default function SitStartOptimizer() {
             <label>Week:&nbsp;</label>
             <input type="number" min="1" max="18" value={week} onChange={(e)=>setWeek(e.target.value)} style={{ width: 80 }} />
           </div>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <input type="checkbox" checked={includeDebug} onChange={(e)=>setIncludeDebug(e.target.checked)} /> Include debug
+          </label>
           <button onClick={optimize} disabled={loading || !teamKey}>{loading ? 'Optimizing…' : 'Optimize My Lineup'}</button>
         </div>
       </div>
@@ -116,10 +120,41 @@ export default function SitStartOptimizer() {
           )}
           {result.ai_note_json && (
             <div style={{ marginTop: 12 }}>
+              {/* Headline with confidence + delta pill */}
+              {(() => {
+                const conf = (result.ai_note_json.confidence || '').trim();
+                const headline = result.ai_note_json.headline || '';
+                // Try to extract (+N.N pts) for a delta pill
+                let delta = '';
+                const m = headline.match(/\(([-+]?\d+(?:\.\d+)?)\s*pts\)/i);
+                if (m && m[1]) delta = `${Number(m[1]) >= 0 ? '+' : ''}${Number(m[1]).toFixed(1)} pts`;
+                // Confidence chip style
+                const chipColor = conf === 'High' ? '#28a745' : conf === 'Medium' ? '#007bff' : '#6c757d';
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+                    {conf && (
+                      <span style={{ padding: '2px 8px', borderRadius: 12, border: `1px solid ${chipColor}`, color: chipColor, fontSize: 12, fontWeight: 600 }}>{conf}</span>
+                    )}
+                    {delta && (
+                      <span style={{ padding: '2px 8px', borderRadius: 12, border: '1px solid #e5e7eb', background: '#f7f7f9', fontSize: 12, fontWeight: 600 }}>{delta}</span>
+                    )}
+                    <span style={{ fontWeight: 600 }}>{headline}</span>
+                  </div>
+                );
+              })()}
               {/* Tags */}
               {Array.isArray(result.ai_note_json.tags) && result.ai_note_json.tags.length > 0 && (
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-                  {result.ai_note_json.tags.map((t, idx) => (
+                  {(() => {
+                    const order = ['Projection Edge','Favorable Matchup','Consensus','Consensus Diff','Correlation Risk','Variance Bias','Usage','Confidence','Flex Fit'];
+                    const tags = [...result.ai_note_json.tags];
+                    tags.sort((a,b) => {
+                      const ia = order.indexOf(a);
+                      const ib = order.indexOf(b);
+                      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+                    });
+                    return tags;
+                  })().map((t, idx) => (
                     <span key={idx} style={{ padding: '2px 8px', background: 'var(--chip-bg, #eef1f5)', borderRadius: 12, fontSize: 12, border: '1px solid var(--chip-border, #cfd6e4)' }}>{t}</span>
                   ))}
                 </div>
@@ -136,7 +171,6 @@ export default function SitStartOptimizer() {
               )}
               {/* Structured reasons with type chips and clarified labels */}
               <div style={{ border: '1px solid var(--chip-border, #cfd6e4)', borderRadius: 8, padding: 12, background: 'var(--surface-subtle, #fafbfc)' }}>
-                <div style={{ fontWeight: 600, marginBottom: 8 }}>{result.ai_note_json.headline}</div>
                 <ul style={{ margin: 0, paddingLeft: 18 }}>
                   {(result.ai_note_json.reasons || []).map((r, idx) => {
                     const t = (r.type || '').trim();
