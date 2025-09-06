@@ -48,3 +48,4 @@ Raw technical scores were meaningless to users. Now each number gets interpreted
 3. Add CSS classes for new styling
 4. Test all functionality
 5. Apply color coding system
+

@@ -132,6 +132,19 @@ This document provides detailed technical information about the RATM Draft Kit p
     *   Check `git status` for untracked/uncommitted changes.
     *   Verify remote tracking branches are set up correctly (`git branch -vv`).
 
+### Debug verbosity control
+
+- Backend prints are concise by default. A single one‑line summary is emitted after CSV/ECR/projections load, e.g.
+  - `Data loaded | players:11400 ECR[bo:521, bp:574, drk:113] weekly:892 combined:1141 aliases:0`
+- Set `RATM_DEBUG=1` to re‑enable detailed DEBUG traces:
+  - Yahoo pagination and parse traces, raw response key hints, roster parsing fallbacks, waiver pool paging/enrichment messages
+  - CSV download/update messages in `backend/data_importer.py`
+- Example:
+  ```bash
+  export RATM_DEBUG=1
+  cd backend && python app.py
+  ```
+
 ## 6. Testing Infrastructure (Updated August 19, 2025)
 
 ### A. Backend Test Suite

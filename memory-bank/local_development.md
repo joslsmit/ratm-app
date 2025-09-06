@@ -56,6 +56,23 @@ For local development, especially when dealing with OAuth providers like Yahoo t
         ```
         *Your backend should now be running on `https://localhost:5000`.*
 
+#### Debug logging (concise by default)
+
+By default the backend suppresses verbose DEBUG prints and shows a single one‑line summary after data load, for example:
+
+```
+Data loaded | players:11400 ECR[bo:521, bp:574, drk:113] weekly:892 combined:1141 aliases:0
+```
+
+To re‑enable detailed DEBUG logs (Yahoo pagination, raw response keys, roster/waiver parsing traces), set an env var before running:
+
+```bash
+export RATM_DEBUG=1
+python app.py
+```
+
+When `RATM_DEBUG=1`, extra `_dbg("DEBUG: …")` traces are printed, and CSV download messages from `backend/data_importer.py` are shown; otherwise they are quiet.
+
 5.  **Update the Yahoo App Callback URL (Manual Step):**
     *   Go to your application's page on the [Yahoo Developer Network](https://developer.yahoo.com/apps/).
     *   **Delete ALL existing redirect URIs** associated with this application.

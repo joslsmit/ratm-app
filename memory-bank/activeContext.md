@@ -199,6 +199,20 @@
 - **Feature Adoption** - Complete feature builds user trust and engagement
 - **Competitive Advantage** - Only fantasy app providing complete bench management analysis
 
+## Upcoming Focus
+
+- Player Dossier UX Enhancements (Phase A2): Resume and complete the interpretation-driven UI per memory-bank/PLAYER_DOSSIER_UX_ENHANCEMENT_STATUS.md
+  - Apply helper outputs across Value Opportunity and Age Trajectory sections
+  - Add CSS classes and color coding for badges (projectionBadge, matchupBadge, etc.)
+  - Replace remaining raw numbers with badges + plain-English context + actionable guidance
+  - Validate no regressions in Dossier interactions and rendering
+
+### Debug Logging Policy
+
+- Backend logs are concise by default (one-line data load summary). To enable verbose DEBUG traces for Yahoo and parsing diagnostics:
+  - Set `RATM_DEBUG=1` before running the backend (e.g., `export RATM_DEBUG=1; python app.py`)
+  - CSV download messages are also quiet unless `RATM_DEBUG=1`
+
 ### **🎉 PHASE 1 COMPLETED ACHIEVEMENTS:**
 *   **✅ KEEPER ANALYSIS SYSTEM COMPLETE: Critical Fixes Applied**
     *   **✅ Keeper Cost Calculation Fixed:** Draft round last year → One round better this year

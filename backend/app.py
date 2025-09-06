@@ -35,6 +35,15 @@ except Exception as e:
     pass # Suppress error if logging fails
 
 load_dotenv()
+
+# Quiet DEBUG prints unless explicitly enabled
+RATM_DEBUG = os.getenv("RATM_DEBUG", "0") == "1"
+def _dbg(*args, **kwargs):
+    if RATM_DEBUG:
+        try:
+            print(*args, **kwargs)
+        except Exception:
+            pass
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_host=1, x_proto=1, x_port=1, x_prefix=1) # Apply ProxyFix
 FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY")
@@ -540,11 +549,20 @@ def load_all_data():
         except Exception as _e:
             print(f"WARN: load_name_aliases failed: {_e}")
 
-        print(f"Player data cache size: {len(player_data_cache) if player_data_cache else 0}")
-        print(f"Static Overall ECR data size: {len(static_ecr_overall_data) if static_ecr_overall_data else 0}")
-        print(f"Static Positional ECR data size: {len(static_ecr_positional_data) if static_ecr_positional_data else 0}")
-        print(f"Static Rookie ECR data size: {len(static_ecr_rookie_data) if static_ecr_rookie_data else 0}")
-        print(f"Weekly projections cache size: {len(weekly_projections_cache) if weekly_projections_cache else 0}")
+        # Concise one-line summary of data cache state (CSV/ECR/projections)
+        try:
+            summary = (
+                f"Data loaded | players:{len(player_data_cache) if player_data_cache else 0} "
+                f"ECR[bo:{len(static_ecr_overall_data) if static_ecr_overall_data else 0}, "
+                f"bp:{len(static_ecr_positional_data) if static_ecr_positional_data else 0}, "
+                f"drk:{len(static_ecr_rookie_data) if static_ecr_rookie_data else 0}] "
+                f"weekly:{len(weekly_projections_cache) if weekly_projections_cache else 0} "
+                f"combined:{len(combined_player_data_cache) if combined_player_data_cache else 0} "
+                f"aliases:{len(name_aliases) if isinstance(name_aliases, dict) else 0}"
+            )
+            print(summary)
+        except Exception:
+            pass
 
     except Exception as e:
         print(f"❌ FATAL ERROR during application startup data loading: {e}")
@@ -557,7 +575,7 @@ load_all_data()
 def refresh_external_data():
     """Download latest CSVs and rebuild combined caches."""
     try:
-        print("DEBUG: Refreshing external data (CSV download + cache rebuild)")
+        _dbg("DEBUG: Refreshing external data (CSV download + cache rebuild)")
         import_data()
         # Reload CSV-derived caches and rebuild combined cache
         global static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data
@@ -572,7 +590,7 @@ def refresh_external_data():
             load_name_aliases()
         except Exception as _e:
             print(f"WARN: load_name_aliases failed (refresh): {_e}")
-        print("DEBUG: External data refresh complete")
+        _dbg("DEBUG: External data refresh complete")
     except Exception as e:
         print(f"ERROR: External data refresh failed: {e}")
         traceback.print_exc()
@@ -1567,7 +1585,7 @@ def all_player_names_with_data():
     
     # Debugging: Print a sample of the data being sent to the frontend
     if player_list:
-        print(f"Sample of player_list sent to frontend (first entry):\n{player_list[0]}")
+        _dbg(f"Sample of player_list sent to frontend (first entry):\n{player_list[0]}")
     
     return jsonify(player_list)
 
@@ -1575,12 +1593,12 @@ def all_player_names_with_data():
 def trending_players():
     try:
         url = "https://api.sleeper.app/v1/players/nfl/trending/add?lookback_hours=48&limit=25"
-        print(f"DEBUG: Fetching trending players from: {url}")
+        _dbg(f"DEBUG: Fetching trending players from: {url}")
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         
         sleeper_trending_data = response.json()
-        print(f"DEBUG: Received {len(sleeper_trending_data)} trending players from Sleeper API.")
+        _dbg(f"DEBUG: Received {len(sleeper_trending_data)} trending players from Sleeper API.")
         
         detailed_list = []
         for player in sleeper_trending_data:
@@ -1601,7 +1619,7 @@ def trending_players():
                         'worst': clean_numeric_value(static_info.get('worst')),
                         'rank_delta': clean_numeric_value(static_info.get('rank_delta'))
                     })
-        print(f"DEBUG: Returning {len(detailed_list)} detailed trending players.")
+        _dbg(f"DEBUG: Returning {len(detailed_list)} detailed trending players.")
         return jsonify(detailed_list)
     except requests.exceptions.RequestException as req_e:
         print(f"ERROR: Request to Sleeper API failed: {req_e}")
@@ -2163,8 +2181,8 @@ def waiver_swap_analysis_enhanced():
         if not player_to_add:
             return jsonify({"error": "player_to_add is required."}), 400
 
-        print(f"DEBUG: Enhanced waiver analysis for {player_to_add}")
-        print(f"DEBUG: Filled positions: {len(filled_positions)}, Empty positions: {len(empty_positions)}")
+        _dbg(f"DEBUG: Enhanced waiver analysis for {player_to_add}")
+        _dbg(f"DEBUG: Filled positions: {len(filled_positions)}, Empty positions: {len(empty_positions)}")
 
         # Get enhanced context for the waiver candidate
         waiver_player_data = combined_player_data_cache.get(normalize_player_name(player_to_add), {})
@@ -2519,9 +2537,9 @@ def yahoo_login():
     authorization_url, state = yahoo.authorization_url(AUTHORIZATION_BASE_URL)
 
     # Debug: Log the authorization URL and parameters for troubleshooting
-    print(f"DEBUG: Yahoo OAuth Authorization URL: {authorization_url}")
-    print(f"DEBUG: OAuth State: {state}")
-    print(f"DEBUG: Redirect URI used: {YAHOO_REDIRECT_URI}")
+    _dbg(f"DEBUG: Yahoo OAuth Authorization URL: {authorization_url}")
+    _dbg(f"DEBUG: OAuth State: {state}")
+    _dbg(f"DEBUG: Redirect URI used: {YAHOO_REDIRECT_URI}")
 
     # State is used to prevent CSRF, keep this for later verification
     session['oauth_state'] = state
@@ -2576,7 +2594,7 @@ def get_yahoo_leagues():
     """
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith('Bearer '):
-        print("DEBUG: Authorization header missing or malformed.")
+        _dbg("DEBUG: Authorization header missing or malformed.")
         return jsonify({"error": "Not authenticated with Yahoo. Authorization header missing."}), 401
 
     try:
@@ -2636,7 +2654,7 @@ def parse_yahoo_leagues_response(data):
         
         # User info is typically an array where [1] contains the games
         if not isinstance(user_info, list) or len(user_info) < 2:
-            print("DEBUG: User info structure unexpected")
+            _dbg("DEBUG: User info structure unexpected")
             return []
         
         games = user_info[1].get('games', {})
@@ -2647,7 +2665,7 @@ def parse_yahoo_leagues_response(data):
         
         # Game info is typically an array where [1] contains the leagues
         if not isinstance(game_info, list) or len(game_info) < 2:
-            print("DEBUG: Game info structure unexpected")
+            _dbg("DEBUG: Game info structure unexpected")
             return []
         
         leagues_data = game_info[1].get('leagues', {})
@@ -3016,11 +3034,11 @@ def get_yahoo_roster():
             url_fallback = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster?format=json'
 
         # Try primary (explicit players)
-        print(f"DEBUG: Requesting Yahoo roster primary URL: {url_primary}")
+        _dbg(f"DEBUG: Requesting Yahoo roster primary URL: {url_primary}")
         response = requests.get(url_primary, headers=yahoo_headers, timeout=10)
         if response.status_code == 404:
             # Some leagues may not support the explicit subresource path
-            print("DEBUG: Primary roster URL 404, trying fallback URL")
+            _dbg("DEBUG: Primary roster URL 404, trying fallback URL")
             response = requests.get(url_fallback, headers=yahoo_headers, timeout=10)
         response.raise_for_status()
 
@@ -3031,30 +3049,30 @@ def get_yahoo_roster():
             raise
         parsed_players = parse_yahoo_roster_response(raw)
         minimal_entries = _extract_roster_player_entries_minimal(raw)
-        print(f"DEBUG: Parsed {len(parsed_players) if isinstance(parsed_players, list) else 'N/A'} players; minimal_entries={len(minimal_entries)}")
+        _dbg(f"DEBUG: Parsed {len(parsed_players) if isinstance(parsed_players, list) else 'N/A'} players; minimal_entries={len(minimal_entries)}")
 
         # If primary returned 200 but empty, try fallback URL anyway
         if (not parsed_players) and (not minimal_entries):
-            print("DEBUG: Primary roster returned empty; attempting fallback URL despite 200 status")
+            _dbg("DEBUG: Primary roster returned empty; attempting fallback URL despite 200 status")
             response = requests.get(url_fallback, headers=yahoo_headers, timeout=10)
             response.raise_for_status()
             raw = response.json()
             parsed_players = parse_yahoo_roster_response(raw)
             minimal_entries = _extract_roster_player_entries_minimal(raw)
-            print(f"DEBUG: Fallback parse counts -> parsed={len(parsed_players) if isinstance(parsed_players, list) else 'N/A'}, minimal={len(minimal_entries)}")
+            _dbg(f"DEBUG: Fallback parse counts -> parsed={len(parsed_players) if isinstance(parsed_players, list) else 'N/A'}, minimal={len(minimal_entries)}")
 
         if parsed_players:
             return jsonify(parsed_players)
 
         # Fallback: batch-enrich using player_keys if names were missing
         if not minimal_entries:
-            print("DEBUG: Minimal roster extraction returned 0 players")
+            _dbg("DEBUG: Minimal roster extraction returned 0 players")
             return jsonify([])
 
         league_key = _derive_league_key_from_team_key(team_key)
         keys = [p['player_key'] for p in minimal_entries]
         details_map = _fetch_yahoo_player_details_by_keys(access_token_string, league_key, keys)
-        print(f"DEBUG: Batch details fetch resolved {len(details_map)} of {len(keys)} player keys")
+        _dbg(f"DEBUG: Batch details fetch resolved {len(details_map)} of {len(keys)} player keys")
 
         # Merge details and enrich locally
         merged = []
@@ -4019,17 +4037,17 @@ def parse_yahoo_roster_response(data):
     """
     try:
         # DEBUG: Log the raw response structure to understand what we're getting
-        print(f"DEBUG: Raw Yahoo roster response keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+        _dbg(f"DEBUG: Raw Yahoo roster response keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
         if isinstance(data, dict) and 'fantasy_content' in data:
-            print(f"DEBUG: fantasy_content keys: {list(data['fantasy_content'].keys())}")
+            _dbg(f"DEBUG: fantasy_content keys: {list(data['fantasy_content'].keys())}")
         
         # Navigate the complex JSON structure using defensive .get() calls
         fantasy_content = data.get('fantasy_content', {})
         
         # Team data commonly is a list or dict; find the element that has 'roster'
         team_data = fantasy_content.get('team', [])
-        print(f"DEBUG: team_data type: {type(team_data)}")
-        print(f"DEBUG: team_data keys/length: {list(team_data.keys()) if isinstance(team_data, dict) else len(team_data) if isinstance(team_data, list) else 'Neither dict nor list'}")
+        _dbg(f"DEBUG: team_data type: {type(team_data)}")
+        _dbg(f"DEBUG: team_data keys/length: {list(team_data.keys()) if isinstance(team_data, dict) else len(team_data) if isinstance(team_data, list) else 'Neither dict nor list'}")
 
         roster_container = _find_roster_container(team_data)
         if not roster_container:
@@ -4039,7 +4057,7 @@ def parse_yahoo_roster_response(data):
             debug_pd_keys = list(players_data.keys()) if isinstance(players_data, dict) else 'N/A'
         except Exception:
             debug_pd_keys = 'N/A'
-        print(f"DEBUG: players_data type: {type(players_data)}; keys: {debug_pd_keys}")
+        _dbg(f"DEBUG: players_data type: {type(players_data)}; keys: {debug_pd_keys}")
         
         # Parse players - handle dict or list shapes by deep-scan of each container
         players = []
@@ -4160,7 +4178,7 @@ def get_yahoo_waiver_wire():
 
         while True:
             yahoo_url = f"{base_url}/league/{league_key}/players;status={status};start={page_start};count={page_count}"
-            print(f"DEBUG: Requesting Yahoo waiver page start={page_start} count={page_count}")
+            _dbg(f"DEBUG: Requesting Yahoo waiver page start={page_start} count={page_count}")
             yahoo_response = requests.get(yahoo_url, headers=yahoo_headers, params={'format': 'json'}, timeout=10)
 
             if yahoo_response.status_code == 401:
@@ -4183,7 +4201,7 @@ def get_yahoo_waiver_wire():
                 return jsonify({"error": "Invalid response format from Yahoo API"}), 500
 
             page_players = parse_yahoo_waiver_response(page_json)
-            print(f"DEBUG: Parsed {len(page_players)} players from page start={page_start}")
+            _dbg(f"DEBUG: Parsed {len(page_players)} players from page start={page_start}")
             aggregated_players.extend(page_players)
 
             if len(page_players) < page_count or len(aggregated_players) >= max_players_cap:
@@ -4213,14 +4231,14 @@ def get_yahoo_waiver_wire():
             }
             enriched_players.append(enriched_player)
 
-        print(f"DEBUG: Enriched {len(enriched_players)} players with local data (pre-sort)")
+        _dbg(f"DEBUG: Enriched {len(enriched_players)} players with local data (pre-sort)")
 
         # Sort by ECR (best first), None last
         enriched_players.sort(key=lambda x: (x['ecr'] is None, x['ecr'] if x['ecr'] is not None else 9999))
 
         # Limit output to top 100 for performance
         limited = enriched_players[:100]
-        print(f"DEBUG: Returning {len(limited)} players after pagination + enrichment")
+        _dbg(f"DEBUG: Returning {len(limited)} players after pagination + enrichment")
 
         return jsonify({
             'league_key': league_key,
@@ -4318,7 +4336,7 @@ def get_yahoo_waiver_debug():
         except Exception:
             pass
 
-        print(f"DEBUG: WAIVER_DEBUG url={yahoo_url} status={resp.status_code} elapsed_ms={elapsed_ms} parsed_count={parsed_count}")
+        _dbg(f"DEBUG: WAIVER_DEBUG url={yahoo_url} status={resp.status_code} elapsed_ms={elapsed_ms} parsed_count={parsed_count}")
 
         return jsonify({
             'request': {
@@ -4360,7 +4378,7 @@ def parse_yahoo_waiver_response(data):
         league_data = fantasy_content.get('league', [])
         
         if not isinstance(league_data, list) or len(league_data) < 2:
-            print("DEBUG: Unexpected league data structure for waiver wire")
+            _dbg("DEBUG: Unexpected league data structure for waiver wire")
             return []
         
         # Get players data from second element (follows existing pattern)
@@ -4437,7 +4455,7 @@ def parse_yahoo_waiver_response(data):
                     if extracted:
                         available_players.append(extracted)
         
-        print(f"DEBUG: Successfully parsed {len(available_players)} available players")
+        _dbg(f"DEBUG: Successfully parsed {len(available_players)} available players")
         return available_players
         
     except Exception as e:
@@ -4607,7 +4625,7 @@ def parse_yahoo_league_context(settings_data, players_data, teams_data):
                 'total_teams': len(team_info)
             }
         
-        print(f"DEBUG: Successfully parsed league context with {len(league_context['player_ownership'])} players")
+        _dbg(f"DEBUG: Successfully parsed league context with {len(league_context['player_ownership'])} players")
         return league_context
         
     except Exception as e:
@@ -4646,7 +4664,7 @@ def get_yahoo_league_context():
         }
         yahoo_params = {'format': 'json'}
         
-        print(f"DEBUG: Fetching league context for {league_key}")
+        _dbg(f"DEBUG: Fetching league context for {league_key}")
         
         # Make parallel API requests for efficiency
         settings_response = requests.get(league_settings_url, headers=yahoo_headers, params=yahoo_params, timeout=10)
@@ -4679,7 +4697,7 @@ def get_yahoo_league_context():
             settings_data = settings_response.json()
             players_data = players_response.json()
             teams_data = teams_response.json()
-            print(f"DEBUG: Received Yahoo responses with keys: settings={settings_data.keys()}, players={players_data.keys()}, teams={teams_data.keys()}")
+            _dbg(f"DEBUG: Received Yahoo responses with keys: settings={settings_data.keys()}, players={players_data.keys()}, teams={teams_data.keys()}")
         except ValueError as e:
             print(f"ERROR: Failed to parse Yahoo API JSON responses: {e}")
             return jsonify({"error": "Invalid response format from Yahoo API"}), 500
