@@ -23,7 +23,7 @@ const Sidebar = ({ activeTool, targetList }) => {
   useEffect(() => {
     try {
       const v = JSON.parse(localStorage.getItem('recentDossierPlayers') || '[]');
-      if (Array.isArray(v)) setRecentPlayers(v.slice(0,3));
+      if (Array.isArray(v)) setRecentPlayers(v.slice(0,4));
     } catch(_){}
   }, [activeTool]);
 
@@ -73,7 +73,16 @@ const Sidebar = ({ activeTool, targetList }) => {
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Recent Dossiers</div>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {recentPlayers.map((p) => (
-                <a key={p} href={`/?tool=dossier&player=${encodeURIComponent(p)}`} className="chip" title={p}>{p}</a>
+                <a
+                  key={p}
+                  href={`/?tool=dossier&player=${encodeURIComponent(p)}`}
+                  className="chip"
+                  title={p}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {p}
+                </a>
               ))}
             </div>
           </div>

@@ -228,7 +228,7 @@ function App() {
             const key = 'recentDossierPlayers';
             const arr = JSON.parse(localStorage.getItem(key) || '[]');
             const nm = nameToFetch.trim();
-            const next = [nm, ...arr.filter(x => x.toLowerCase() !== nm.toLowerCase())].slice(0,3);
+            const next = [nm, ...arr.filter(x => x.toLowerCase() !== nm.toLowerCase())].slice(0,4);
             localStorage.setItem(key, JSON.stringify(next));
           } catch (_) {}
         } else {
