@@ -41,7 +41,11 @@ For local development, especially when dealing with OAuth providers like Yahoo t
         ```python
         app.run(debug=True, host='0.0.0.0', port=5000, ssl_context=('backend/certs/localhost.pem', 'backend/certs/localhost-key.pem'))
         ```
-    *   Also, ensure your `YAHOO_REDIRECT_URI` and CORS origin in `backend/app.py` are set to `https://localhost:5000/api/yahoo/callback` and `https://localhost:5000` respectively.
+    *   Also, ensure your CORS origins include `https://localhost:5000`.
+    *   Set `YAHOO_REDIRECT_URI` via environment variable for local dev (no code edit):
+        ```bash
+        export YAHOO_REDIRECT_URI="https://localhost:5000/api/yahoo/callback"
+        ```
 
 4.  **Start Your Local Backend Server:**
     *   Open a terminal window.
@@ -107,7 +111,7 @@ This setup provides a stable and secure local development environment for OAuth,
    - `https://localhost:5000/api/yahoo/callback` (local backend)
    - `https://ratm-app.onrender.com/api/yahoo/callback` (production backend)
 
-**Important**: Change Homepage URL back to `https://ratm-app.vercel.app/` before production deployment.
+**Important**: Yahoo only allows one Homepage URL at a time. Change it back to `https://ratm-app.vercel.app/` before production deployment.
 
 ### Complete Local Development Yahoo Setup
 
@@ -117,8 +121,11 @@ This setup provides a stable and secure local development environment for OAuth,
    ```
 
 2. **Configure backend for local OAuth**:
-   - Set `YAHOO_REDIRECT_URI = 'https://localhost:5000/api/yahoo/callback'` in `backend/app.py` line 2377
-   - The OAuth redirect logic will automatically handle localhost vs production frontend redirects
+   - Export env var (no code edit):
+     ```bash
+     export YAHOO_REDIRECT_URI="https://localhost:5000/api/yahoo/callback"
+     ```
+   - The OAuth callback will redirect back to `http://localhost:3000` when developing locally.
 
 3. **Set Yahoo Homepage URL** (in Yahoo Developer Console):
    ```
