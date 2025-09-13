@@ -130,7 +130,8 @@ def load_ecr_data_from_csv(file_path):
             print(f"❌ FATAL ERROR: 'ecr_type' column not found in {file_path}. Cannot categorize ECR data.")
             return None, None, None # Return None for all caches if critical column is missing
 
-        print(f"Unique ecr_type values: {df['ecr_type'].unique()}")
+        unique_types = list(df['ecr_type'].unique())
+        print(f"Unique ecr_type values: {unique_types}")
 
         # Convert all NaN values in the DataFrame to None at this stage
         df = df.where(pd.notna(df), None)
@@ -170,17 +171,48 @@ def load_ecr_data_from_csv(file_path):
                 }
             return ecr_dict
 
-        # Filter and create dictionaries for each type
-        overall_df = df[df['ecr_type'] == 'bo'].copy()
-        positional_df = df[df['ecr_type'] == 'bp'].copy()
+        # Determine which ECR flavor to use for overall/positional
+        # Supported flavors and their (overall, positional) type codes
+        flavor_map = {
+            'redraft': ('ro', 'rp'),
+            'dynasty': ('do', 'dp'),
+            'weekly':  ('wo', 'wp'),
+        }
+
+        # Preference order: env var hint first, then sensible fallbacks
+        env_flavor = os.getenv('RATM_ECR_FLAVOR', 'auto').strip().lower()
+        if env_flavor in flavor_map:
+            preference = [env_flavor] + [f for f in ['redraft', 'dynasty', 'weekly'] if f != env_flavor]
+        else:
+            preference = ['redraft', 'dynasty', 'weekly']
+
+        selected = None
+        for flv in preference:
+            ov, pos = flavor_map[flv]
+            has_ov = ov in unique_types and len(df[df['ecr_type'] == ov]) > 0
+            has_pos = pos in unique_types and len(df[df['ecr_type'] == pos]) > 0
+            if has_ov or has_pos:
+                selected = (flv, ov, pos, has_ov, has_pos)
+                break
+
+        if selected is None:
+            print("❌ FATAL ERROR: Could not find any supported ECR types (ro/rp, do/dp, or wo/wp) in CSV.")
+            return None, None, None
+
+        flavor_name, overall_code, positional_code, has_overall, has_positional = selected
+        print(f"✅ Selected ECR flavor: {flavor_name} (overall='{overall_code}', positional='{positional_code}')")
+
+        # Filter and create dictionaries for chosen types (allow missing one side)
+        overall_df = df[df['ecr_type'] == overall_code].copy() if has_overall else df.iloc[0:0].copy()
+        positional_df = df[df['ecr_type'] == positional_code].copy() if has_positional else df.iloc[0:0].copy()
         rookie_df = df[df['ecr_type'] == 'drk'].copy() # For rookie rankings
 
         overall_ecr_dict = create_ecr_dict(overall_df)
         positional_ecr_dict = create_ecr_dict(positional_df)
         rookie_ecr_dict = create_ecr_dict(rookie_df)
 
-        print(f"✅ Successfully loaded {len(overall_ecr_dict)} overall ECR entries (bo).")
-        print(f"✅ Successfully loaded {len(positional_ecr_dict)} positional ECR entries (bp).")
+        print(f"✅ Successfully loaded {len(overall_ecr_dict)} overall ECR entries ({overall_code}).")
+        print(f"✅ Successfully loaded {len(positional_ecr_dict)} positional ECR entries ({positional_code}).")
         print(f"✅ Successfully loaded {len(rookie_ecr_dict)} rookie ECR entries (drk).")
 
         return overall_ecr_dict, positional_ecr_dict, rookie_ecr_dict
