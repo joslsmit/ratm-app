@@ -879,12 +879,8 @@ function App() {
     };
   }, [generateDossier]); // generateDossier is a dependency
 
-  const toggleNavSection = (section) => {
-    setNavSections(prevSections => ({
-      ...prevSections,
-      [section]: !prevSections[section]
-    }));
-  };
+  // Note: Legacy navSections state and toggler were removed in a prior refactor.
+  // Any references to setNavSections have been eliminated to avoid undefined usage.
 
   const resetApplication = () => {
     if (window.confirm("Are you sure you want to clear all saved data? This will remove your API key, saved draft board, and target list and cannot be undone.")) {
