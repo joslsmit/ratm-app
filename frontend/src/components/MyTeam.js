@@ -2,6 +2,51 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useApi } from '../hooks/useApi';
 import styles from './MyTeam.module.css';
 
+// Map Yahoo roster slot codes to human-friendly descriptions
+const SLOT_DESCRIPTIONS = {
+    'QB': 'Quarterback (starter) — scores points',
+    'WR': 'Wide receiver (starter) — scores points',
+    'RB': 'Running back (starter) — scores points',
+    'TE': 'Tight end (starter) — scores points',
+    'W/T': 'Flex: wide receiver or tight end — scores points',
+    'W/R': 'Flex: wide receiver or running back — scores points',
+    'W/R/T': 'Flex: wide receiver, running back, or tight end — scores points',
+    'BN': 'Bench — does not score in lineup',
+    'IR': 'Injured reserve — does not score in lineup',
+    'DEF': 'Team defense (starter) — scores points',
+    'K': 'Kicker (starter) — scores points'
+};
+
+const POS_DESCRIPTIONS = {
+    'QB': 'Quarterback (player position on roster)',
+    'WR': 'Wide receiver (player position on roster)',
+    'RB': 'Running back (player position on roster)',
+    'TE': 'Tight end (player position on roster)',
+    'DEF': 'Team defense (player position)',
+    'K': 'Kicker (player position)'
+};
+
+const getRosterSlotLabel = (player) => {
+    // Only trust Yahoo's roster slot for the badge.
+    // If missing, show a dash rather than guessing from natural position.
+    const slot = (player?.selected_position || '').toString().toUpperCase().trim();
+    return slot || '—';
+};
+
+const getRosterSlotDescription = (slot) => {
+    if (!slot) return 'Roster slot';
+    const key = String(slot).toUpperCase().trim();
+    return SLOT_DESCRIPTIONS[key] || 'Roster slot';
+};
+
+const classifySlot = (slot) => {
+    const s = String(slot || '').toUpperCase();
+    if (s === 'BN') return 'bench';
+    if (s === 'IR') return 'ir';
+    if (s === 'W/T' || s === 'W/R' || s === 'W/R/T') return 'flex';
+    return 'starter';
+};
+
 const MyTeam = () => {
     const [leagues, setLeagues] = useState([]);
     const [selectedLeague, setSelectedLeague] = useState(null);
@@ -133,8 +178,42 @@ const MyTeam = () => {
             <div key={player.player_key || index} className={styles.playerCard}>
                 <div className={styles.playerHeader}>
                     <h3 className={styles.playerName}>{player.name || 'Unknown Player'}</h3>
-                    <span className={styles.position}>{player.selected_position || 'N/A'}</span>
+                    {(() => {
+                        const slot = getRosterSlotLabel(player);
+                        const slotDesc = getRosterSlotDescription(slot);
+                        const category = classifySlot(slot);
+                        const slotClass = category === 'bench' ? styles.slotBench
+                                         : category === 'ir' ? styles.slotIR
+                                         : category === 'flex' ? styles.slotFlex
+                                         : styles.slotStarter;
+                        return (
+                            <div className={styles.badgeGroup}>
+                                <span className={`${styles.slotBadge} ${slotClass}`} title={slotDesc} aria-label={slotDesc}>
+                                    {slot}
+                                </span>
+                            </div>
+                        );
+                    })()}
                 </div>
+
+                {(() => {
+                    const slot = getRosterSlotLabel(player);
+                    const category = classifySlot(slot);
+                    const naturalPos = (player?.position || '').toUpperCase() || '—';
+                    const categoryLabel = category === 'bench' ? 'Bench'
+                                          : category === 'ir' ? 'Injured Reserve'
+                                          : category === 'flex' ? 'Flex'
+                                          : category === 'starter' ? 'Starter' : '—';
+                    const elig = Array.isArray(player?.eligible_positions)
+                        ? player.eligible_positions.map(p => typeof p === 'string' ? p : p?.position).filter(Boolean)
+                        : [];
+                    const eligText = elig.length ? `Eligible: ${elig.join('/')}` : '';
+                    return (
+                        <div className={styles.slotLine}>
+                            <span>Slot: <strong>{slot}</strong>{categoryLabel !== '—' ? ` (${categoryLabel})` : ''} • Position: <strong>{naturalPos}</strong>{eligText ? ` • ${eligText}` : ''}</span>
+                        </div>
+                    );
+                })()}
                 
                 <div className={styles.playerStats}>
                     <div className={styles.statRow}>

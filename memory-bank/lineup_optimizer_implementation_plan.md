@@ -1,7 +1,7 @@
 # Lineup Optimizer Implementation Plan — Hybrid (Deterministic + AI)
 
 > Priority: HIGH — In‑Season Functionality Enhancement  
-> Status: READY FOR IMPLEMENTATION  
+> Status: PARTIALLY IMPLEMENTED — Yahoo mode live; Traditional mode de‑scoped (not planned)  
 > Last Updated: August 31, 2025  
 > Estimated Effort: 12–16 hours dev + 4–6 hours testing  
 > Complexity: MEDIUM (reuses existing infra)  
@@ -36,11 +36,11 @@
   - Bench: All remaining eligible players not selected for starters.
   - Support `week` parameter for weekly specificity where applicable.
 
-## 4. API Design
+## 4. API Design (Current vs Pending)
 
 Endpoint: `POST /api/optimize_lineup`
 
-Request (Yahoo mode):
+Request (Yahoo mode) — Implemented:
 ```
 {
   "mode": "yahoo",
@@ -50,27 +50,9 @@ Request (Yahoo mode):
 }
 ```
 
-Request (Traditional mode):
+Request (Traditional mode) — De‑scoped:
 ```
-{
-  "mode": "traditional",
-  "roster": {
-    "QB": "Josh Allen",
-    "RB1": "Saquon Barkley",
-    "RB2": "James Cook",
-    "WR1": "Tyreek Hill",
-    "WR2": "Amon-Ra St. Brown",
-    "TE": "Sam LaPorta",
-    "W/T": "",
-    "W/R/T": "",
-    "K": "Justin Tucker",
-    "DEF": "49ers",
-    "BN1": "Tony Pollard",
-    "BN2": "Jerry Jeudy",
-    "BN3": "..."
-  },
-  "week": 1
-}
+// Not planned — we will only support Yahoo‑authenticated optimization.
 ```
 
 Success Response (common):
@@ -98,9 +80,12 @@ Success Response (common):
     "excluded": ["Player X (OUT)", "Player Y (IR)", "Defense Z (BYE)"],
     "flagged": ["Player Q (Questionable)", "Player D (Doubtful)"]
   },
-  "ai_note": {
+  "ai_note_json": {
     "confidence": "High|Medium|Low",
-    "analysis": "markdown string"
+    "headline": "string",
+    "reasons": [{"type":"Projection|Matchup|Status|Variance|Correlation|FlexAllocation|Consensus|Usage|Confidence|Context","text":"string","evidence":{}}],
+    "tags": ["string"],
+    "score_breakdown": { "projection": number, "matchup": number, "correlation": number, "variance": number }
   }
 }
 ```
@@ -114,7 +99,7 @@ Headers:
 - `X-API-Key`: user’s Gemini key (existing pattern) for AI note (optional if AI is disabled).
 - Yahoo token header (match existing Yahoo endpoints; reuse current handling in backend/app.py).
 
-## 5. Deterministic Optimizer Spec
+## 5. Deterministic Optimizer Spec (Implemented)
 
 ### 5.1 Eligibility & Preprocessing
 - Build canonical player objects with: name, pos, team, status, bye_week, projected_points (float), opponent, home_away, matchup_difficulty (if available).
@@ -151,25 +136,22 @@ Notes:
 - This achieves near‑optimal results for typical roster sizes without external solvers; deterministic and <300ms target.
 - If we later add an ILP/Hungarian solver, this interface remains stable.
 
-## 6. AI “Analyst’s Note” (Concise Narrative)
-- Purpose: Explain the most impactful 1–2 lineup changes in 1–3 short paragraphs max.
+## 6. AI “Analyst’s Note” (Concise Narrative) — Implemented
+- Purpose: Explain the most impactful change in up to three grounded bullets, with small score chips.
 - Prompting:
   - System: "You are a fantasy football analyst. Explain the key lineup change(s) succinctly and data‑driven."
   - User context includes: player_in/out, projections, opponent, status flags, and why the optimizer preferred one over the other (projection delta, slot scarcity, matchup).
 - Implementation:
   - Use `PromptBuilder` (extend with `build_lineup_note_prompt`), then call Gemini with user `X-API-Key`.
-  - Process via `process_ai_response_v2` with expected `{ confidence, analysis }`.
+- Process via `process_ai_response_v2` or strict JSON parse; attach `ai_note_json` with `{ confidence, headline, reasons[], tags[], score_breakdown{} }`.
 - Failure mode: If AI call fails, omit `ai_note` and still return deterministic result.
 
-## 7. Frontend UI/UX
+## 7. Frontend UI/UX (Current + Next)
 - Mode toggle: Reuse Waiver Wire Assistant component; add `assistantMode = 'waiver' | 'lineup'`.
-- Action button: “Optimize My Lineup” (Yahoo mode) or “Analyze Current Lineup” (traditional mode).
-- Side‑by‑side view: Current vs Suggested with:
-  - Green up arrow for bench→starter, red down arrow for starter→bench.
-  - Status chips (Q/D) and BYE/OUT badges.
-  - Total projected points delta.
-- Loader and errors: Reuse existing loader styling and error box patterns.
-- Markdown render: Display `ai_note.analysis` below results as “Analyst’s Note.”
+- Current: Yahoo‑only flow present in `SitStartOptimizer.js` with league/week controls; renders `ai_note_json` card with tags, score chips, and typed reasons. Markdown hidden by default. Debug available server‑side via `?debug=1` or `{debug:true}`.
+- De‑scope: Traditional mode UI will not be added.
+- Next (Yahoo): Add a small “Include debug” checkbox to send `{debug:true}`; minor card polish (confidence chip; clearer tag ordering; delta points as a pill on headline).
+- Side‑by‑side view: Current vs Suggested with changes and points total (already present for Yahoo).
 
 ## 8. Security & Config
 - Yahoo OAuth: Reuse existing header/token flow; do not persist tokens server‑side.
@@ -182,21 +164,38 @@ Notes:
 - AI call: <1.5s typical on “flash” tier; total endpoint p95 <2.0s with AI; <0.7s without AI.
 - Cache: Memoize enriched roster for team/week during request scope; optional short‑lived cache by team_key/week.
 
-## 10. Testing Plan
+## 10. Testing Plan (Updated)
 - Unit (backend):
   - Eligibility filter: OUT/IR/BYE excluded; Q/D flagged.
   - Slot assignment: Respect `W/T`, `W/R/T` constraints; no duplicates; deterministic tie‑breaks.
   - Local improvement: Improves or equals greedy baseline on targeted scenarios (close RB/WR/TE tradeoffs).
   - Imputation: When projections missing, imputed values used and marked.
 - Integration:
-  - Yahoo mode: Mock Yahoo roster and league slots; verify optimizer output and `diff` correctness.
-  - Traditional mode: Provide manual roster payload; verify same core results.
+  - Yahoo mode: Mock Yahoo roster and league slots; verify optimizer output and `diff` correctness. (Implemented)
+  - Traditional mode: De‑scoped.
   - Error paths: Missing token, empty roster, no eligible players, AI failure (still returns deterministic result).
+  - Debug: Use `?debug=1` to inspect `consensus_inputs` and `matchup_inputs` (raw values and applied bonus) for transparency.
 - Frontend:
-  - Render tests for mode toggle, loader, error display, and side‑by‑side diff.
+  - Render tests for Yahoo flow (exists). Add tests for Traditional UI once implemented: roster inputs, submit, render results, debug toggle.
   - Snapshot test for result rendering with `ai_note` present/absent.
 - E2E (optional):
   - Yahoo login → league select → optimize → see suggested lineup and analyst note.
+
+## 11. Next Steps (Phased — Yahoo only)
+
+Phase Y1 — Frontend UX polish (low risk)
+- Add a “Include debug” checkbox in SitStartOptimizer to send `{debug:true}` and render `result.debug.lineup_note` in a collapsible section.
+- Add a confidence chip (High/Medium/Low) next to the headline; add a small delta pill (e.g., `+1.4 pts`).
+- Clarify tags ordering by importance: Projection Edge, Favorable Matchup (only when a categorical difference exists), Consensus/Consensus Diff, Correlation Risk, Variance Bias, Usage, Confidence, Flex Fit.
+
+Phase Y2 — Backend micro‑fixes (surgical)
+- Confidence adjustment: downgrade when the chosen player (`to`) is Q/D; do not downgrade when the benched player (`from`) is Q/D (that should increase confidence). Current code downgrades on `from` — flip the check.
+- Tag gating: add `Favorable Matchup` tag only when a categorical difference exists (already computed for the bonus), not just when opponent names are present.
+- Debug meta: when `debug=true`, attach `debug.opponent_projection` and a simple `debug.slots_filled` summary.
+
+Phase Y3 — Validation & script polish
+- Expand `scripts/test_lineup_optimizer.zsh` to print HTTP status and a short body snippet on failure for easier local debugging.
+- Add a minimal backend unit test to assert the confidence downgrade behavior when `to.status in {Q,D}`.
 
 ## 11. Implementation Phases & Tasks
 
@@ -249,4 +248,3 @@ Phase F — Tests & Polish (3–4h)
 ---
 
 This plan merges deterministic optimization for correctness and speed with concise AI explanations for user trust and clarity. It reuses your existing Yahoo integration, data enrichment, PromptBuilder, and response processing, minimizing risk and time‑to‑ship while ensuring a professional, testable implementation.
-

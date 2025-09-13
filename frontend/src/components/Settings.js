@@ -6,10 +6,36 @@ const Settings = ({ lastUpdateDate, toggleTheme, resetApplication }) => {
   const { API_BASE_URL } = useContext(AppContext);
   const [isYahooLoggedIn, setIsYahooLoggedIn] = useState(false);
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
+  const [leagues, setLeagues] = useState([]);
+  const [leagueKey, setLeagueKey] = useState('');
+  const [teamKey, setTeamKey] = useState('');
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagError, setDiagError] = useState('');
+  const [diagData, setDiagData] = useState(null);
+  const [refreshLoading, setRefreshLoading] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('yahoo_token');
     setIsYahooLoggedIn(!!token);
+    // On mount, if logged in, attempt to load leagues for diagnostics
+    if (token) {
+      try {
+        const tok = JSON.parse(token);
+        const auth = `Bearer ${tok.access_token}`;
+        fetch(`${API_BASE_URL}/yahoo/leagues`, { headers: { Authorization: auth }})
+          .then(r => r.ok ? r.json() : Promise.reject(new Error('Failed to load leagues')))
+          .then(ls => {
+            if (Array.isArray(ls)) {
+              setLeagues(ls);
+              if (ls.length === 1) {
+                setLeagueKey(ls[0].league_key);
+                setTeamKey(ls[0].team_key);
+              }
+            }
+          })
+          .catch(() => {});
+      } catch (_) {}
+    }
 
     const handleThemeChange = () => {
       setTheme(document.body.getAttribute('data-theme') || 'dark');
@@ -32,6 +58,37 @@ const Settings = ({ lastUpdateDate, toggleTheme, resetApplication }) => {
     localStorage.removeItem('yahoo_token');
     setIsYahooLoggedIn(false);
     window.location.hash = '#settings';
+  };
+
+  const fetchDiagnostics = async () => {
+    setDiagError(''); setDiagLoading(true); setDiagData(null);
+    try {
+      if (!leagueKey) throw new Error('Select a league');
+      const token = JSON.parse(localStorage.getItem('yahoo_token') || '{}');
+      const auth = `Bearer ${token.access_token}`;
+      const qs = new URLSearchParams({ league_key: leagueKey });
+      if (teamKey) qs.set('team_key', teamKey);
+      const rsp = await fetch(`${API_BASE_URL}/diagnostics/yahoo-data-health?${qs.toString()}`, { headers: { Authorization: auth }});
+      if (!rsp.ok) { const e = await rsp.json().catch(()=>({})); throw new Error(e.error || `HTTP ${rsp.status}`); }
+      const data = await rsp.json();
+      setDiagData(data);
+    } catch (e) {
+      setDiagError(e.message || 'Failed to load diagnostics');
+    } finally { setDiagLoading(false); }
+  };
+
+  const refreshData = async () => {
+    setRefreshLoading(true); setDiagError('');
+    try {
+      const rsp = await fetch(`${API_BASE_URL}/admin/refresh_data`, { method: 'POST' });
+      if (!rsp.ok) { const e = await rsp.json().catch(()=>({})); throw new Error(e.error || `HTTP ${rsp.status}`); }
+      // Re-run diagnostics after refresh if league selected
+      if (leagueKey) {
+        await fetchDiagnostics();
+      }
+    } catch (e) {
+      setDiagError(e.message || 'Refresh failed');
+    } finally { setRefreshLoading(false); }
   };
 
   const loginButtonImage = theme === 'dark' ? '/images/yahoo_login_dark.png' : '/images/yahoo_login_light.png';
@@ -72,6 +129,52 @@ const Settings = ({ lastUpdateDate, toggleTheme, resetApplication }) => {
       <div className="card">
         <h3>Data Last Updated</h3>
         <p>Dynasty process files were last updated on: <strong>{lastUpdateDate}</strong></p>
+      </div>
+
+      <div className="card">
+        <h3>Data Health</h3>
+        <p>Check CSV freshness and enrichment coverage for your Yahoo league.</p>
+        {isYahooLoggedIn ? (
+          <>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+              <div>
+                <label>League:&nbsp;</label>
+                <select value={leagueKey} onChange={(e)=>{ const lk = e.target.value; setLeagueKey(lk); const l = leagues.find(x=>x.league_key===lk); setTeamKey(l?.team_key||''); }}>
+                  <option value="">Select a league…</option>
+                  {leagues.map(l => (
+                    <option key={l.league_key} value={l.league_key}>{l.league_name}</option>
+                  ))}
+                </select>
+              </div>
+              <button onClick={fetchDiagnostics} disabled={!leagueKey || diagLoading}>{diagLoading ? 'Checking…' : 'Check Data Health'}</button>
+              <button onClick={refreshData} disabled={refreshLoading}>{refreshLoading ? 'Refreshing…' : 'Refresh Data (Admin)'}</button>
+            </div>
+            {diagError && <div className="error-text" style={{ marginTop: 6 }}>{diagError}</div>}
+            {diagData && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ marginBottom: 8 }}>
+                  <strong>Roster Match:</strong> {diagData.roster?.enrichment?.match_rate ?? 0}% ({diagData.roster?.enrichment?.matched ?? 0}/{diagData.roster?.enrichment?.total ?? 0})
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <strong>Waiver Coverage (A, first 100):</strong> {diagData.waivers_A_first2pages?.enrichment?.match_rate ?? 0}% ({diagData.waivers_A_first2pages?.enrichment?.matched ?? 0}/{diagData.waivers_A_first2pages?.enrichment?.total ?? 0})
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <strong>Weekly Projections:</strong> {diagData.weekly_checks?.row_count ?? 0} rows • Latest scrape: {diagData.weekly_checks?.latest_scrape_date || 'N/A'}
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <strong>CSV Freshness:</strong>
+                  <ul>
+                    {Object.entries(diagData.csv_freshness || {}).map(([name, info]) => (
+                      <li key={name}>{name}: {info.modified || 'N/A'}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <p>Sign in to Yahoo above to view league diagnostics.</p>
+        )}
       </div>
     </section>
   );

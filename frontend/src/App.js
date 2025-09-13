@@ -13,6 +13,7 @@ import DraftAssistant from './components/DraftAssistant'; // Import DraftAssista
 import TargetList from './components/TargetList'; // Import TargetList
 import Settings from './components/Settings'; // Import Settings
 import Documentation from './components/Documentation'; // Import Documentation
+import SitStartOptimizer from './components/SitStartOptimizer';
 import YahooLeagues from './components/YahooLeagues'; // Import YahooLeagues
 import MyTeam from './components/MyTeam'; // Import MyTeam
 import Sidebar from './components/Sidebar'; // Import Sidebar
@@ -48,8 +49,6 @@ function App() {
     setLastUpdateDate,
     targetList,
     setTargetList,
-    ecrTypePreference,
-    setEcrTypePreference,
     converter,
     API_BASE_URL,
     setShowApiKeyModal
@@ -57,10 +56,7 @@ function App() {
 
   const { makeApiRequest, get } = useApi();
 
-  const [navSections, setNavSections] = useState({
-    playerAnalysis: false,
-    teamManagement: false,
-  });
+  // Legacy navSections removed; sidebar now groups by season mode internally
 
   const [sortDirection, setSortDirection] = useState({ name: 'asc', position: 'asc', adds: 'desc', team: 'asc', ecr: 'asc' });
   const [keeperList, setKeeperList] = useState([]);
@@ -227,6 +223,14 @@ function App() {
       .then(data => {
         if (data) {
           setDossierResult(data);
+          // Record recent player for quick access in sidebar
+          try {
+            const key = 'recentDossierPlayers';
+            const arr = JSON.parse(localStorage.getItem(key) || '[]');
+            const nm = nameToFetch.trim();
+            const next = [nm, ...arr.filter(x => x.toLowerCase() !== nm.toLowerCase())].slice(0,4);
+            localStorage.setItem(key, JSON.stringify(next));
+          } catch (_) {}
         } else {
           setDossierResult({ error: 'The Analyst returned an empty response.' });
         }
@@ -727,7 +731,7 @@ function App() {
       }
 
       // Fetch roster data
-      const rosterResponse = await fetch(`${API_BASE_URL}/api/yahoo/roster?team_key=${teamKey}`, {
+      const rosterResponse = await fetch(`${API_BASE_URL}/yahoo/roster?team_key=${teamKey}`, {
         headers: {
           'Authorization': authHeader,
           'Content-Type': 'application/json'
@@ -741,7 +745,7 @@ function App() {
       const rosterData = await rosterResponse.json();
 
       // Fetch available players data
-      const waiverResponse = await fetch(`${API_BASE_URL}/api/yahoo/waiver_wire?league_key=${leagueKey}&status=A`, {
+      const waiverResponse = await fetch(`${API_BASE_URL}/yahoo/waiver_wire?league_key=${leagueKey}&status=A`, {
         headers: {
           'Authorization': authHeader,
           'Content-Type': 'application/json'
@@ -953,9 +957,6 @@ function App() {
       <Sidebar
         activeTool={activeTool}
         targetList={targetList}
-        navSections={navSections}
-        toggleNavSection={toggleNavSection}
-        setEcrTypePreference={setEcrTypePreference}
       />
 
       <div className="main-content">
@@ -1045,7 +1046,6 @@ function App() {
               handleGlobalSearch={handleGlobalSearch}
               converter={converter}
               activeTool={activeTool}
-              ecrTypePreference={ecrTypePreference}
               getOverallSdLabel={getOverallSdLabel}
               getPositionalSdLabel={getPositionalSdLabel}
               normalizePlayerName={normalizePlayerName}
@@ -1069,6 +1069,10 @@ function App() {
               analysisResult={waiverSwapResult}
               isLoading={isWaiverSwapLoading}
             />
+          )}
+
+          {activeTool === 'lineup' && (
+            <SitStartOptimizer />
           )}
 
           {activeTool === 'settings' && (

@@ -2,6 +2,14 @@ import requests
 import os
 from datetime import datetime
 
+RATM_DEBUG = os.getenv("RATM_DEBUG", "0") == "1"
+def _dbg(msg):
+    if RATM_DEBUG:
+        try:
+            print(msg)
+        except Exception:
+            pass
+
 def download_file(url, local_filename):
     """Downloads a file from a URL to a local path, checking for updates."""
     try:
@@ -18,7 +26,7 @@ def download_file(url, local_filename):
                 remote_mtime = datetime.strptime(remote_mtime_str, '%a, %d %b %Y %H:%M:%S GMT')
 
                 if local_mtime >= remote_mtime:
-                    print(f"'{local_filename}' is up to date. Skipping download.")
+                    _dbg(f"'{local_filename}' is up to date. Skipping download.")
                     return True
         
         # Download the file if it's new or updated
@@ -27,7 +35,7 @@ def download_file(url, local_filename):
             with open(local_filename, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
-        print(f"Successfully downloaded {local_filename}")
+        _dbg(f"Successfully downloaded {local_filename}")
         return True
     except requests.exceptions.RequestException as e:
         print(f"Error downloading {url}: {e}")
@@ -39,7 +47,9 @@ def import_data():
     files_to_download = [
         "db_fpecr_latest.csv",
         "values-players.csv",
-        "values-picks.csv"
+        "values-picks.csv",
+        # Weekly projections (FantasyPros aggregated weekly projections)
+        "fp_latest_weekly.csv",
     ]
     
     backend_dir = os.path.dirname(os.path.abspath(__file__))

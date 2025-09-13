@@ -366,3 +366,247 @@
     margin-top: 10px;
   }
 }
+
+/* Recommendations + Controls (Yahoo mode) */
+.controlsHeader {
+  background-color: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.controlsRow {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.advancedRow {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.controlGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.controlGroup select,
+.controlGroup input[type="range"] {
+  padding: 6px 8px;
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  background-color: var(--input-background);
+  color: var(--text-color);
+}
+
+.rangeValue {
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.inlineToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.linkButton {
+  background: none;
+  border: none;
+  color: var(--primary-color);
+  cursor: pointer;
+  padding: 6px 8px;
+}
+
+.summaryChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 18px 0;
+}
+
+.chip {
+  background-color: var(--input-background);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.9em;
+  color: var(--text-color);
+}
+
+.chipMuted {
+  background-color: var(--input-background);
+  border: 1px dashed var(--border-color);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.9em;
+  color: var(--text-muted);
+}
+
+.recommendationsList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recCard {
+  background-color: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.recHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.recTitle {
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.headerRight { display: inline-flex; align-items: center; gap: 8px; }
+
+.confidence {
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 0.8em;
+  color: #fff;
+}
+.conf_high { background-color: #2e7d32; }
+.conf_medium { background-color: #ef6c00; }
+.conf_low { background-color: #546e7a; }
+
+.benefitBadge {
+  background-color: var(--success-color, #2e7d32);
+  color: #fff;
+  border-radius: 16px;
+  padding: 4px 10px;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+.sourceChip {
+  background-color: var(--input-background);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 0.8em;
+  color: var(--text-muted);
+}
+
+.recBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.recLabel {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.playerLine {
+  color: var(--text-color);
+}
+
+.playerLink {
+  color: var(--primary-color);
+  text-decoration: none;
+}
+.playerLink:hover { text-decoration: underline; }
+
+.badgesRow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  background-color: var(--input-background);
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+  border-radius: 12px;
+  padding: 3px 8px;
+  font-size: 0.8em;
+}
+
+.actionsRow { display: flex; gap: 12px; margin-top: 4px; }
+
+.whyBox {
+  margin-top: 8px;
+  background-color: var(--input-background);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.detailsBox summary {
+  cursor: pointer;
+  color: var(--primary-color);
+}
+
+.detailsGrid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+  margin-top: 8px;
+}
+
+.claimOnly {
+  margin-top: 8px;
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
+.emptyState {
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 12px 0;
+}
+
+.divider {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 18px 0;
+}
+
+.analystBox {
+  background-color: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 10px 0 12px 0;
+}
+.analystHeading { font-weight: 600; margin-bottom: 6px; color: var(--text-color); }
+.analystContent { color: var(--text-color); }
+
+.opinionBanner {
+  background-color: var(--input-background);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--primary-color);
+  padding: 10px 12px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  color: var(--text-color);
+}
+
+.helpText { color: var(--text-muted); font-style: normal; font-size: 0.9em; }

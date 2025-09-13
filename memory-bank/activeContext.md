@@ -71,6 +71,22 @@
     *   Responsive design with CSS variables and theming support
     *   All Yahoo API foundation work completed and tested
 
+### September 6, 2025 — Navigation, Optimizer, and Settings Updates
+
+**✅ Sidebar — Season Mode + Cleanup**
+- Added Season Mode filter: In‑Season vs Pre‑Season with a Show All toggle.
+- Quick actions row: Player search (Dossier), Sit/Start, Waiver, plus Yahoo status chip.
+- Removed ECR Type toggle app‑wide (default to overall semantics), and removed decorative icons for a clean, modern look.
+- Recent Dossier chips deep‑link directly to Dossier (pre‑filled and executed).
+
+**✅ Sit/Start (Yahoo) — UX + Micro‑fixes**
+- Frontend: “Include debug” checkbox, confidence chip, delta points pill, ordered tags.
+- Backend: Confidence downgrade applies when chosen starter is Q/D; matchup tag gated to categorical changes; debug payload includes opponent_projection and slots_filled.
+
+**✅ Settings — Data Health Card**
+- Shows CSV freshness, weekly projections row count/latest scrape date, and enrichment coverage (roster and first 100 A‑status waivers).
+- “Refresh Data (Admin)” triggers CSV re‑download + cache rebuild and rechecks diagnostics.
+
 ## 4. Current Implementation Status
 *   **📋 Documentation Phase Complete:** Comprehensive implementation documentation created
     *   Complete step-by-step implementation guide with exact code changes
@@ -136,6 +152,28 @@
 3. **✅ Priority 2**: Enhanced Player Dossier Data Integration (**COMPLETED AUGUST 23, 2025**)
 4. **🔥 Priority 3**: Enhanced Trade Analysis Data Integration (**CURRENT HIGHEST PRIORITY**)
 
+### ✅ Waiver Wire v3 — AI‑First UX (September 3, 2025)
+- Backend: Added `/api/yahoo/waiver_recommendations_ai` (AI‑authority). Debug mode returns full prompt and diagnostics.
+- Deterministic: Calibrated QB replacement baseline to 12.0 for 6‑pt passing TD leagues (RB/WR 7.5; TE 5.0 unchanged).
+- Prompt: Includes legend, starters (wp/ecr/sched), bench (wp/ecr/sched), and up to 15 candidate moves with component deltas.
+- Frontend: Recommendations‑first UI, “Why” bullets default, “AI” vs “Deterministic” source chip, Dossier links, Browse Pool fixed.
+
+### ✅ Player Dossier UX — Section Reorder (September 4, 2025)
+- Adjusted section order to improve scanability and keep AI context near top:
+  - Quick Scan → Player Overview → Expert Consensus & Rankings → AI Analysis → Weekly Outlook → Market Analysis → Age/Trajectory.
+- Important: This order is controlled by CSS flex `order` rules in `PlayerDossier.module.css`. JSX order does not affect render order if CSS assigns `order` values.
+
+### 🚧 Sit/Start Optimizer — Current Status (September 4–5, 2025)
+- Backend endpoint `/api/optimize_lineup` (Yahoo mode) implemented:
+  - Uses projections (PPR) and slot rules; excludes BYE/OUT, flags Q/D; fills strict slots before flex; preserves duplicate slots (RB, RB2, WR, WR2).
+  - Opponent-aware tie-breakers in close calls only: tiny penalty for opponent DEF clash; slight variance bias if trailing/favored.
+  - Diff filters out cosmetic slot shuffles.
+- Analyst’s Note: Upgraded to structured JSON (`ai_note_json`) with headline, confidence, up to 3 grounded reasons (Projection/Matchup/Status/Variance/Correlation/Consensus/Usage/Confidence/Context), tags, and score_breakdown (projection + small adjustments). UI now renders only the structured card; legacy markdown hidden.
+- ECR semantics enforced: use overall ECR (season‑long) for cross‑position comparisons; use weekly positional rank only when both players share the same position; never compare positional ranks across positions. When overall ECR exists but the gap is below threshold, show a neutral “Overall ECR” context line instead of a consensus claim.
+- Matchup signal: always shows opponent + HOME/AWAY context; when categorical difficulty differs by ≥1 step (Easy/Moderate/Tough), surface “Easier/Tougher matchup” and apply a numeric nudge in score_breakdown (`matchup` ±0.10) with explicit annotation. Correlation and variance remain small nudges for close calls.
+- Debug & testing: `?debug=1` (or body `{debug:true}`) returns `debug.lineup_note` with consensus and matchup inputs. Headless tester `./test_script` added; accepts `TOKEN` and optional `GEMINI_KEY`.
+- Open item: Reasons feel too factual/obvious in some cases. See records/sit_start_optimizer_status.md for the refined plan to make analysis more insightful while staying grounded.
+
 ### **✅ RESOLVED: WAIVER WIRE BENCH ANALYSIS COMPLETE (August 20, 2025)**
 **Resolution Status**: **🎉 CRITICAL ISSUE FULLY RESOLVED - COMPREHENSIVE IMPLEMENTATION COMPLETE**
 
@@ -177,6 +215,20 @@
 - **Feature Adoption** - Complete feature builds user trust and engagement
 - **Competitive Advantage** - Only fantasy app providing complete bench management analysis
 
+## Upcoming Focus
+
+- Player Dossier UX Enhancements (Phase A2): Resume and complete the interpretation-driven UI per memory-bank/PLAYER_DOSSIER_UX_ENHANCEMENT_STATUS.md
+  - Apply helper outputs across Value Opportunity and Age Trajectory sections
+  - Add CSS classes and color coding for badges (projectionBadge, matchupBadge, etc.)
+  - Replace remaining raw numbers with badges + plain-English context + actionable guidance
+  - Validate no regressions in Dossier interactions and rendering
+
+### Debug Logging Policy
+
+- Backend logs are concise by default (one-line data load summary). To enable verbose DEBUG traces for Yahoo and parsing diagnostics:
+  - Set `RATM_DEBUG=1` before running the backend (e.g., `export RATM_DEBUG=1; python app.py`)
+  - CSV download messages are also quiet unless `RATM_DEBUG=1`
+
 ### **🎉 PHASE 1 COMPLETED ACHIEVEMENTS:**
 *   **✅ KEEPER ANALYSIS SYSTEM COMPLETE: Critical Fixes Applied**
     *   **✅ Keeper Cost Calculation Fixed:** Draft round last year → One round better this year
@@ -198,6 +250,21 @@
 *   **🎉 COMPLETED: Yahoo-Integrated Waiver Wire Assistant (Phase 6) - August 18, 2025**
     *   **✅ FULL IMPLEMENTATION COMPLETE:** All backend and frontend components working
     *   **✅ COMPREHENSIVE TESTING PASSED:** All endpoints validated with organized test suite in `backend/tests/`
+
+## 2A. Recent Major Completion (September 2–3, 2025)
+
+**✅ Waiver Wire v2 — Whole‑Roster Scoring Implemented**
+- Backend optimizes overall roster: lineup (weekly) + bench VOR + balance + bye coverage
+- Conservative scoring: weekly‑first; ECR→points fallback for missing projections (QB/RB/WR/TE curves)
+- Enrichment: exact name + Yahoo ID join; optional fuzzy reserved for edge cases
+- Candidate pool: broad with position quotas to avoid QB crowding; K/DEF excluded
+- Guards: cross‑position penalty unless balance improves; avoid surplus bench QBs; preserve RB/WR depth
+- Diagnostics: weekly freshness (row_count, scrape_date, anchors) and coverage scripts
+
+Next up:
+- Alternatives Mode (opt‑in) to surface best near‑neutral moves with rationale badges
+- UI: replace “delta” with “Estimated Benefit”; show badges (Depth/Bye/Insurance/Upside/Risk) and compact breakdown
+- Optional: AI narrative for top 3–5 moves (strict JSON)
     *   **✅ FILES IMPLEMENTED:**
         *   Backend: `app.py` (+300 lines), test suite with 4 scripts + README
         *   Frontend: Enhanced `WaiverWireAssistant.js`, `WaiverWireAssistant.module.css` (+110 lines), `App.js`
@@ -281,3 +348,12 @@
     *   **Total Effort**: 8-12 hours development + 4-6 hours testing
 *   **Testing Strategy:** Cannot test until post-draft - comprehensive validation plan prepared
 *   **Success Criteria:** Zero breaking changes + valuable start/sit recommendations + intuitive UX
+### ✅ RESOLVED: Yahoo Roster Parsing + UI Slots (August 31, 2025)
+- ✅ Backend: Robust NFL roster parser with deep-scan across nested list-of-lists; captures `selected_position` (dict/string/list forms)
+- ✅ Endpoints: `/api/yahoo/roster` and `/api/yahoo/roster_debug` hardened; explicit Bearer auth + JSON accept
+- ✅ Frontend: My Team shows accurate roster slot badge (Starter/Flex/Bench/IR) and explicit slot line
+- 🎯 Outcome: Correct names + slot codes (e.g., BN, W/T, W/R/T) displayed; verified via roster_debug `slot_samples`
+### ✅ Player Dossier UX — Phases A + B Complete (September 6, 2025)
+- Interpreted badges and concise guidance standardized across Weekly Outlook, Market/Ownership, and Age/Trajectory; unified chip style ensures consistent visuals.
+- Responsive layout: Weekly and Market sections use 2‑column grids on desktop, stack on mobile; section order remains CSS‑controlled for stability.
+- Backend dossier test suite green; defensive rendering patterns preserved; no regressions introduced.

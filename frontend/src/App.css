@@ -476,6 +476,25 @@ section {
     display: none; /* Hidden by default */
 }
 
+/* Global chips for quick actions and labels */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #eef1f5;
+  border: 1px solid #cfd6e4;
+  font-size: 12px;
+  color: var(--text-color);
+  text-decoration: none;
+}
+.chip:hover { background: #e9edf4; }
+.chip-success { background: rgba(40,167,69,0.12); border-color: rgba(40,167,69,0.35); color: #28a745; }
+.chip-muted { background: rgba(108,117,125,0.12); border-color: rgba(108,117,125,0.35); color: #6c757d; }
+
+.nav-icon { margin-right: 8px; width: 1.2em; text-align: center; }
+
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }

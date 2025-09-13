@@ -2,12 +2,23 @@
 
 > **File Type**: GO-FORWARD  
 > **Review Priority**: High  
-> **Last Updated**: August 9, 2025  
+> **Last Updated**: August 31, 2025  
 > **Purpose**: Yahoo API implementation details and patterns
 
 ## Overview
 
 This document provides comprehensive implementation guidance for creating the `/api/yahoo/roster` endpoint based on thorough research of the Yahoo Fantasy Sports API documentation and analysis of the existing codebase patterns.
+
+## Update (Resolved 2025-08-31): NFL Roster Parsing & Auth Notes
+
+- NFL roster responses often nest data in list-of-lists, and `selected_position` (the roster slot) may be a sibling to `player` and can be a dict, string, or an array of dicts. Do not rely solely on `player.selected_position`.
+- Robust approach implemented:
+  - Recursively locate `roster` and `players` containers regardless of nesting using helper search.
+  - Deep-scan each player container to extract `player_key`, `name.full`, `eligible_positions`, `status`, and `selected_position` across dict/string/list forms.
+  - Primary endpoint: `/team/{team_key}/roster/players;week={n}?format=json`; fallback to `/team/{team_key}/roster;week={n}?format=json` when the first returns empty.
+  - Requests use explicit `Authorization: Bearer <access_token>` and `Accept: application/json` (no OAuth session wrapper needed once you have the token).
+- Debugging aid: `/api/yahoo/roster_debug` returns counts and `slot_samples` for quick verification of `selected_position`.
+- Frontend mapping: Display a single roster-slot badge (Starter/Flex/Bench/IR) driven strictly by `selected_position`, plus a visible line: `Slot: <code> (<category>) • Position: <pos> • Eligible: ...`.
 
 ## API Research Findings
 
@@ -101,16 +112,12 @@ Based on research, the roster response follows this structure:
 
 ### Authentication Pattern
 
-From existing `/api/yahoo/leagues` endpoint (lines 956-1003 in app.py):
+Preferred pattern once you have the access token:
 ```python
-@app.route('/api/yahoo/roster')
-def get_yahoo_roster():
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({"error": "Not authenticated with Yahoo. Authorization header missing."}), 401
-    
-    access_token_string = auth_header.split(' ')[1]
-    yahoo = OAuth2Session(YAHOO_CLIENT_ID, token={'access_token': access_token_string})
+auth_header = request.headers.get('Authorization')  # Expect: Bearer <token>
+access_token = auth_header.split(' ')[1]
+yahoo_headers = { 'Authorization': f'Bearer {access_token}', 'Accept': 'application/json' }
+resp = requests.get(yahoo_url, headers=yahoo_headers, timeout=10)
 ```
 
 ### Defensive Parsing Pattern
@@ -222,10 +229,12 @@ def parse_yahoo_roster_response(data):
                         else:
                             full_name = str(name_data) if name_data else ''
                         
-                        # Handle position data
+                        # Handle roster slot (NFL may return dict, string, or list)
                         selected_pos_data = player_data.get('selected_position', {})
                         if isinstance(selected_pos_data, dict):
                             selected_position = selected_pos_data.get('position', '')
+                        elif isinstance(selected_pos_data, list):
+                            selected_position = next((d.get('position') for d in selected_pos_data if isinstance(d, dict) and d.get('position')), '')
                         else:
                             selected_position = str(selected_pos_data) if selected_pos_data else ''
                         

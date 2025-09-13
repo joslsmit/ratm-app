@@ -2,7 +2,7 @@
 
 > **File Type**: GO-FORWARD  
 > **Review Priority**: High  
-> **Last Updated**: August 20, 2025 (Waiver Wire Bench Analysis Complete - Critical Issue Resolved)  
+> **Last Updated**: September 6, 2025 (Player Dossier UX complete; Week 1 priorities)  
 > **Purpose**: Overall project progress and current development phase
 
 This document tracks the progress of the RATM Draft Kit project against the defined deployment and integration plan.
@@ -77,6 +77,12 @@ This document tracks the progress of the RATM Draft Kit project against the defi
 
 ### 🚀 ALL YAHOO API FEATURES NOW UNBLOCKED!
 **Achievement:** With world-class AI foundation complete, all Yahoo API development can proceed with confidence.
+
+## August 31, 2025 — Yahoo Roster Parsing Resolved
+- Implemented robust NFL roster parsing handling Yahoo's nested list-of-lists and varied `selected_position` shapes (dict/string/list)
+- Switched Yahoo data fetches to explicit Bearer requests with JSON accept; added `/api/yahoo/roster_debug` with `slot_samples`
+- My Team UI updated: single slot badge with Starter/Flex/Bench/IR variants + explicit Slot line.
+- Result: Roster displays correct names and accurate slot codes (e.g., BN, W/T, W/R/T). Verified locally via curl and app UI.
 
 ## Current and Future Phases - NOW READY FOR DEVELOPMENT! 🚀
 
@@ -176,9 +182,33 @@ This document tracks the progress of the RATM Draft Kit project against the defi
 *   **Business Impact:** Keeper analysis now provides strategic, accurate recommendations with optimal roster construction guidance
 *   **Files Updated:** `/backend/app.py` (keeper calculation + AI methodology), `/frontend/src/components/KeeperEvaluator.js` (complete UX overhaul)
 
-## 🎯 DEVELOPMENT SEQUENCE - PRIORITIZED ROADMAP
+## 🎯 DEVELOPMENT SEQUENCE - PRIORITIZED ROADMAP (Week 1)
 
-### 🏆 ALL PRIORITY PHASES COMPLETE! 🎉
+### P0 — Ship before lineups lock
+1) Yahoo‑Integrated Market Inefficiency Finder (sleepers/busts, league‑aware)
+2) Yahoo‑Roster Sit/Start Optimizer (deterministic lineup + structured AI note)
+3) Waiver v3 Stability QA (invalid AI moves already guarded; verify in live leagues)
+
+### P1 — After kickoff (1–3 days)
+- Waiver v3 Alternatives mode polish; add small dossier extras to AI prompt (ownership %, schedule difficulty)
+- Market Inefficiency UX polish and Dossier links
+
+### P2 — Next sprint
+- Trade Analyzer weekly data overlay + concise AI verdicts
+- Token security (cookie/server exchange) and short‑TTL caching for roster/pool
+- Settings “Data Health” card (CSV freshness, coverage)
+
+### Phase 7: Settings — Data Health Card
+*   **Status:** ✅ COMPLETED (September 6, 2025)
+*   **Details:** Added diagnostics to Settings showing CSV freshness, weekly projections row counts/latest scrape date, and enrichment coverage (roster and waivers). Includes an admin refresh action to re‑download CSVs and rebuild caches.
+
+### Phase 8: Sit/Start Optimizer — Yahoo‑Only UX + Micro‑Fixes
+*   **Status:** ✅ COMPLETED (September 6, 2025)
+*   **Details:** Frontend added Include debug checkbox, confidence chip, delta pill, and ordered tags. Backend adjusted confidence for Q/D on chosen starter, gated matchup tags to categorical differences, and added richer debug meta.
+
+### Phase 9: Sidebar — Season Mode & Cleanup
+*   **Status:** ✅ COMPLETED (September 6, 2025)
+*   **Details:** Added Season Mode (In‑Season/Pre‑Season) and Show All toggle; quick actions row; Yahoo status chip; removed ECR Type toggle; removed icons for a cleaner look; Dossier recents deep‑link to players.
 
 ### 🥇 ✅ COMPLETED: Phase 6 - AI-Powered Waiver Wire Assistant (Yahoo Integrated)
 *   **Status:** **🎉 FULLY COMPLETED - Ready for Post-Draft Testing**
@@ -230,6 +260,14 @@ This document tracks the progress of the RATM Draft Kit project against the defi
     *   **✅ Context Generation Verified:** Enhanced multi-factor formatting operational for all analysis types
 *   **Business Impact:** **40-60% improvement in waiver recommendation accuracy** achieved through elimination of basic errors and systematic market opportunity identification
 *   **Files Enhanced:** `app.py` (+200 lines data loading), `utils.py` (+240 lines utility functions), `context_formatters.py` (+230 lines enhanced formatting)
+
+### 🚀 ✅ COMPLETED: Waiver Wire v2 — Whole‑Roster Scoring (September 2–3, 2025)
+*   **Status:** **✅ BACKEND COMPLETE** — recommendations now consider lineup + bench VOR + balance + bye coverage
+*   **Conservative Scoring:** Weekly‑first; ECR→points fallback for missing weekly projections
+*   **Enrichment:** Exact name + Yahoo ID join; K/DEF excluded; broad pool with position quotas to avoid QB crowding
+*   **Guards:** Cross‑position penalty unless balance improves; avoid surplus bench QBs; preserve RB/WR depth
+*   **Diagnostics:** Weekly freshness (row_count, scrape_date, anchor presence) and coverage scripts
+*   **Next:** Alternatives Mode (opt‑in) and UI badges/“Estimated Benefit”; optional AI narrative
 
 ### 🥇 ✅ COMPLETED: Phase 9 - Yahoo-Enhanced Market Inefficiency Finder
 *   **Status:** **🎉 FULLY COMPLETED - Production Ready**
@@ -381,3 +419,15 @@ This document tracks the progress of the RATM Draft Kit project against the defi
 *   **✅ Local Development with mkcert:** Successfully implemented local HTTPS development using `mkcert` instead of `ngrok`. SSL certificates are generated in `backend/certs/` directory. This provides a stable, secure local development environment for Yahoo OAuth testing.
 *   **✅ Yahoo OAuth Flow:** Complete authentication flow working locally with proper token storage and endpoint protection.
 *   **✅ API Integration:** Successfully integrated with Yahoo Fantasy Sports API with proper defensive JSON parsing patterns.
+### ✅ Sit/Start Optimizer Enhancements (Sept 4–5)
+- Structured AI note with headline, confidence, up to 3 grounded reasons, canonical tags, and score breakdown.
+- ECR semantics fixed: overall ECR for cross‑position; weekly positional only within same position; neutral “Overall ECR” context when under threshold.
+- Matchup difficulty (Easy/Moderate/Tough) mapped to a small numeric nudge (±0.10) with explicit reason; opponent/Home‑Away always shown.
+- UI: Structured card renders chips + score row + typed reasons; legacy markdown hidden.
+- Debug: `?debug=1` exposes `consensus_inputs` and `matchup_inputs` for verification.
+- Test script: `./test_script` for headless verification (TOKEN required; optional GEMINI_KEY).
+### Phase 7: Player Dossier UX Enhancement (Phases A + B)
+*   **Status:** **✅ COMPLETED (September 2025)**
+*   **Outcome:** Interpreted badges and concise guidance across Weekly Outlook, Market/Ownership, and Age/Trajectory; unified chip styling; responsive 2‑column Weekly/Market grids; CSS‑controlled section order preserved.
+*   **Quality:** Backend dossier test suite (6/6) passing; null‑safe rendering; no regression to existing flows.
+*   **Docs:** See `PLAYER_DOSSIER_UX_ENHANCEMENT_STATUS.md` for final plan/outcomes and run instructions.

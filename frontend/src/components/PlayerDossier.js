@@ -856,6 +856,12 @@ export default function PlayerDossier({
             </div>
           </div>
 
+          {/* AI Analysis moved up: after Quick Scan + Player Overview */}
+          <div className={`${styles.card} ${styles.aiAnalysisCard}`}>
+            <h3>AI Analysis</h3>
+            <div id="dossier-result" className={styles.resultBox} dangerouslySetInnerHTML={{ __html: converter.makeHtml(dossierResult.analysis) }}></div>
+          </div>
+
           <div className={`${styles.card} ${styles.ecrDataCard} ${styles.priorityStandard}`}>
             <div className={styles.sectionPriorityIndicator}></div>
             <h3>Expert Consensus & Rankings</h3>
@@ -916,7 +922,7 @@ export default function PlayerDossier({
                           </div>
                         </div>
                       } detailed>
-                        <span className={`${styles.projectionBadge} ${styles[projectionInterpretation?.tier || 'standard']}`}>
+                        <span className={`${styles.chip} ${styles.projectionBadge} ${styles[projectionInterpretation?.tier || 'standard']}`}>
                           {projectionInterpretation?.badge} {projectionInterpretation?.context}
                         </span>
                       </Tooltip>
@@ -976,7 +982,7 @@ export default function PlayerDossier({
                           </div>
                         </div>
                       } detailed>
-                        <span className={`${styles.matchupBadge} ${styles[matchupInterpretation?.confidence || 'moderate']}`}>
+                        <span className={`${styles.chip} ${styles.matchupBadge} ${styles[matchupInterpretation?.confidence || 'moderate']}`}>
                           {matchupInterpretation?.badge} {matchupInterpretation?.assessment}
                         </span>
                       </Tooltip>
@@ -1052,7 +1058,7 @@ export default function PlayerDossier({
                           </div>
                         </div>
                       } detailed>
-                        <span className={`${styles.ownershipBadge} ${styles[ownershipInterpretation?.tier]}`}>
+                        <span className={`${styles.chip} ${styles.ownershipBadge} ${styles[ownershipInterpretation?.tier]}`}>
                           {ownershipInterpretation?.badge} {ownershipInterpretation?.context}
                         </span>
                       </Tooltip>
@@ -1080,12 +1086,14 @@ export default function PlayerDossier({
                   );
                 })()}
 
-                {/* Market Value */}
-                {dossierResult.player_data.value_1qb && (() => {
-                  const valueInterpretation = interpretValueScore(
-                    dossierResult.player_data.value_1qb,
-                    dossierResult.player_data.position
-                  );
+                {/* Market Value (supports 1QB or 2QB fallback) */}
+                {(dossierResult.player_data.value_1qb || dossierResult.player_data.value_2qb) && (() => {
+                  const pos = dossierResult.player_data.position;
+                  const valueScore = (typeof dossierResult.player_data.value_1qb === 'number' ? dossierResult.player_data.value_1qb : null)
+                    ?? (typeof dossierResult.player_data.value_2qb === 'number' ? dossierResult.player_data.value_2qb : null);
+                  const valueInterpretation = valueScore != null ? interpretValueScore(valueScore, pos) : null;
+                  const formatLabel = (dossierResult.player_data.value_1qb != null) ? '1QB format' : '2QB/Superflex format';
+                  if (!valueInterpretation) return null;
                   
                   return (
                     <div className={styles.marketSection}>
@@ -1096,6 +1104,7 @@ export default function PlayerDossier({
                           <p><strong>Value Tier:</strong> {valueInterpretation?.context}</p>
                           <p><strong>Score Context:</strong> {valueInterpretation?.scoreContext}</p>
                           <p><strong>Why This Matters:</strong> {valueInterpretation?.whyItMatters}</p>
+                          <p><em>Format:</em> {formatLabel}</p>
                           <div className={styles.tooltipSection}>
                             <strong>Calculation Method:</strong>
                             <ul>
@@ -1107,17 +1116,18 @@ export default function PlayerDossier({
                           </div>
                         </div>
                       } detailed>
-                        <span className={`${styles.valueBadge} ${styles[valueInterpretation?.tier]}`}>
+                        <span className={`${styles.chip} ${styles.valueBadge} ${styles[valueInterpretation?.tier]}`}>
                           {valueInterpretation?.badge}
                         </span>
                       </Tooltip>
                       <span className={styles.valueDescription}>
                         {valueInterpretation?.description} - {valueInterpretation?.context}
                       </span>
-                      <span className={styles.valueScore}>
-                        Draft Rating: {dossierResult.player_data.value_1qb} pts
-                        {dossierResult.player_data.value_2qb && ` (Superflex: ${dossierResult.player_data.value_2qb} pts)`}
-                      </span>
+                      {valueScore != null && (
+                        <span className={styles.valueScore}>
+                          Draft Rating: {valueScore} pts{dossierResult.player_data.value_2qb && dossierResult.player_data.value_1qb != null && ` (Superflex: ${dossierResult.player_data.value_2qb} pts)`}
+                        </span>
+                      )}
                     </div>
                   );
                 })()}
@@ -1132,7 +1142,7 @@ export default function PlayerDossier({
                   return (
                     <div className={styles.marketSection}>
                       <h4>Waiver Wire Priority</h4>
-                      <span className={`${styles.opportunityBadge} ${styles[opportunityInterpretation?.tier]}`}>
+                      <span className={`${styles.chip} ${styles.opportunityBadge} ${styles[opportunityInterpretation?.tier]}`}>
                         {opportunityInterpretation?.badge}
                       </span>
                       <span className={styles.opportunityDescription}>
@@ -1378,10 +1388,6 @@ export default function PlayerDossier({
             </div>
           )}
 
-          <div className={`${styles.card} ${styles.aiAnalysisCard}`}>
-            <h3>AI Analysis</h3>
-            <div id="dossier-result" className={styles.resultBox} dangerouslySetInnerHTML={{ __html: converter.makeHtml(dossierResult.analysis) }}></div>
-          </div>
         </div>
       )}
       {dossierResult && dossierResult.error && (

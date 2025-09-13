@@ -43,7 +43,13 @@ This document provides detailed technical information about the RATM Draft Kit p
 *   **Frontend `API_BASE_URL`:** Configured in `frontend/src/context/AppContext.js`.
     *   Local: `https://localhost:5000/api` (using `mkcert` for HTTPS)
     *   Production: `https://ratm-app.onrender.com/api`
-*   **Backend `/api/*` endpoints:** All API endpoints are prefixed with `/api/` (e.g., `/api/player_dossier`, `/api/rookie_rankings`).
+*   **Backend `/api/*` endpoints:** All API endpoints are prefixed with `/api/` (e.g., `/api/player_dossier`, `/api/rookie_rankings`). Key endpoints:
+    - `GET /api/yahoo/waiver_pool`
+    - `POST /api/yahoo/waiver_recommendations_v2`
+    - `POST /api/yahoo/waiver_recommendations_ai` — AI‑authority, supports `?debug=1` to return full prompt and diagnostics
+    - `POST /api/optimize_lineup` — Yahoo lineup optimizer: returns `suggested_lineup`, `diff`, `eligibility_info`, plus `ai_note_json` with `{ confidence, headline, reasons[], tags[], score_breakdown{} }`. Supports `?debug=1` (or body `{debug:true}`) to include `consensus_inputs`, `matchup_inputs`, `opponent_projection`, and `slots_filled`.
+    - `GET /api/diagnostics/yahoo-data-health` — League diagnostics (CSV freshness, enrichment coverage); requires Yahoo Authorization and `league_key`.
+    - `POST /api/admin/refresh_data` — Admin/developer CSV refresh that rebuilds caches.
 
 ### C. CORS Configuration
 *   **Location:** `backend/app.py`
@@ -55,9 +61,10 @@ This document provides detailed technical information about the RATM Draft Kit p
 *   **Purpose:** Ensures the browser allows the frontend to make requests to the backend API.
 *   **Production Issue Resolution (August 27, 2025):** Added `https://ratm-app.vercel.app` to CORS origins to resolve "Access-Control-Allow-Origin" errors when frontend deployed to production.
 
-### D. Data Paths
+### D. Data & Navigation
 *   **`basedir`:** Defined in `backend/app.py` to correctly resolve paths to local data files.
 *   **CSV Files:** `db_fpecr_latest.csv`, `values-players.csv`, `values-picks.csv` are expected to be present in the `backend/` directory.
+*   **Navigation:** Sidebar uses a Season Mode switch (In‑Season / Pre‑Season) with a Show All toggle; quick actions provide direct access to common in‑season tools.
 
 ## 3. Tool-Specific Context
 
@@ -82,7 +89,7 @@ This document provides detailed technical information about the RATM Draft Kit p
 *   **Build & Start Commands:** Vercel automatically detects React projects and handles these.
 *   **Production URL:** `https://ratm-app.vercel.app`
 
-## 5. Production Deployment (Updated August 27, 2025)
+## 5. Production Deployment (Updated September 3, 2025)
 
 ### ✅ Current Production Status
 *   **Frontend:** Successfully deployed at `https://ratm-app.vercel.app`
@@ -128,6 +135,19 @@ This document provides detailed technical information about the RATM Draft Kit p
     *   Check `git status` for untracked/uncommitted changes.
     *   Verify remote tracking branches are set up correctly (`git branch -vv`).
 
+### Debug verbosity control
+
+- Backend prints are concise by default. A single one‑line summary is emitted after CSV/ECR/projections load, e.g.
+  - `Data loaded | players:11400 ECR[bo:521, bp:574, drk:113] weekly:892 combined:1141 aliases:0`
+- Set `RATM_DEBUG=1` to re‑enable detailed DEBUG traces:
+  - Yahoo pagination and parse traces, raw response key hints, roster parsing fallbacks, waiver pool paging/enrichment messages
+  - CSV download/update messages in `backend/data_importer.py`
+- Example:
+  ```bash
+  export RATM_DEBUG=1
+  cd backend && python app.py
+  ```
+
 ## 6. Testing Infrastructure (Updated August 19, 2025)
 
 ### A. Backend Test Suite
@@ -141,3 +161,20 @@ This document provides detailed technical information about the RATM Draft Kit p
 *   **Usage:** Run from `backend/tests/` with activated virtual environment
 *   **Purpose:** Validate Yahoo implementations (waiver wire, market inefficiency) structure and error handling
 *   **Current Status:** ✅ All priority Yahoo implementations tested and validated
+
+## 7. Waiver Wire v3 — Implementation Notes (Sept 3)
+- AI‑first endpoint `/api/yahoo/waiver_recommendations_ai` combines deterministic candidate generation with Gemini ranking/explanation.
+- Debug: `?debug=1` returns full prompt, prompt length, coverage, and AI response meta.
+- Deterministic baselines calibrated for 6‑pt passing TD leagues (QB 12.0; RB/WR 7.5; TE 5.0).
+- Frontend shows “AI” vs “Deterministic” source chip on each recommendation card; “Why” bullets shown by default; details collapsed.
+
+### League Scoring Reference
+- Offensive scoring settings documented in `records/league_scoring_offense.md`.
+- Bench VOR baselines are aligned to these rules; projections consumed are PPR (r2p_pts).
+## 8. Sit/Start Optimizer — Implementation Notes (Sept 4–5)
+- Yahoo‑only endpoint implemented; deterministic selection driven by weekly projections; excludes BYE/OUT; Q/D flagged.
+- Structured AI note: up to 3 grounded reasons (Projection/Matchup/Status/Variance/Correlation/Consensus/Usage/Confidence/Context) with canonical tags and a score breakdown (projection plus small nudges: matchup ±0.10, correlation/variance in close calls).
+- ECR: overall ECR used for cross‑position; weekly positional rank only for same‑position; neutral Overall ECR context when gaps are small.
+- Matchup: opponent + HOME/AWAY always shown; categorical difficulty (Easy/Moderate/Tough) mapped and surfaced when meaningful with a small numeric nudge.
+- UI renders structured card only; markdown hidden.
+- Test script: project root `./test_script` — set `TOKEN` (Yahoo), optional `GEMINI_KEY`; add `INSECURE=1` if using mkcert locally. Smoketest also available at `scripts/test_lineup_optimizer.zsh`.

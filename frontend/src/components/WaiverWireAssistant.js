@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useContext } from 'react';
 import autoComplete from '@tarekraafat/autocomplete.js';
 import styles from './WaiverWireAssistant.module.css';
 import { useApi } from '../hooks/useApi';
+import { AppContext } from '../context/AppContext';
 
 const RosterInput = ({ id, label, allPlayers, description = null, onPlayerChange }) => {
   useEffect(() => {
@@ -87,13 +88,15 @@ const WaiverWireAssistant = ({
   allPlayers, 
   onAnalyze, 
   onAnalyzeEnhanced = null, // Optional: New prop for enhanced analysis with complete roster data
-  onAnalyzeYahoo = null, // Optional: New prop for Yahoo analysis
+  // onAnalyzeYahoo deprecated in favor of direct v2 call from this component
+  onAnalyzeYahoo = null, // kept for backward compatibility; not used in Yahoo mode
   onLeaguesUpdate = null, // Optional: New prop to pass leagues to parent
   analysisResult, 
   isLoading 
 }) => {
-  // API_BASE_URL is provided by useApi hook context
-  const { get } = useApi();
+  // API_BASE_URL is provided by app context; GET helper via useApi
+  const { API_BASE_URL, converter, userApiKey } = useContext(AppContext);
+  const { get, makeApiRequest } = useApi();
   
   const rosterPositions = {
     Starters: ['QB', 'WR1', 'WR2', 'RB1', 'RB2', 'W/T', 'W/R/T', 'DEF'],
@@ -137,6 +140,21 @@ const WaiverWireAssistant = ({
   const [isLoadingYahooData, setIsLoadingYahooData] = useState(false);
   const [yahooError, setYahooError] = useState('');
   const [useYahooMode, setUseYahooMode] = useState(false);
+  // Recommendations state (Yahoo v2 endpoint)
+  const [recommendations, setRecommendations] = useState([]); // deterministic fallback
+  const [aiMoves, setAiMoves] = useState([]); // AI-authority moves
+  const [recMeta, setRecMeta] = useState(null);
+  const [recError, setRecError] = useState('');
+  const [statusFilter, setStatusFilter] = useState('A'); // A|FA|W
+  const [includeAlternatives, setIncludeAlternatives] = useState(false);
+  const [minBenefit, setMinBenefit] = useState(0.0); // toggled to -1.0 when alternatives enabled
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showPool, setShowPool] = useState(false);
+  const [showMeta, setShowMeta] = useState(false);
+  const [expandedRecs, setExpandedRecs] = useState({});
+  const [analystNoteHtml, setAnalystNoteHtml] = useState('');
+  const [showAiDebug, setShowAiDebug] = useState(false);
+  const [aiDebug, setAiDebug] = useState(null);
 
   const sanitizeId = (label) => label.replace(/\//g, '-');
   
@@ -274,9 +292,11 @@ const WaiverWireAssistant = ({
         onLeaguesUpdate(leagues);
       }
       
-      // Auto-select first league if only one available
+      // Auto-select first league if only one available, and load pool
       if (leagues.length === 1) {
-        setSelectedLeague(leagues[0].league_key);
+        const lk = leagues[0].league_key;
+        setSelectedLeague(lk);
+        try { await fetchAvailablePlayers(lk); } catch(_) {}
       }
     } catch (error) {
       console.error('Error fetching leagues:', error);
@@ -300,6 +320,8 @@ const WaiverWireAssistant = ({
         const token = localStorage.getItem('yahoo_token');
         if (token) {
           setIsYahooUser(true);
+          // Default to Yahoo mode when token present
+          setUseYahooMode(true);
           // Fetch user's leagues
           await fetchUserLeagues(token);
         } else {
@@ -357,33 +379,31 @@ const WaiverWireAssistant = ({
     
     if (leagueKey && useYahooMode) {
       await fetchAvailablePlayers(leagueKey);
+      // Clear stale recommendations on league change
+      setRecommendations([]);
+      setRecMeta(null);
+      setRecError('');
     }
   };
 
   // Toggle Yahoo mode
   const toggleYahooMode = () => {
-    setUseYahooMode(!useYahooMode);
-    if (!useYahooMode && selectedLeague) {
+    const next = !useYahooMode;
+    setUseYahooMode(next);
+    if (next && selectedLeague) {
       fetchAvailablePlayers(selectedLeague);
     }
   };
 
   const handleAnalyzeClick = () => {
     if (useYahooMode && selectedLeague) {
-      // Yahoo mode: use league roster and available players
-      if (!onAnalyzeYahoo) {
-        console.error('Yahoo analysis handler not provided');
-        alert('Yahoo analysis not available. Please contact support.');
-        return;
-      }
-      
+      // Yahoo mode: call deterministic v2 recommendations endpoint directly
       const token = localStorage.getItem('yahoo_token');
       if (!token) {
         alert('Yahoo authentication required. Please log in with Yahoo.');
         return;
       }
-      
-      onAnalyzeYahoo(selectedLeague, token);
+      generateRecommendations(selectedLeague, token);
     } else {
       // Traditional mode: use manual roster input
       // First save any pending changes, then use saved roster data
@@ -420,6 +440,109 @@ const WaiverWireAssistant = ({
         onAnalyze(filledPositions, playerToAdd);
       }
     }
+  };
+
+  const generateRecommendations = async (leagueKey, yahooToken) => {
+    try {
+      setIsLoadingYahooData(true);
+      setRecError('');
+      setRecommendations([]);
+      setRecMeta(null);
+
+      // Parse token object and extract access_token
+      const tokenObject = JSON.parse(yahooToken);
+      const authHeader = `Bearer ${tokenObject.access_token}`;
+
+      // Determine team key from userLeagues
+      const leagueObj = userLeagues.find(l => l.league_key === leagueKey);
+      const teamKey = leagueObj?.team_key;
+      if (!teamKey) {
+        throw new Error('Unable to find your team in the selected league.');
+      }
+
+      // Build payload for v2 endpoint
+      const body = {
+        league_key: leagueKey,
+        team_key: teamKey,
+        status: statusFilter,
+        top_n: 10,
+        include_alternatives: includeAlternatives,
+        min_benefit: includeAlternatives ? (minBenefit ?? -1.0) : 0.0,
+        exclude_positions: ['K', 'DEF']
+      };
+
+      // Prefer AI-authority endpoint when API key is available; fallback to deterministic v2
+      if (userApiKey) {
+        const aiResp = await fetch(`${API_BASE_URL}/yahoo/waiver_recommendations_ai?debug=1`, {
+          method: 'POST',
+          headers: {
+            'Authorization': authHeader,
+            'X-API-Key': userApiKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        });
+        if (aiResp.ok) {
+          const aiData = await aiResp.json();
+          setAiMoves(Array.isArray(aiData.moves) ? aiData.moves : []);
+          setAnalystNoteHtml(aiData.summary ? converter.makeHtml(aiData.summary) : '');
+          setRecMeta(aiData.metadata || null);
+          setAiDebug(aiData.debug || { ai_used: true, ai_moves_count: (aiData.moves||[]).length });
+          // Keep deterministic as fallback if provided
+          setRecommendations(Array.isArray(aiData.recommendations) ? aiData.recommendations : []);
+          return;
+        }
+        // if AI endpoint fails, fall through to deterministic
+        else {
+          try { const errData = await aiResp.json(); setAiDebug(errData && errData.debug ? errData.debug : { ai_used: false, error: `HTTP ${aiResp.status}` }); } catch(_) {}
+        }
+      }
+
+      const response = await fetch(`${API_BASE_URL}/yahoo/waiver_recommendations_v2`, {
+        method: 'POST',
+        headers: {
+          'Authorization': authHeader,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || `Failed to fetch recommendations (${response.status})`);
+      }
+
+      const data = await response.json();
+      setRecommendations(Array.isArray(data.recommendations) ? data.recommendations : []);
+      setRecMeta(data.metadata || null);
+    } catch (err) {
+      console.error('Recommendations error:', err);
+      setRecError(err.message || 'Unknown error fetching recommendations');
+    } finally {
+      setIsLoadingYahooData(false);
+    }
+  };
+
+  const getConfidence = (rec) => {
+    const b = typeof rec.estimated_benefit === 'number' ? rec.estimated_benefit : 0;
+    if (b >= 2.0) return 'High';
+    if (b >= 0.5) return 'Medium';
+    return 'Low';
+  };
+
+  const badgeToReason = (badge) => {
+    switch ((badge || '').toLowerCase()) {
+      case 'depth': return 'Strengthens bench depth at a need position';
+      case 'bye coverage': return 'Improves coverage for upcoming starter byes';
+      case 'insurance': return 'Adds insurance behind a key starter';
+      case 'upside': return 'Adds upside profile for later weeks';
+      case 'risk': return 'Carries some uncertainty (monitor)';
+      default: return null;
+    }
+  };
+
+  const toggleRecExpanded = (idx) => {
+    setExpandedRecs(prev => ({ ...prev, [idx]: !prev[idx] }));
   };
   
   useEffect(() => {
@@ -564,26 +687,246 @@ const WaiverWireAssistant = ({
           <div className={styles.card}>
             {useYahooMode && selectedLeague ? (
               <>
-                <h3>Available Players in Your League</h3>
-                <p>Based on your {userLeagues.find(l => l.league_key === selectedLeague)?.league_name} league</p>
-                <div className={styles.availablePlayersGrid}>
-                  {yahooAvailablePlayers.slice(0, 20).map((player) => (
-                    <div key={player.player_key} className={styles.availablePlayerCard}>
-                      <div className={styles.playerName}>{player.name}</div>
-                      <div className={styles.playerMeta}>
-                        {player.primary_position} - {player.team}
-                        {player.ecr && <span className={styles.ecrBadge}>ECR: {player.ecr}</span>}
+                <div className={styles.controlsHeader}>
+                  <div className={styles.controlsRow}>
+                    <div className={styles.controlGroup}>
+                      <button 
+                        onClick={handleAnalyzeClick} 
+                        className={styles.actionButton} 
+                        disabled={isLoadingYahooData}
+                      >
+                        {isLoadingYahooData ? 'Refreshing…' : 'Refresh Recommendations'}
+                      </button>
+                    </div>
+                    <label className={styles.inlineToggle}>
+                      <input
+                        type="checkbox"
+                        checked={includeAlternatives}
+                        onChange={(e) => {
+                          const v = e.target.checked;
+                          setIncludeAlternatives(v);
+                          setMinBenefit(v ? -1.0 : 0.0);
+                        }}
+                      />
+                      Show Alternatives
+                    </label>
+                    <button className={styles.linkButton} onClick={() => setShowMeta(!showMeta)}>
+                      {showMeta ? 'Hide Details' : 'Show Details'}
+                    </button>
+                    <button className={styles.linkButton} onClick={() => setShowAdvanced(!showAdvanced)}>
+                      {showAdvanced ? 'Hide Advanced' : 'Advanced'}
+                    </button>
+                    <button className={styles.linkButton} onClick={async () => {
+                      const opening = !showPool;
+                      setShowPool(opening);
+                      if (opening && selectedLeague && (!yahooAvailablePlayers || yahooAvailablePlayers.length === 0)) {
+                        try { await fetchAvailablePlayers(selectedLeague); } catch(_) {}
+                      }
+                    }}>
+                      {showPool ? 'Hide Pool' : 'Browse Pool'}
+                    </button>
+                    <button className={styles.linkButton} onClick={() => setShowAiDebug(!showAiDebug)}>
+                      {showAiDebug ? 'Hide AI Debug' : 'Debug AI'}
+                    </button>
+                  </div>
+                  {showAdvanced && (
+                    <div className={styles.advancedRow}>
+                      <div className={styles.controlGroup}>
+                        <label>Status</label>
+                        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                          <option value="A">All (A)</option>
+                          <option value="FA">Free Agents (FA)</option>
+                          <option value="W">Waivers (W)</option>
+                        </select>
                       </div>
+                      {includeAlternatives && (
+                        <div className={styles.controlGroup}>
+                          <label>Min Estimated Benefit</label>
+                          <input
+                            type="range"
+                            min={-5}
+                            max={5}
+                            step={0.5}
+                            value={minBenefit}
+                            onChange={(e) => setMinBenefit(parseFloat(e.target.value))}
+                          />
+                          <span className={styles.rangeValue}>{Number.isFinite(minBenefit) ? minBenefit.toFixed(1) : '-'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Analyst Summary */}
+                {analystNoteHtml && (
+                  <div className={styles.analystBox}>
+                    <div className={styles.analystHeading}>Analyst’s Note</div>
+                    <div className={styles.analystContent} dangerouslySetInnerHTML={{ __html: analystNoteHtml }} />
+                  </div>
+                )}
+
+                {showAiDebug && (
+                  <div className={styles.analystBox}>
+                    <div className={styles.analystHeading}>AI Debug</div>
+                    <div className={styles.detailsGrid}>
+                      <span>API Key Present</span><span>{userApiKey ? 'Yes' : 'No'}</span>
+                      <span>AI Endpoint Used</span><span>{aiMoves && aiMoves.length ? 'Yes' : 'No (fallback)'}</span>
+                      <span>AI Moves Count</span><span>{aiMoves ? aiMoves.length : 0}</span>
+                      {aiDebug && aiDebug.pool_coverage && <>
+                        <span>Pool Coverage</span><span>{aiDebug.pool_coverage.rate}% ({aiDebug.pool_coverage.have}/{aiDebug.pool_coverage.total})</span>
+                      </>}
+                      {aiDebug && aiDebug.roster_coverage && <>
+                        <span>Roster Coverage</span><span>{aiDebug.roster_coverage.rate}% ({aiDebug.roster_coverage.have}/{aiDebug.roster_coverage.total})</span>
+                      </>}
+                      {aiDebug && aiDebug.error && <>
+                        <span>Error</span><span style={{color:'var(--danger-color)'}}>{aiDebug.error}</span>
+                      </>}
+                    </div>
+                    {aiDebug && (aiDebug.prompt || aiDebug.prompt_sample) && (
+                      <details style={{marginTop:'8px'}}>
+                        <summary>Prompt Preview</summary>
+                        <pre style={{whiteSpace:'pre-wrap'}}>{aiDebug.prompt || aiDebug.prompt_sample}</pre>
+                      </details>
+                    )}
+                  </div>
+                )}
+
+                {showMeta && recMeta && (
+                  <div className={styles.summaryChips}>
+                    <span className={styles.chip}>Baseline Overall: {recMeta.baseline_overall}</span>
+                    <span className={styles.chip}>Lineup: {recMeta.baseline_points}</span>
+                    <span className={styles.chip}>Bench VOR: {recMeta.baseline_bench_vor}</span>
+                    <span className={styles.chip}>Balance: {recMeta.baseline_balance}</span>
+                    <span className={styles.chip}>Bye: {recMeta.baseline_bye}</span>
+                    <span className={styles.chipMuted}>Pool: {recMeta.pool_considered} • Coverage: {recMeta.pool_projection_coverage?.rate}%</span>
+                  </div>
+                )}
+
+                {recError && <div className={styles.errorText}>{recError}</div>}
+
+                <h3>Top Waiver Moves</h3>
+                {/* Opinionated banner: show strongest call or low-impact disclaimer */}
+                {(aiMoves.length > 0 || recommendations.length > 0) && (
+                  <div className={styles.opinionBanner}>
+                    {(() => {
+                      const list = aiMoves.length ? aiMoves : recommendations;
+                      const maxB = Math.max(...list.map(r => Number((r.estimated_benefit) || 0)));
+                      if (!isFinite(maxB) || maxB < 0.3) return <span>No clear upgrades this week — small, balance‑only gains.</span>;
+                      const first = list[0];
+                      const addName = typeof first.add === 'string' ? first.add : (first.add?.name || first.add_player?.name);
+                      const dropName = typeof first.drop === 'string' ? first.drop : (first.drop?.name || first.drop_player?.name);
+                      return <span>Do this: Add {addName} • Drop {dropName}</span>;
+                    })()}
+                  </div>
+                )}
+                <div className={styles.recommendationsList}>
+                  {(aiMoves.length ? aiMoves : recommendations).map((rec, idx) => (
+                    <div key={idx} className={styles.recCard}>
+                      <div className={styles.recHeader}>
+                        <div className={styles.recTitle}>Add {typeof rec.add === 'string' ? rec.add : (rec.add?.name || rec.add_player?.name)} • Drop {typeof rec.drop === 'string' ? rec.drop : (rec.drop?.name || rec.drop_player?.name)}</div>
+                        <div className={styles.headerRight}>
+                          <span className={`${styles.confidence} ${styles['conf_'+getConfidence(rec).toLowerCase()]}`}>{getConfidence(rec)}</span>
+                          <span className={styles.benefitBadge}>+{(rec.estimated_benefit ?? 0).toFixed(2)}</span>
+                          <span className={styles.sourceChip}>{aiMoves.length ? 'AI' : 'Deterministic'}</span>
+                        </div>
+                      </div>
+                      <div className={styles.recBody}>
+                        <div className={styles.recRow}>
+                          <div>
+                            <div className={styles.recLabel}>Add</div>
+                            <div className={styles.playerLine}>
+                              <a href={`/?tool=dossier&player=${encodeURIComponent((typeof rec.add === 'string' ? rec.add : (rec.add?.name || rec.add_player?.name)) || '')}`} target="_blank" rel="noopener noreferrer" className={styles.playerLink}>
+                                {typeof rec.add === 'string' ? rec.add : (rec.add?.name || rec.add_player?.name)}
+                              </a>
+                              {(rec.add?.position || rec.add_player?.position || rec.add?.team || rec.add_player?.team) && (
+                                <>
+                                  {` (`}
+                                  {rec.add?.position || rec.add_player?.position || 'Pos?'}
+                                  {`, `}
+                                  {rec.add?.team || rec.add_player?.team || 'Team?'}
+                                  {`)`}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <div className={styles.recLabel}>Drop</div>
+                            <div className={styles.playerLine}>
+                              <a href={`/?tool=dossier&player=${encodeURIComponent((typeof rec.drop === 'string' ? rec.drop : (rec.drop?.name || rec.drop_player?.name)) || '')}`} target="_blank" rel="noopener noreferrer" className={styles.playerLink}>
+                                {typeof rec.drop === 'string' ? rec.drop : (rec.drop?.name || rec.drop_player?.name)}
+                              </a>
+                              {(rec.drop?.position || rec.drop_player?.position || rec.drop?.team || rec.drop_player?.team) && (
+                                <>
+                                  {` (`}
+                                  {rec.drop?.position || rec.drop_player?.position || 'Pos?'}
+                                  {`, `}
+                                  {rec.drop?.team || rec.drop_player?.team || 'Team?'}
+                                  {`)`}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        {Array.isArray(rec.badges) && rec.badges.length > 0 && (
+                          <div className={styles.badgesRow}>
+                            {rec.badges.slice(0,3).map((b, i) => (
+                              <span key={i} className={styles.badge}>{b}</span>
+                            ))}
+                          </div>
+                        )}
+                        <div className={styles.whyBox}>
+                            {Array.isArray(rec.rationale_bullets) && rec.rationale_bullets.length > 0 ? (
+                              <ul>
+                                {rec.rationale_bullets.slice(0,4).map((t, i) => <li key={i}>{t}</li>)}
+                              </ul>
+                            ) : (
+                              <ul>
+                                {Array.isArray(rec.badges) && rec.badges.slice(0,3).map((b, i) => {
+                                  const reason = badgeToReason(b);
+                                  return reason ? <li key={i}>{reason}</li> : null;
+                                })}
+                                {!rec.badges?.length && <li>Small improvement this week based on roster balance.</li>}
+                              </ul>
+                            )}
+                            <details className={styles.detailsBox}>
+                              <summary>Show details</summary>
+                             <div className={styles.detailsGrid}>
+                                <span>Estimated Benefit</span><span>+{(rec.estimated_benefit ?? 0).toFixed(2)} <em className={styles.helpText}>(overall roster score gain)</em></span>
+                                {recMeta && <>
+                                  <span>Baseline Overall</span><span>{recMeta.baseline_overall}</span>
+                                  <span>Source</span><span>{aiMoves.length ? 'AI' : 'Deterministic'}</span>
+                                </>}
+                              </div>
+                            </details>
+                        </div>
+                      </div>
+                      {rec.claim_only && <div className={styles.claimOnly}>Claim only (on waivers)</div>}
                     </div>
                   ))}
+                  {!recommendations.length && !isLoadingYahooData && (
+                    <div className={styles.emptyState}>No recommendations yet. Adjust filters or click Get Waiver Recommendations.</div>
+                  )}
                 </div>
-                <button 
-                  onClick={handleAnalyzeClick} 
-                  className={styles.actionButton} 
-                  disabled={isLoading || isLoadingYahooData}
-                >
-                  {isLoading ? 'Analyzing...' : 'Get Waiver Recommendations'}
-                </button>
+
+                {showPool && (
+                  <>
+                    <div className={styles.divider} />
+                    <h3>Available Players</h3>
+                    <p>Top available players in {userLeagues.find(l => l.league_key === selectedLeague)?.league_name}</p>
+                    <div className={styles.availablePlayersGrid}>
+                      {yahooAvailablePlayers.slice(0, 20).map((player) => (
+                        <div key={player.player_key} className={styles.availablePlayerCard}>
+                          <div className={styles.playerName}>{player.name}</div>
+                          <div className={styles.playerMeta}>
+                            {(player.position || player.primary_position)} - {player.team}
+                            {player.ecr_overall && <span className={styles.ecrBadge}>ECR: {player.ecr_overall}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </>
             ) : (
               <>

@@ -83,11 +83,11 @@ button:hover {
 /* Progressive disclosure - logical section ordering */
 .quickScanCard { order: 1; }
 .playerOverviewCard { order: 2; }
-.weeklyOutlookCard { order: 3; }
-.marketAnalysisCard { order: 4; }
-.ageTrajectoryCard { order: 5; }
-.ecrDataCard { order: 6; }
-.aiAnalysisCard { order: 7; }
+.ecrDataCard { order: 3; }
+.aiAnalysisCard { order: 4; }
+.weeklyOutlookCard { order: 5; }
+.marketAnalysisCard { order: 6; }
+.ageTrajectoryCard { order: 7; }
 
 .playerOverviewCard {
   padding: 15px;
@@ -322,6 +322,18 @@ button:hover {
 }
 
 /* Badge classes for specific sections */
+/* Unified chip style for badges */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  font-size: 0.9em;
+  font-weight: 600;
+  margin-right: 8px;
+}
+
 .projectionBadge, .matchupBadge, .valueBadge, 
 .opportunityBadge, .ownershipBadge, .ageBadge {
   display: inline-block;
@@ -339,6 +351,7 @@ button:hover {
 
 .weeklyGrid {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 15px;
   margin-top: 15px;
 }
@@ -388,6 +401,7 @@ button:hover {
 
 .marketGrid {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 15px;
   margin-top: 15px;
 }
@@ -1057,7 +1071,7 @@ button:hover {
 .weeklyOutlookCard {
   background: linear-gradient(135deg, rgba(40, 167, 69, 0.03), rgba(255, 255, 255, 0.98));
   border-left: 5px solid var(--tier-elite-color);
-  order: 2;
+  order: 5;
   position: relative;
 }
 
@@ -1079,25 +1093,25 @@ button:hover {
 .marketAnalysisCard {
   background: linear-gradient(135deg, rgba(23, 162, 184, 0.03), rgba(255, 255, 255, 0.98));
   border-left: 5px solid var(--tier-excellent-color);
-  order: 3;
+  order: 6;
 }
 
 .ageTrajectoryCard {
   background: linear-gradient(135deg, rgba(111, 66, 193, 0.03), rgba(255, 255, 255, 0.98));
   border-left: 5px solid var(--tier-standard-color);
-  order: 4;
+  order: 7;
 }
 
 .ecrDataCard {
   background: linear-gradient(135deg, rgba(108, 117, 125, 0.03), rgba(255, 255, 255, 0.98));
   border-left: 5px solid var(--tier-solid-color);
-  order: 5;
+  order: 3;
 }
 
 .aiAnalysisCard {
   background: linear-gradient(135deg, rgba(255, 193, 7, 0.03), rgba(255, 255, 255, 0.98));
   border-left: 5px solid var(--tier-serviceable-color);
-  order: 6;
+  order: 4;
   margin-top: 40px;
   position: relative;
 }

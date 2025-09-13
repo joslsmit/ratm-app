@@ -30,15 +30,19 @@ cd frontend && npm start
 ```
 
 ### 2. Fix Yahoo OAuth for Local Testing (CRITICAL)
-**⚠️ The main issue**: Temporarily change `backend/app.py` line 2377:
+**⚠️ Two Required Changes**:
 
-```python
-# TEMPORARY - Change this line for local development:
-YAHOO_REDIRECT_URI = 'https://localhost:5000/api/yahoo/callback'
-
-# Instead of:
-# YAHOO_REDIRECT_URI = 'https://ratm-app.onrender.com/api/yahoo/callback'
+**A. Backend OAuth Redirect URI (via env var, no code edit)**
+```bash
+# In your local shell before starting the backend
+export YAHOO_REDIRECT_URI="https://localhost:5000/api/yahoo/callback"
 ```
+The backend now reads `YAHOO_REDIRECT_URI` from the environment and defaults to the production URL when unset. This avoids branch-specific code flips.
+
+**B. Yahoo Developer Console** - Change Homepage URL (Yahoo allows one Homepage URL at a time):
+- Go to [Yahoo Developer Network](https://developer.yahoo.com/apps/)
+- Set **Homepage URL** to: `http://localhost:3000`
+- Keep both redirect URIs (localhost + production)
 
 ### 3. Restart Backend
 ```bash
@@ -46,20 +50,36 @@ YAHOO_REDIRECT_URI = 'https://localhost:5000/api/yahoo/callback'
 python app.py
 ```
 
-**Result**: Yahoo OAuth now works locally, full functionality restored.
+**Result**: Yahoo OAuth now works locally, redirects to localhost, full functionality restored.
 
 ---
 
 ## 📤 LOCAL DEVELOPMENT → PRODUCTION
 
-### 1. Revert OAuth URL (CRITICAL)
-**⚠️ Before committing**: Change `backend/app.py` line 2377 back to:
+### 1. Revert OAuth Configuration (CRITICAL)
+**⚠️ Two Required Reversions Before Committing/Deploying**:
 
-```python
-YAHOO_REDIRECT_URI = 'https://ratm-app.onrender.com/api/yahoo/callback'
+**A. Backend OAuth Redirect URI**
+- Ensure no local override is set when deploying (unset the env var locally and confirm Render has production value):
+```bash
+unset YAHOO_REDIRECT_URI  # local only
+```
+- On Render: set `YAHOO_REDIRECT_URI=https://ratm-app.onrender.com/api/yahoo/callback` in the service Environment.
+
+**B. Yahoo Developer Console** - Revert Homepage URL:
+- Go to [Yahoo Developer Network](https://developer.yahoo.com/apps/)  
+- Set **Homepage URL** back to: `https://ratm-app.vercel.app/`
+- Keep both redirect URIs (localhost + production for future development)
+
+### 2. Test Production Configuration Locally (Optional but Recommended)
+```bash
+# Temporarily test with production OAuth settings
+# Verify no localhost overrides remain in your shell
+unset YAHOO_REDIRECT_URI
+# Test that production redirects work as expected
 ```
 
-### 2. Deploy to Production
+### 3. Deploy to Production
 ```bash
 # Commit changes
 git add . && git commit -m "feat: [description]"
@@ -68,9 +88,10 @@ git add . && git commit -m "feat: [description]"
 git checkout main && git merge feature/[name] && git push origin main
 ```
 
-### 3. Verify Deployment
+### 4. Verify Deployment
 - **Vercel + Render auto-deploy** from main branch (2-5 minutes)
 - **Test**: https://ratm-app.vercel.app works with Yahoo login
+- **Verify**: OAuth redirects to Vercel (not localhost)
 
 ---
 
@@ -106,12 +127,14 @@ git revert HEAD && git push origin main
 git checkout -b feature/[name]
 cd backend && source venv/bin/activate && python app.py
 cd frontend && npm start
-# Fix YAHOO_REDIRECT_URI in app.py line 2377
+# export YAHOO_REDIRECT_URI=https://localhost:5000/api/yahoo/callback
+# Set Yahoo Homepage URL in Yahoo console to http://localhost:3000
 ```
 
 ### Deploy to Production  
 ```bash
-# Revert YAHOO_REDIRECT_URI in app.py line 2377
+# Ensure YAHOO_REDIRECT_URI env var is unset locally; set to production in Render
+# Revert Yahoo Homepage URL to https://ratm-app.vercel.app/ in Yahoo console
 git checkout main && git merge feature/[name] && git push origin main
 ```
 
