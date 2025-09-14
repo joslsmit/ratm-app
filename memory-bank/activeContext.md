@@ -17,6 +17,13 @@
 - **✅ Full Feature Set**: All Yahoo integrations, AI enhancements, and data analysis tools operational
 - **✅ Yahoo OAuth Production Setup**: Environment variables configured in Render, redirect URIs updated for production use
 
+### ✅ September 2025 — Infra & OAuth Quality Improvements
+- Env‑based Yahoo Redirect: Backend reads `YAHOO_REDIRECT_URI` from environment (prod‑safe default); local uses `backend/.env`.
+- Two‑App Yahoo Model (Guidance): Use a dedicated Yahoo Dev app (localhost homepage + redirect) and keep the existing app for production to avoid homepage flips.
+- Flask Secret Enforcement: `FLASK_SECRET_KEY` required (sessions for OAuth); docs include one‑liner to generate local secret.
+- ECR Auto‑Select: Backend auto‑selects ECR flavor from CSV (`ro/rp` preferred; fallback `do/dp`, `wo/wp`) to handle source changes gracefully.
+- Data Hygiene: CSVs removed from Git tracking; backend downloads at runtime; `.gitignore` updated; `backend/.env` added locally and ignored.
+
 ### 🔧 PRODUCTION ISSUE RESOLVED - CORS Fix Applied:
 **Problem**: Frontend blocked by CORS policy - "Access-Control-Allow-Origin" header missing
 **Solution**: Added `https://ratm-app.vercel.app` to backend CORS allowed origins

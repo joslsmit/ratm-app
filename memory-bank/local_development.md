@@ -94,6 +94,29 @@ This setup provides a stable and secure local development environment for OAuth,
 
 ## Yahoo OAuth Local Development Configuration
 
+### Recommended: Two Yahoo Apps (No Flipping Homepage)
+
+To avoid changing Yahoo Homepage URL when switching between local and production:
+
+1. Keep your existing Yahoo app for Production.
+   - Homepage: `https://ratm-app.vercel.app`
+   - Redirect URI: `https://ratm-app.onrender.com/api/yahoo/callback`
+2. Create a second Yahoo app for Local Development.
+   - Homepage: `http://localhost:3000`
+   - Redirect URI: `https://localhost:5000/api/yahoo/callback`
+3. Configure credentials per environment:
+   - Local: set in `backend/.env` (git‑ignored)
+     - `YAHOO_CLIENT_ID=YOUR_DEV_YAHOO_CLIENT_ID`
+     - `YAHOO_CLIENT_SECRET=YOUR_DEV_YAHOO_CLIENT_SECRET`
+     - `YAHOO_REDIRECT_URI=https://localhost:5000/api/yahoo/callback`
+     - `FLASK_SECRET_KEY=...` (generate with `python3 -c "import secrets; print(secrets.token_hex(32))"`)
+   - Production (Render): set in service Environment
+     - `YAHOO_CLIENT_ID` / `YAHOO_CLIENT_SECRET` for PROD app
+     - `YAHOO_REDIRECT_URI=https://ratm-app.onrender.com/api/yahoo/callback`
+     - `FLASK_SECRET_KEY` (stable secret)
+
+Result: No console flipping. When switching between prod and local in the browser, sign out to clear any old token.
+
 ### Critical OAuth Redirect Fix (Required for Local Development)
 
 **Problem**: The Yahoo OAuth callback was hardcoded to redirect to production Vercel URL, causing local development to redirect away from localhost.
@@ -103,15 +126,9 @@ This setup provides a stable and secure local development environment for OAuth,
 - **Dynamic redirect logic** added to detect localhost development vs production
 - **Automatic environment detection** using request Referer header
 
-### Yahoo Developer Console Configuration
+### Yahoo Developer Console Configuration (Two‑App model)
 
-**For Local Development**:
-1. **Homepage URL**: Set to `http://localhost:3000` (temporarily during development)
-2. **Redirect URIs**: Both URLs should be present:
-   - `https://localhost:5000/api/yahoo/callback` (local backend)
-   - `https://ratm-app.onrender.com/api/yahoo/callback` (production backend)
-
-**Important**: Yahoo only allows one Homepage URL at a time. Change it back to `https://ratm-app.vercel.app/` before production deployment.
+Use two apps as above. If temporarily using a single app, you must flip the Homepage URL between `http://localhost:3000` (dev) and `https://ratm-app.vercel.app/` (prod) to satisfy Yahoo’s single‑homepage restriction.
 
 ### Complete Local Development Yahoo Setup
 
@@ -121,11 +138,14 @@ This setup provides a stable and secure local development environment for OAuth,
    ```
 
 2. **Configure backend for local OAuth**:
-   - Export env var (no code edit):
-     ```bash
-     export YAHOO_REDIRECT_URI="https://localhost:5000/api/yahoo/callback"
+   - Put your local dev Yahoo app credentials in `backend/.env`:
      ```
-   - The OAuth callback will redirect back to `http://localhost:3000` when developing locally.
+     YAHOO_CLIENT_ID=YOUR_DEV_YAHOO_CLIENT_ID
+     YAHOO_CLIENT_SECRET=YOUR_DEV_YAHOO_CLIENT_SECRET
+     YAHOO_REDIRECT_URI=https://localhost:5000/api/yahoo/callback
+     FLASK_SECRET_KEY=YOUR_LOCAL_SECRET
+     ```
+   - Start backend from the `backend/` folder so `load_dotenv()` picks up `backend/.env`.
 
 3. **Set Yahoo Homepage URL** (in Yahoo Developer Console):
    ```
