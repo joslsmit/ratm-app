@@ -246,6 +246,9 @@
       - “Explore options” group for near‑neutral moves below main list, capped at 5, with one‑line explainer
       - Optional “Hide negative moves” toggle (default ON): clamps AI items to ≥ 0 even when slider < 0; deterministic honors slider
 
+    - Phases 4–6 — Deferred
+      - Phase 4 (AI narrative/validation polish), Phase 5 (observability + E2E tests), and Phase 6 (feature flag/A-B) are considered non‑essential now and deferred. Current implementation already validates AI by ID + name, merges cleanly, and provides clear guidance via the Top Moves banner.
+
 - Player Dossier UX Enhancements (Phase A2): Continue polish after waiver v4
   - Apply helper outputs across Value Opportunity and Age Trajectory sections
   - Add CSS classes and color coding for badges (projectionBadge, matchupBadge, etc.)

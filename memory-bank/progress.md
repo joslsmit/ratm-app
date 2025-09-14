@@ -478,3 +478,10 @@ This document tracks the progress of the RATM Draft Kit project against the defi
 - Verification (local, League 461.l.42889, Team .t.8)
   - A) alternatives ON, min_benefit = −0.5: deterministic small positives surfaced (e.g., Drop Cincinnati → add RB depth at ~+0.21); top 10 show green “+” badges
   - B) alternatives ON, min_benefit = 0.0: no non‑negative items returned; summary shows “No clear upgrades…”
+
+### Decision — Defer Waiver v4 Phases 4–6
+- Rationale: Remaining items are non‑essential polish or operational safeguards. Current UI and backend already deliver clear top moves, robust safety (ID + name guards), and merged AI/deterministic behavior.
+- Deferred scope:
+  - Phase 4: AI Narrative & Validation Polish (minor copy/metrics; validation parity largely implemented)
+  - Phase 5: Observability + E2E (optional regression guardrails; can revisit later)
+  - Phase 6: Rollout & Safeguards (feature flag/A-B not required for current scale)
