@@ -168,7 +168,7 @@ This document tracks the progress of the RATM Draft Kit project against the defi
         *   League dropdown populated from `/api/yahoo/leagues`
         *   Empty roster display for pre-draft scenario
         *   Complete error handling and responsive design
-        *   **✅ User Testing Confirmed:** Component works successfully with limited pre-draft data
+      *   **✅ User Testing Confirmed:** Component works successfully with limited pre-draft data
 *   **🚨 PRIORITY CHANGED:** Post-draft testing now secondary to AI enhancement (Phase 0)
 *   **Implementation Guide:** Detailed specifications available in `yahoo_roster_implementation.md`
 
@@ -470,3 +470,11 @@ This document tracks the progress of the RATM Draft Kit project against the defi
 *   **Outcome:** Interpreted badges and concise guidance across Weekly Outlook, Market/Ownership, and Age/Trajectory; unified chip styling; responsive 2‑column Weekly/Market grids; CSS‑controlled section order preserved.
 *   **Quality:** Backend dossier test suite (6/6) passing; null‑safe rendering; no regression to existing flows.
 *   **Docs:** See `PLAYER_DOSSIER_UX_ENHANCEMENT_STATUS.md` for final plan/outcomes and run instructions.
+### Sept 14, 2025 — Waiver v4 Phase 3 Completed
+- Frontend
+  - ID-based dedupe and self-add guard in merged UI (prefer Yahoo `player_id`, fallback to normalized names)
+  - “Explore options” grouping for near-neutral moves, capped at 5 with concise explainer
+  - New “Hide negative moves” checkbox (default ON). If ON, AI items < 0 are hidden even when slider < 0; deterministic continues to follow slider
+- Verification (local, League 461.l.42889, Team .t.8)
+  - A) alternatives ON, min_benefit = −0.5: deterministic small positives surfaced (e.g., Drop Cincinnati → add RB depth at ~+0.21); top 10 show green “+” badges
+  - B) alternatives ON, min_benefit = 0.0: no non‑negative items returned; summary shows “No clear upgrades…”

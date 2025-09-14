@@ -92,6 +92,8 @@
   - Limit to top 5 alternatives to prevent overwhelm.
 - Acceptance
   - Users can easily distinguish strong upgrades vs exploratory options.
+  - Implemented: ID-based dedupe + client self‑add guard; “Explore options” group (cap 5); optional “Hide negative moves” toggle (default ON)
+  - Verified locally: with alternatives ON, min_benefit −0.5 shows small positives by default; with 0.0, no negative items appear
 
 ### Phase 4 — AI Narrative & Validation Polish (1–2 days)
 - Validation

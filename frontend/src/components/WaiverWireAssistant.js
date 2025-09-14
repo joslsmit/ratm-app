@@ -138,6 +138,7 @@ const WaiverWireAssistant = ({
   const [selectedLeague, setSelectedLeague] = useState('');
   const [yahooAvailablePlayers, setYahooAvailablePlayers] = useState([]);
   const [yahooRosterNames, setYahooRosterNames] = useState(new Set());
+  const [yahooRosterIds, setYahooRosterIds] = useState(new Set());
   const [isLoadingYahooData, setIsLoadingYahooData] = useState(false);
   const [yahooError, setYahooError] = useState('');
   const [useYahooMode, setUseYahooMode] = useState(false);
@@ -148,6 +149,7 @@ const WaiverWireAssistant = ({
   const [recError, setRecError] = useState('');
   const [statusFilter, setStatusFilter] = useState('A'); // A|FA|W
   const [includeAlternatives, setIncludeAlternatives] = useState(false);
+  const [hideNegativeAi, setHideNegativeAi] = useState(true);
   const [minBenefit, setMinBenefit] = useState(0.0); // toggled to -1.0 when alternatives enabled
   const [showFilters, setShowFilters] = useState(false);
   const [showPool, setShowPool] = useState(false);
@@ -389,11 +391,15 @@ const WaiverWireAssistant = ({
         headers: { 'Authorization': authHeader }
       });
       const norm = (s) => (typeof s === 'string' ? s.trim().toLowerCase() : '');
-      const names = new Set((Array.isArray(roster) ? roster : []).map(p => norm(p.name)).filter(Boolean));
+      const arr = Array.isArray(roster) ? roster : [];
+      const names = new Set(arr.map(p => norm(p.name)).filter(Boolean));
+      const ids = new Set(arr.map(p => String(p.player_id || '')).filter(v => v && v !== 'null' && v !== 'undefined'));
       setYahooRosterNames(names);
+      setYahooRosterIds(ids);
     } catch (e) {
       console.warn('Could not fetch roster names for guard', e);
       setYahooRosterNames(new Set());
+      setYahooRosterIds(new Set());
     }
   };
 
@@ -769,6 +775,19 @@ const WaiverWireAssistant = ({
                           </span>
                         </label>
                       </div>
+                      <div className={styles.controlGroup}>
+                        <label className={styles.inlineToggle}>
+                          <input
+                            type="checkbox"
+                            checked={hideNegativeAi}
+                            onChange={(e) => setHideNegativeAi(e.target.checked)}
+                          />
+                          Hide negative AI moves
+                          <span className={styles.helpText} style={{ marginLeft: 6 }}>
+                            If enabled, AI items below 0 are hidden even when near‑neutral is on
+                          </span>
+                        </label>
+                      </div>
                       {includeAlternatives && (
                         <div className={styles.controlGroup}>
                           <label>Min Estimated Benefit</label>
@@ -842,18 +861,37 @@ const WaiverWireAssistant = ({
                       const norm = (s) => (typeof s === 'string' ? s.trim().toLowerCase() : '');
                       const mkAddName = (r) => (typeof r.add === 'string' ? r.add : (r.add?.name || r.add_player?.name));
                       const mkDropName = (r) => (typeof r.drop === 'string' ? r.drop : (r.drop?.name || r.drop_player?.name));
-                      const aiL = (aiMoves || []).map(r => ({...r, __source:'AI'}));
-                      const detL = (recommendations || []).map(r => ({...r, __source:'Deterministic'}));
+                      const detL = (recommendations || []).map(r => ({
+                        ...r,
+                        __source:'Deterministic',
+                        __add_id: String(r.add_player?.player_id || ''),
+                        __drop_id: String(r.drop_player?.player_id || ''),
+                      }));
+                      const keyByNames = (a,d) => `${norm(a||'')}|${norm(d||'')}`;
+                      const idsByPair = new Map();
+                      for (const r of detL) {
+                        idsByPair.set(keyByNames(mkAddName(r), mkDropName(r)), {addId: r.__add_id, dropId: r.__drop_id});
+                      }
+                      const aiL = (aiMoves || []).map(r => {
+                        const ids = idsByPair.get(keyByNames(mkAddName(r), mkDropName(r))) || {};
+                        return { ...r, __source:'AI', __add_id: String(ids.addId || ''), __drop_id: String(ids.dropId || '') };
+                      });
                       const raw = [...aiL, ...detL];
                       const filtered = raw.filter(r => {
                         const addName = mkAddName(r);
+                        const addId = String(r.__add_id || '');
                         const b = Number(r.estimated_benefit || 0);
-                        return (!addName || !yahooRosterNames.has(norm(addName))) && (Number.isFinite(b) ? b >= minBenefit : true);
+                        const selfAdd = (addId && yahooRosterIds.has(addId)) || (!!addName && yahooRosterNames.has(norm(addName)));
+                        if (selfAdd) return false;
+                        if (r.__source === 'AI' && hideNegativeAi && Number.isFinite(b) && b < 0) return false;
+                        return (Number.isFinite(b) ? b >= minBenefit : true);
                       });
                       const seen = new Set();
                       const deduped = [];
                       for (const r of filtered) {
-                        const k = `${norm(mkAddName(r)||'')}|${norm(mkDropName(r)||'')}`;
+                        const addId = String(r.__add_id || '');
+                        const dropId = String(r.__drop_id || '');
+                        const k = (addId && dropId) ? `${addId}|${dropId}` : `${norm(mkAddName(r)||'')}|${norm(mkDropName(r)||'')}`;
                         if (seen.has(k)) continue;
                         seen.add(k);
                         deduped.push(r);
@@ -872,13 +910,30 @@ const WaiverWireAssistant = ({
                     const norm = (s) => (typeof s === 'string' ? s.trim().toLowerCase() : '');
                     const mkAddName = (r) => (typeof r.add === 'string' ? r.add : (r.add?.name || r.add_player?.name));
                     const mkDropName = (r) => (typeof r.drop === 'string' ? r.drop : (r.drop?.name || r.drop_player?.name));
-                    const aiL = (aiMoves || []).map(r => ({...r, __source:'AI'}));
-                    const detL = (recommendations || []).map(r => ({...r, __source:'Deterministic'}));
+                    const detL = (recommendations || []).map(r => ({
+                      ...r,
+                      __source:'Deterministic',
+                      __add_id: String(r.add_player?.player_id || ''),
+                      __drop_id: String(r.drop_player?.player_id || ''),
+                    }));
+                    const keyByNames = (a,d) => `${norm(a||'')}|${norm(d||'')}`;
+                    const idsByPair = new Map();
+                    for (const r of detL) {
+                      idsByPair.set(keyByNames(mkAddName(r), mkDropName(r)), {addId: r.__add_id, dropId: r.__drop_id});
+                    }
+                    const aiL = (aiMoves || []).map(r => {
+                      const ids = idsByPair.get(keyByNames(mkAddName(r), mkDropName(r))) || {};
+                      return { ...r, __source:'AI', __add_id: String(ids.addId || ''), __drop_id: String(ids.dropId || '') };
+                    });
                     const raw = [...aiL, ...detL];
                     const filtered = raw.filter(r => {
                       const addName = mkAddName(r);
+                      const addId = String(r.__add_id || '');
                       const b = Number(r.estimated_benefit || 0);
-                      return (!addName || !yahooRosterNames.has(norm(addName))) && (Number.isFinite(b) ? b >= minBenefit : true);
+                      const selfAdd = (addId && yahooRosterIds.has(addId)) || (!!addName && yahooRosterNames.has(norm(addName)));
+                      if (selfAdd) return false;
+                      if (r.__source === 'AI' && hideNegativeAi && Number.isFinite(b) && b < 0) return false;
+                      return (Number.isFinite(b) ? b >= minBenefit : true);
                     });
                     const counts = filtered.reduce((acc, r) => { acc[r.__source] = (acc[r.__source]||0)+1; return acc; }, {});
                     const hiddenCount = raw.length - filtered.length;
@@ -888,17 +943,28 @@ const WaiverWireAssistant = ({
                     const cap = 10;
                     const pinned = aiOnly.length ? [aiOnly[0]] : [];
                     // Merge pinned AI with the rest, highest benefit first, avoiding duplicates
-                    const seen = new Set(pinned.map(r => `${norm(mkAddName(r)||'')}|${norm(mkDropName(r)||'')}`));
+                    const seen = new Set(pinned.map(r => {
+                      const addId = String(r.__add_id || '');
+                      const dropId = String(r.__drop_id || '');
+                      return (addId && dropId) ? `${addId}|${dropId}` : `${norm(mkAddName(r)||'')}|${norm(mkDropName(r)||'')}`;
+                    }));
                     const merged = [...pinned];
                     const sortedAll = [...aiOnly.slice(1), ...rest].sort((a,b) => Number(b.estimated_benefit||0) - Number(a.estimated_benefit||0));
                     for (const r of sortedAll) {
                       if (merged.length >= cap) break;
-                      const k = `${norm(mkAddName(r)||'')}|${norm(mkDropName(r)||'')}`;
+                      const addId = String(r.__add_id || '');
+                      const dropId = String(r.__drop_id || '');
+                      const k = (addId && dropId) ? `${addId}|${dropId}` : `${norm(mkAddName(r)||'')}|${norm(mkDropName(r)||'')}`;
                       if (seen.has(k)) continue;
                       seen.add(k);
                       merged.push(r);
                     }
                     const capped = merged;
+                    const movesTop = capped.filter(r => Number(r.estimated_benefit || 0) >= 0);
+                    const movesExplore = capped.filter(r => {
+                      const b = Number(r.estimated_benefit || 0);
+                      return Number.isFinite(b) && b < 0 && b >= (minBenefit ?? 0);
+                    }).slice(0, 5);
                     return (
                       <>
                         {(counts['AI'] || counts['Deterministic']) && (
@@ -911,7 +977,7 @@ const WaiverWireAssistant = ({
                             {hiddenCount} move{hiddenCount>1?'s':''} hidden (already on your roster)
                           </div>
                         )}
-                        {capped.map((rec, idx) => (
+                        {movesTop.map((rec, idx) => (
                           <div key={idx} className={styles.recCard}>
                             <div className={styles.recHeader}>
                               <div className={styles.recTitle}>Add {typeof rec.add === 'string' ? rec.add : (rec.add?.name || rec.add_player?.name)} • Drop {typeof rec.drop === 'string' ? rec.drop : (rec.drop?.name || rec.drop_player?.name)}</div>
@@ -993,6 +1059,87 @@ const WaiverWireAssistant = ({
                       </div>
                       {rec.claim_only && <div className={styles.claimOnly}>Claim only (on waivers)</div>}
                     </div>
+                        ))}
+                        {movesExplore.length > 0 && (
+                          <div className={styles.chipMuted} style={{ marginTop: 16, marginBottom: 8 }}>
+                            Explore options — small or lateral moves to improve balance/depth
+                          </div>
+                        )}
+                        {movesExplore.map((rec, idx) => (
+                          <div key={`x-${idx}`} className={styles.recCard}>
+                            <div className={styles.recHeader}>
+                              <div className={styles.recTitle}>Add {typeof rec.add === 'string' ? rec.add : (rec.add?.name || rec.add_player?.name)} • Drop {typeof rec.drop === 'string' ? rec.drop : (rec.drop?.name || rec.drop_player?.name)}</div>
+                              <div className={styles.headerRight}>
+                                <span className={`${styles.confidence} ${styles['conf_'+getConfidence(rec).toLowerCase()]}`}>{getConfidence(rec)}</span>
+                                {(() => { const b=Number(rec.estimated_benefit||0); const cls=b>0?styles.benefitBadgePos:(b<0?styles.benefitBadgeNeg:styles.benefitBadgeZero); const s=b>0?'+':(b<0?'−':'±'); return (<span className={`${styles.benefitBadge} ${cls}`}>{s}{Math.abs(b).toFixed(2)}</span>); })()}
+                                <span className={styles.sourceChip}>{rec.__source || (aiMoves.length ? 'AI' : 'Deterministic')}</span>
+                              </div>
+                            </div>
+                            <div className={styles.recBody}>
+                              <div className={styles.recRow}>
+                                <div>
+                                  <div className={styles.recLabel}>Add</div>
+                                  <div className={styles.playerLine}>
+                                    <a href={`/?tool=dossier&player=${encodeURIComponent((typeof rec.add === 'string' ? rec.add : (rec.add?.name || rec.add_player?.name)) || '')}`} target="_blank" rel="noopener noreferrer" className={styles.playerLink}>
+                                      {typeof rec.add === 'string' ? rec.add : (rec.add?.name || rec.add_player?.name)}
+                                    </a>
+                                    {(rec.add?.position || rec.add_player?.position || rec.add?.team || rec.add_player?.team) && (
+                                      <>
+                                        {` (`}
+                                        {rec.add?.position || rec.add_player?.position || 'Pos?'}
+                                        {`, `}
+                                        {rec.add?.team || rec.add_player?.team || 'Team?'}
+                                        {`)`}
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className={styles.recLabel}>Drop</div>
+                                  <div className={styles.playerLine}>
+                                    <a href={`/?tool=dossier&player=${encodeURIComponent((typeof rec.drop === 'string' ? rec.drop : (rec.drop?.name || rec.drop_player?.name)) || '')}`} target="_blank" rel="noopener noreferrer" className={styles.playerLink}>
+                                      {typeof rec.drop === 'string' ? rec.drop : (rec.drop?.name || rec.drop_player?.name)}
+                                    </a>
+                                    {(rec.drop?.position || rec.drop_player?.position || rec.drop?.team || rec.drop_player?.team) && (
+                                      <>
+                                        {` (`}
+                                        {rec.drop?.position || rec.drop_player?.position || 'Pos?'}
+                                        {`, `}
+                                        {rec.drop?.team || rec.drop_player?.team || 'Team?'}
+                                        {`)`}
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className={styles.whyBox}>
+                                {Array.isArray(rec.rationale_bullets) && rec.rationale_bullets.length > 0 ? (
+                                  <ul>
+                                    {rec.rationale_bullets.slice(0,4).map((t, i) => <li key={i}>{t}</li>)}
+                                  </ul>
+                                ) : (
+                                  <ul>
+                                    {Array.isArray(rec.badges) && rec.badges.slice(0,3).map((b, i) => {
+                                      const reason = badgeToReason(b);
+                                      return reason ? <li key={i}>{reason}</li> : null;
+                                    })}
+                                    {!rec.badges?.length && <li>Small improvement this week based on roster balance.</li>}
+                                  </ul>
+                                )}
+                                <details className={styles.detailsBox}>
+                                  <summary>Show details</summary>
+                                  <div className={styles.detailsGrid}>
+                                    <span>Estimated Benefit</span><span>+{(rec.estimated_benefit ?? 0).toFixed(2)} <em className={styles.helpText}>(overall roster score gain)</em></span>
+                                    {recMeta && <>
+                                      <span>Baseline Overall</span><span>{recMeta.baseline_overall}</span>
+                                      <span>Source</span><span>{rec.__source || (aiMoves.length ? 'AI' : 'Deterministic')}</span>
+                                    </>}
+                                  </div>
+                                </details>
+                              </div>
+                              {rec.claim_only && <div className={styles.claimOnly}>Claim only (on waivers)</div>}
+                            </div>
+                          </div>
                         ))}
                       </>
                     );

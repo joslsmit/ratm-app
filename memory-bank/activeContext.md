@@ -241,8 +241,10 @@
       - Expand candidates when projection coverage is low (+30 best remaining) to improve variety
       - UI merges AI + deterministic results; dedupes, filters by slider, sorts by benefit; pins top AI move
       - Benefit badge color-coded/sign-correct (green +, grey ±, red −)
-    - Phase 3 — Alternatives Reframe: NEXT
-      - Group “Explore options” below top moves; limit list; clearer explanation
+    - Phase 3 — Alternatives Reframe: COMPLETE
+      - ID-based dedupe and client self‑add guard (Yahoo player_id preferred; fallback to normalized names)
+      - “Explore options” group for near‑neutral moves below main list, capped at 5, with one‑line explainer
+      - Optional “Hide negative moves” toggle (default ON): clamps AI items to ≥ 0 even when slider < 0; deterministic honors slider
 
 - Player Dossier UX Enhancements (Phase A2): Continue polish after waiver v4
   - Apply helper outputs across Value Opportunity and Age Trajectory sections
