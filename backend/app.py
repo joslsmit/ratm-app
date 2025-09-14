@@ -5363,6 +5363,25 @@ def _compute_bench_counts(enriched_roster: list, lineup: list) -> dict:
             counts[pos] += 1
     return counts
 
+def _bench_counts_simple(enriched_roster: list) -> dict:
+    """Approximate bench composition from selected_position without computing lineup.
+    Excludes K/DEF from counts; returns counts for QB/RB/WR/TE.
+    """
+    counts = {'QB': 0, 'RB': 0, 'WR': 0, 'TE': 0}
+    try:
+        for p in enriched_roster:
+            slot = str(p.get('selected_position','')).upper()
+            if not slot.startswith('BN'):
+                continue
+            pos = (p.get('position') or p.get('primary_position') or '').upper()
+            if pos in ('K','DEF','DST'):
+                continue
+            if pos in counts:
+                counts[pos] += 1
+    except Exception:
+        pass
+    return counts
+
 def _bench_players_all(enriched_roster: list, lineup: list) -> list:
     """Bench players including all positions (K/DEF included)."""
     starter_names = set()
@@ -5678,7 +5697,17 @@ def yahoo_waiver_recommendations_v2():
         for pos in buckets:
             buckets[pos].sort(key=lambda x: -_eff_score_local(x))
         # Quotas to reach ~120
+        # Dynamic quotas based on bench composition needs (approximate)
         quotas = {'QB': 10, 'RB': 40, 'WR': 50, 'TE': 20}
+        bench_counts_simple = _bench_counts_simple(enriched_roster)
+        if bench_counts_simple.get('QB', 0) >= 1:
+            quotas['QB'] = 5
+        if bench_counts_simple.get('RB', 0) < 2:
+            quotas['RB'] += 10
+        if bench_counts_simple.get('WR', 0) < 2:
+            quotas['WR'] += 10
+        if bench_counts_simple.get('TE', 0) < 1:
+            quotas['TE'] += 5
         candidates = []
         for pos, limit in quotas.items():
             candidates.extend(buckets.get(pos, [])[:limit])
@@ -6040,19 +6069,50 @@ def yahoo_waiver_recommendations_ai():
         for pos in buckets:
             buckets[pos].sort(key=lambda x: -_eff_score_local(x))
         quotas = {'QB': 10, 'RB': 40, 'WR': 50, 'TE': 20}
+        # Dynamic quotas (approximate) based on bench composition
+        bench_counts_simple = _bench_counts_simple(enriched_roster)
+        if bench_counts_simple.get('QB', 0) >= 1:
+            quotas['QB'] = 5
+        if bench_counts_simple.get('RB', 0) < 2:
+            quotas['RB'] += 10
+        if bench_counts_simple.get('WR', 0) < 2:
+            quotas['WR'] += 10
+        if bench_counts_simple.get('TE', 0) < 1:
+            quotas['TE'] += 5
         candidates = []
         for pos, limit in quotas.items():
             candidates.extend(buckets.get(pos, [])[:limit])
-        if len(candidates) < 120:
+        target_count = 120
+        if len(candidates) < target_count:
             selected_ids = set(id(x) for x in candidates)
             remainder = [c for c in pool if id(c) not in selected_ids]
             remainder.sort(key=lambda x: -_eff_score_local(x))
-            candidates.extend(remainder[:(120 - len(candidates))])
+            candidates.extend(remainder[:(target_count - len(candidates))])
 
         roster_proj_total = len(enriched_roster)
         roster_proj_have = sum(1 for rp in enriched_roster if isinstance(rp.get('weekly_points'), (int, float)))
         pool_proj_total = len(candidates)
         pool_proj_have = sum(1 for c in candidates if isinstance(c.get('weekly_points'), (int, float)))
+        try:
+            coverage_rate = (pool_proj_have / pool_proj_total) if pool_proj_total else 0.0
+        except Exception:
+            coverage_rate = 0.0
+        if coverage_rate < 0.6:
+            selected_ids = set(id(x) for x in candidates)
+            remainder = [c for c in pool if id(c) not in selected_ids]
+            remainder.sort(key=lambda x: -_eff_score_local(x))
+            candidates.extend(remainder[:30])
+        # If projection coverage among candidates is low, expand candidate set modestly
+        try:
+            coverage_rate = (pool_proj_have / pool_proj_total) if pool_proj_total else 0.0
+        except Exception:
+            coverage_rate = 0.0
+        if coverage_rate < 0.6:
+            selected_ids = set(id(x) for x in candidates)
+            remainder = [c for c in pool if id(c) not in selected_ids]
+            remainder.sort(key=lambda x: -_eff_score_local(x))
+            extra = 30  # expand by up to 30 more
+            candidates.extend(remainder[:extra])
 
         baseline_lineup, baseline_points = _best_lineup(enriched_roster, required_slots)
         baseline_bench_vor = _compute_bench_vor(enriched_roster, baseline_lineup)
