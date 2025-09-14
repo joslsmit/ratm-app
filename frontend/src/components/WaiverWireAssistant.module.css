@@ -487,14 +487,10 @@
 .conf_medium { background-color: #ef6c00; }
 .conf_low { background-color: #546e7a; }
 
-.benefitBadge {
-  background-color: var(--success-color, #2e7d32);
-  color: #fff;
-  border-radius: 16px;
-  padding: 4px 10px;
-  font-size: 0.9em;
-  white-space: nowrap;
-}
+.benefitBadge { border-radius: 16px; padding: 4px 10px; font-size: 0.9em; white-space: nowrap; }
+.benefitBadgePos { background-color: var(--success-color, #2e7d32); color: #fff; }
+.benefitBadgeZero { background-color: var(--border-color, #ccc); color: var(--text-color); }
+.benefitBadgeNeg { background-color: var(--danger-color, #c62828); color: #fff; }
 
 .sourceChip {
   background-color: var(--input-background);

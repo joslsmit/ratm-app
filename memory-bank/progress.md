@@ -144,6 +144,19 @@ This document tracks the progress of the RATM Draft Kit project against the defi
     - v2 alternatives (A): small‑gain DEF→RB swaps (+0.21) — e.g., drop Cincinnati
     - v2 alternatives (FA): Add DJ Turner • Drop Rashee Rice (+0.6)
     - AI (A, alternatives, min_benefit=0): no validated non‑negative moves; summary now correctly reports “No clear upgrades…”
+
+### Sept 14, 2025 — Waiver v4 Phase 2 Completed
+- Backend
+  - Dynamic candidate quotas based on bench needs (reduce QB when bench has ≥1; boost RB/WR/TE when shallow)
+  - Expand candidate breadth by +30 when projection coverage among candidates < 60%
+  - Align AI deterministic baseline with DEF/K bench penalty to keep benefit math consistent with v2
+- Frontend
+  - Merge AI + deterministic results in the list (dedupe, slider filter, sort by benefit)
+  - Pin top AI move so at least one AI option appears when alternatives are enabled
+  - Benefit badge color-coded/sign-correct: green (+), grey (±), red (−)
+  - Default Alternatives floor set to −0.5 so small DEF→depth swaps show by default
+- Result
+  - Users see multiple sensible options regardless of source, with clear labeling and consistent thresholds
     *   **✅ Roster Endpoint Complete:** Returns `[]` (empty roster - draft hasn't happened yet)
     *   **✅ Player Enrichment Verified:** Mock testing shows successful ECR/team/bye week integration
     *   **✅ Week Parameter Working:** Supports historical/future roster requests

@@ -179,6 +179,13 @@
   - AI summary now derives from validated moves only (prevents misleading headlines)
   - Mild bench penalty for multiple DEF/K on bench to gently surface sensible trims in near‑neutral cases
 
+- 2025‑09‑14 — Phase 2 COMPLETE
+  - Dynamic candidate quotas based on bench composition (reduce QB when bench has ≥1; boost RB/WR/TE when shallow)
+  - Expand candidate breadth by +30 when projection coverage among candidates is low (< 60%)
+  - UI merges AI + deterministic recommendations; dedupes, applies the same Min Estimated Benefit filter, and sorts by benefit
+  - Pin top AI move so at least one AI option is shown alongside deterministic options
+  - Benefit badge is color-coded and properly signed: green (+), grey (±), red (−)
+
 ## Next Actions
 - Phase 2 — Recommendation Quality
   - Need‑aware candidate quotas; expand breadth when projection coverage is low

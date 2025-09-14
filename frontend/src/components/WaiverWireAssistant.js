@@ -882,16 +882,23 @@ const WaiverWireAssistant = ({
                     });
                     const counts = filtered.reduce((acc, r) => { acc[r.__source] = (acc[r.__source]||0)+1; return acc; }, {});
                     const hiddenCount = raw.length - filtered.length;
-                    const seen = new Set();
-                    const deduped = [];
-                    for (const r of filtered) {
+                    // Ensure at least one AI option is visible when available (pin top AI move)
+                    const aiOnly = filtered.filter(r => r.__source === 'AI').sort((a,b) => Number(b.estimated_benefit||0) - Number(a.estimated_benefit||0));
+                    const rest = filtered.filter(r => r.__source !== 'AI').sort((a,b) => Number(b.estimated_benefit||0) - Number(a.estimated_benefit||0));
+                    const cap = 10;
+                    const pinned = aiOnly.length ? [aiOnly[0]] : [];
+                    // Merge pinned AI with the rest, highest benefit first, avoiding duplicates
+                    const seen = new Set(pinned.map(r => `${norm(mkAddName(r)||'')}|${norm(mkDropName(r)||'')}`));
+                    const merged = [...pinned];
+                    const sortedAll = [...aiOnly.slice(1), ...rest].sort((a,b) => Number(b.estimated_benefit||0) - Number(a.estimated_benefit||0));
+                    for (const r of sortedAll) {
+                      if (merged.length >= cap) break;
                       const k = `${norm(mkAddName(r)||'')}|${norm(mkDropName(r)||'')}`;
                       if (seen.has(k)) continue;
                       seen.add(k);
-                      deduped.push(r);
+                      merged.push(r);
                     }
-                    deduped.sort((a,b) => Number(b.estimated_benefit||0) - Number(a.estimated_benefit||0));
-                    const capped = deduped.slice(0, 10);
+                    const capped = merged;
                     return (
                       <>
                         {(counts['AI'] || counts['Deterministic']) && (
@@ -910,7 +917,7 @@ const WaiverWireAssistant = ({
                               <div className={styles.recTitle}>Add {typeof rec.add === 'string' ? rec.add : (rec.add?.name || rec.add_player?.name)} • Drop {typeof rec.drop === 'string' ? rec.drop : (rec.drop?.name || rec.drop_player?.name)}</div>
                               <div className={styles.headerRight}>
                                 <span className={`${styles.confidence} ${styles['conf_'+getConfidence(rec).toLowerCase()]}`}>{getConfidence(rec)}</span>
-                                <span className={styles.benefitBadge}>+{(rec.estimated_benefit ?? 0).toFixed(2)}</span>
+                                {(() => { const b=Number(rec.estimated_benefit||0); const cls=b>0?styles.benefitBadgePos:(b<0?styles.benefitBadgeNeg:styles.benefitBadgeZero); const s=b>0?'+':(b<0?'−':'±'); return (<span className={`${styles.benefitBadge} ${cls}`}>{s}{Math.abs(b).toFixed(2)}</span>); })()}
                                 <span className={styles.sourceChip}>{rec.__source || (aiMoves.length ? 'AI' : 'Deterministic')}</span>
                               </div>
                             </div>

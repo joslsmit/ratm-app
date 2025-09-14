@@ -236,8 +236,11 @@
       - Replaced multiple toggles with a single Filters drawer (Status, Include near‑neutral, Min benefit slider)
       - Removed Debug AI from the main toolbar; summary banner shows “No clear upgrades…” when appropriate
       - Empty‑state copy polished to instruct enabling near‑neutral moves and adjusting Status
-    - Phase 2 — Recommendation Quality: NEXT
-      - Need‑aware candidate quotas; maintain breadth; strictly non‑negative AI alternatives by default
+    - Phase 2 — Recommendation Quality: COMPLETE
+      - Dynamic candidate quotas by bench needs (reduce QB when bench has ≥1; boost RB/WR/TE when shallow)
+      - Expand candidates when projection coverage is low (+30 best remaining) to improve variety
+      - UI merges AI + deterministic results; dedupes, filters by slider, sorts by benefit; pins top AI move
+      - Benefit badge color-coded/sign-correct (green +, grey ±, red −)
     - Phase 3 — Alternatives Reframe: NEXT
       - Group “Explore options” below top moves; limit list; clearer explanation
 
