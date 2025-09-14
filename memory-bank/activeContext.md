@@ -170,7 +170,7 @@
   - Quick Scan → Player Overview → Expert Consensus & Rankings → AI Analysis → Weekly Outlook → Market Analysis → Age/Trajectory.
 - Important: This order is controlled by CSS flex `order` rules in `PlayerDossier.module.css`. JSX order does not affect render order if CSS assigns `order` values.
 
-### 🚧 Sit/Start Optimizer — Current Status (September 4–5, 2025)
+### ✅ Sit/Start Optimizer — Implemented & Verified (September 12–13, 2025)
 - Backend endpoint `/api/optimize_lineup` (Yahoo mode) implemented:
   - Uses projections (PPR) and slot rules; excludes BYE/OUT, flags Q/D; fills strict slots before flex; preserves duplicate slots (RB, RB2, WR, WR2).
   - Opponent-aware tie-breakers in close calls only: tiny penalty for opponent DEF clash; slight variance bias if trailing/favored.
@@ -179,6 +179,7 @@
 - ECR semantics enforced: use overall ECR (season‑long) for cross‑position comparisons; use weekly positional rank only when both players share the same position; never compare positional ranks across positions. When overall ECR exists but the gap is below threshold, show a neutral “Overall ECR” context line instead of a consensus claim.
 - Matchup signal: always shows opponent + HOME/AWAY context; when categorical difficulty differs by ≥1 step (Easy/Moderate/Tough), surface “Easier/Tougher matchup” and apply a numeric nudge in score_breakdown (`matchup` ±0.10) with explicit annotation. Correlation and variance remain small nudges for close calls.
 - Debug & testing: `?debug=1` (or body `{debug:true}`) returns `debug.lineup_note` with consensus and matchup inputs. Headless tester `./test_script` added; accepts `TOKEN` and optional `GEMINI_KEY`.
+- Verification: ✅ Works locally (Dev Yahoo app) and in production (Vercel + Render). Yahoo login flows confirmed in both; optimizer returns suggested_lineup, diffs, bench, and structured note.
 - Open item: Reasons feel too factual/obvious in some cases. See records/sit_start_optimizer_status.md for the refined plan to make analysis more insightful while staying grounded.
 
 ### **✅ RESOLVED: WAIVER WIRE BENCH ANALYSIS COMPLETE (August 20, 2025)**
