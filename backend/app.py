@@ -2961,6 +2961,7 @@ def _extract_player_fields_from_any(player_container):
     selected_position = ''
     eligible_positions = []
     status = ''
+    team_abbr = ''
 
     for d in dicts:
         if not player_key and 'player_key' in d:
@@ -2993,6 +2994,12 @@ def _extract_player_fields_from_any(player_container):
                 eligible_positions = [eps]
         if not status and 'status' in d:
             status = d.get('status', status)
+        # Try to capture Yahoo editorial team abbreviation if present
+        if not team_abbr and 'editorial_team_abbr' in d:
+            try:
+                team_abbr = d.get('editorial_team_abbr') or team_abbr
+            except Exception:
+                pass
 
     if player_key:
         return {
@@ -3002,6 +3009,7 @@ def _extract_player_fields_from_any(player_container):
             'selected_position': selected_position,
             'eligible_positions': eligible_positions,
             'status': status,
+            'team': team_abbr,
         }
     return None
 
@@ -4203,6 +4211,41 @@ def optimize_lineup():
             except Exception:
                 pass
 
+        # When debug requested but no changes (diff empty), include a minimal human-readable debug block
+        try:
+            debug_flag_any = False
+            if isinstance(data, dict) and data.get('debug'):
+                debug_flag_any = True
+            if str(request.args.get('debug','')).strip() in ('1','true','True'):
+                debug_flag_any = True
+            if debug_flag_any:
+                dbg = resp.setdefault('debug', {})
+                if 'lineup_note' not in dbg:
+                    # Provide a concise, human-readable summary with key context
+                    try:
+                        baseline_total_hr = round(total_base, 2)
+                    except Exception:
+                        baseline_total_hr = None
+                    try:
+                        suggested_total_hr = round(total, 2)
+                    except Exception:
+                        suggested_total_hr = None
+                    try:
+                        slots_hr = list(slots_sorted)
+                    except Exception:
+                        slots_hr = []
+                    summary = "No changes recommended — baseline equals suggested lineup." if not diff else "Debug info available."
+                    dbg['lineup_note'] = {
+                        'summary': summary,
+                        'bias': bias,
+                        'opponent_projection': opponent_projection,
+                        'baseline_total': baseline_total_hr,
+                        'suggested_total': suggested_total_hr,
+                        'slots_filled': slots_hr
+                    }
+        except Exception:
+            pass
+
         return jsonify(resp)
     except requests.exceptions.RequestException:
         return jsonify({'error': 'Failed to connect to Yahoo API'}), 500
@@ -4285,8 +4328,58 @@ def enrich_roster_players(yahoo_players):
             # Normalize player name for matching
             normalized_name = normalize_player_name(player['name'])
             
-            # Get combined player data for additional info
+            # Get combined player data for additional info (name-first)
             combined_info = combined_player_data_cache.get(normalized_name, {})
+            # Fallback: join by Yahoo player_id when name match is missing (important for DST/alias cases)
+            if (not combined_info) and player.get('player_id'):
+                try:
+                    joined_key = yahoo_id_to_key.get(str(player.get('player_id')))
+                    if joined_key and combined_player_data_cache:
+                        combined_info = combined_player_data_cache.get(joined_key, {})
+                except Exception:
+                    pass
+            # Fallback: for DEF/DST, try to match by team abbreviation when available
+            try:
+                sel_pos = str(player.get('selected_position','')).upper()
+                elig_list = player.get('eligible_positions') or []
+                # eligible_positions may be a list of dicts like {'position': 'DEF'}; extract position tokens
+                elig_tokens = []
+                for e in elig_list:
+                    try:
+                        if isinstance(e, dict) and e.get('position'):
+                            elig_tokens.append(str(e.get('position')).upper())
+                        elif isinstance(e, str):
+                            elig_tokens.append(e.upper())
+                    except Exception:
+                        continue
+                elig_norm = elig_tokens
+                is_def_eligible = ('DEF' in elig_norm) or ('DST' in elig_norm) or (sel_pos in ('DEF','DST'))
+                if (not combined_info) and is_def_eligible:
+                    team_abbr = (player.get('team') or '').upper()
+                    # Also capture city name from player.name (e.g., "Cincinnati") for fuzzy match
+                    name_city = (player.get('name') or '').strip().lower()
+                    if not team_abbr:
+                        TEAM_ABBR = {
+                            'arizona': 'ARI','atlanta': 'ATL','baltimore': 'BAL','buffalo': 'BUF','carolina': 'CAR','chicago': 'CHI','cincinnati': 'CIN','cleveland': 'CLE','dallas': 'DAL','denver': 'DEN','detroit': 'DET','green bay': 'GB','houston': 'HOU','indianapolis': 'IND','jacksonville': 'JAX','kansas city': 'KC','las vegas': 'LV','la rams': 'LAR','los angeles rams': 'LAR','chargers': 'LAC','la chargers': 'LAC','los angeles chargers': 'LAC','miami': 'MIA','minnesota': 'MIN','new england': 'NE','new orleans': 'NO','ny giants': 'NYG','new york giants': 'NYG','ny jets': 'NYJ','new york jets': 'NYJ','philadelphia': 'PHI','pittsburgh': 'PIT','san francisco': 'SF','seattle': 'SEA','tampa bay': 'TB','tennessee': 'TEN','washington': 'WAS'
+                        }
+                        for k, v in TEAM_ABBR.items():
+                            if name_city == k:
+                                team_abbr = v
+                                break
+                    if combined_player_data_cache:
+                        # Try: match by abbr first; else by city substring in name/display_name
+                        for key, info in combined_player_data_cache.items():
+                            pos_u = str(info.get('position','')).upper()
+                            if pos_u not in ('DEF','DST'):
+                                continue
+                            info_team_u = str(info.get('team') or '').upper()
+                            info_name_l = str(info.get('name') or '').lower()
+                            info_disp_l = str(info.get('display_name') or '').lower()
+                            if (team_abbr and info_team_u == team_abbr) or (name_city and (name_city in info_name_l or name_city in info_disp_l)):
+                                combined_info = info
+                                break
+            except Exception:
+                pass
             
             # Merge Yahoo data with local data
             enriched_player = {

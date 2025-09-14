@@ -189,3 +189,7 @@ This document provides detailed technical information about the RATM Draft Kit p
 - One‑shot run (roster + v2 + AI):
   - `scripts/dev_run_waiver_v4.zsh` (optional overrides: `STATUS`, `ALTS`, `MINB`, `USE_AI`)
 - Notes: endpoints use loopback HTTPS; scripts pass `-k` to allow mkcert self‑signed certs locally.
+- Yahoo Roster Parsing — DST specifics
+  - Roster deep-scan extracts `player_key`, `player_id`, `name`, `selected_position`, `eligible_positions`, `status`, and (when present) `editorial_team_abbr`.
+  - Enrichment for defenses: if name/ID lookup fails, detect DEF/DST via `eligible_positions`, infer team abbr from city (e.g., Cincinnati→CIN), and match combined cache by abbr or city substring.
+  - DST ECR Overall may be missing when the source CSV lacks a row; team and bye still populate.

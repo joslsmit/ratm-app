@@ -249,6 +249,11 @@
     - Phases 4–6 — Deferred
       - Phase 4 (AI narrative/validation polish), Phase 5 (observability + E2E tests), and Phase 6 (feature flag/A-B) are considered non‑essential now and deferred. Current implementation already validates AI by ID + name, merges cleanly, and provides clear guidance via the Top Moves banner.
 
+    - My Team (Yahoo) — DST enrichment fix
+      - Backend roster parser now captures `editorial_team_abbr` and enrichment detects DEF/DST via `eligible_positions` even when `selected_position` is BN.
+      - DEF/DST join order: player_id → team abbr match → city-name substring match; ensures team and bye populate for DST cards.
+      - Note: ECR Overall for DST may be N/A when the ECR CSV lacks a corresponding row; not a UI defect.
+
 - Player Dossier UX Enhancements (Phase A2): Continue polish after waiver v4
   - Apply helper outputs across Value Opportunity and Age Trajectory sections
   - Add CSS classes and color coding for badges (projectionBadge, matchupBadge, etc.)

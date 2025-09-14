@@ -494,4 +494,12 @@ This document tracks the progress of the RATM Draft Kit project against the defi
   - Links to Player Dossier for players in suggested/current and diff lists.
 - Scripts
   - `scripts/test_lineup_optimizer.zsh` available; can be extended with richer failure output.
- - Related: Waiver v4 Phase 3 Completed — merged AI+deterministic list, ID-based dedupe/self‑add, “Explore options” grouping, and “Hide negative moves” toggle (see section: “Sept 14, 2025 — Waiver v4 Phase 3 Completed”).
+  - Related: Waiver v4 Phase 3 Completed — merged AI+deterministic list, ID-based dedupe/self‑add, “Explore options” grouping, and “Hide negative moves” toggle (see section: “Sept 14, 2025 — Waiver v4 Phase 3 Completed”).
+
+### Sept 14, 2025 — My Team: DST Enrichment Fix
+- Problem: Yahoo roster returns defenses as city names (e.g., "Cincinnati") with `selected_position: BN`, often without team abbreviation. Name lookup failed, so team/ECR/bye rendered N/A.
+- Fix (backend):
+  - Roster parser now captures Yahoo `editorial_team_abbr` when present.
+  - Enrichment uses a DEF/DST fallback that triggers when `eligible_positions` includes DEF/DST (even if `selected_position` is BN).
+  - Joins by Yahoo `player_id` first; if missing, infers team abbreviation from city (e.g., Cincinnati→CIN) and matches cache by abbr or city substring.
+- Result: My Team shows team and bye for DSTs (e.g., CIN). ECR Overall may still display N/A if the ECR CSV lacks a row for that DST; this is a data-source limitation, not a UI bug.
