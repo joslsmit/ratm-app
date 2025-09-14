@@ -494,3 +494,4 @@ This document tracks the progress of the RATM Draft Kit project against the defi
   - Links to Player Dossier for players in suggested/current and diff lists.
 - Scripts
   - `scripts/test_lineup_optimizer.zsh` available; can be extended with richer failure output.
+ - Related: Waiver v4 Phase 3 Completed — merged AI+deterministic list, ID-based dedupe/self‑add, “Explore options” grouping, and “Hide negative moves” toggle (see section: “Sept 14, 2025 — Waiver v4 Phase 3 Completed”).
