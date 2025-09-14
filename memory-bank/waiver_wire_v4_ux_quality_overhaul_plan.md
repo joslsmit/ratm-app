@@ -166,9 +166,24 @@
 - Phase 2–4: +3–6 days (quality + AI polish)
 - Phase 5–6: +1–2 days (tests + rollout)
 
-## Next Actions (Do you want me to proceed?)
-- Implement Phase 0 now:
-  - Backend v2 guard (ID + name) and AI ID guard.
-  - Frontend label rename and temporary client‑side guard.
-- Then refactor WaiverWireAssistant controls into a Filters drawer (Phase 1).
+## Update Log
+- 2025‑09‑14 — Phase 0 COMPLETE
+  - Deterministic v2 and AI endpoints now hard‑guard against self‑adds by Yahoo `player_id` + normalized name (pool filtered and final recs validated)
+  - Client‑side guard hides any stray self‑add and shows a muted “moves hidden (already on your roster)” chip
+  - Alternatives label renamed to “Include near‑neutral moves” with helper copy
+- 2025‑09‑14 — Phase 1 COMPLETE
+  - Simplified header with a single Filters drawer (Status, Include near‑neutral, Min Estimated Benefit)
+  - Removed Debug AI from the main toolbar; summary banner shows “No clear upgrades…” when appropriate
+  - Empty‑state copy polished to guide enabling near‑neutral moves and adjusting Status
+- 2025‑09‑14 — Quality polish (part of Phase 2 scope, shipped early)
+  - AI summary now derives from validated moves only (prevents misleading headlines)
+  - Mild bench penalty for multiple DEF/K on bench to gently surface sensible trims in near‑neutral cases
 
+## Next Actions
+- Phase 2 — Recommendation Quality
+  - Need‑aware candidate quotas; expand breadth when projection coverage is low
+  - Default AI alternatives to non‑negative floor (min_benefit ≥ 0)
+- Phase 3 — Alternatives Reframe
+  - Group “Explore options” below top moves; cap to top 5; clearer explanation
+- Phase 5–6 — Tests & Rollout
+  - Add headless UI tests for self‑add guard and filters; feature flag or quick rollback retained

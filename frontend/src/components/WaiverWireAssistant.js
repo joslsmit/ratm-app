@@ -137,6 +137,7 @@ const WaiverWireAssistant = ({
   const [userLeagues, setUserLeagues] = useState([]);
   const [selectedLeague, setSelectedLeague] = useState('');
   const [yahooAvailablePlayers, setYahooAvailablePlayers] = useState([]);
+  const [yahooRosterNames, setYahooRosterNames] = useState(new Set());
   const [isLoadingYahooData, setIsLoadingYahooData] = useState(false);
   const [yahooError, setYahooError] = useState('');
   const [useYahooMode, setUseYahooMode] = useState(false);
@@ -148,11 +149,12 @@ const WaiverWireAssistant = ({
   const [statusFilter, setStatusFilter] = useState('A'); // A|FA|W
   const [includeAlternatives, setIncludeAlternatives] = useState(false);
   const [minBenefit, setMinBenefit] = useState(0.0); // toggled to -1.0 when alternatives enabled
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const [showPool, setShowPool] = useState(false);
   const [showMeta, setShowMeta] = useState(false);
   const [expandedRecs, setExpandedRecs] = useState({});
   const [analystNoteHtml, setAnalystNoteHtml] = useState('');
+  // Hide AI debug controls by default (available via developer tools only)
   const [showAiDebug, setShowAiDebug] = useState(false);
   const [aiDebug, setAiDebug] = useState(null);
 
@@ -297,6 +299,7 @@ const WaiverWireAssistant = ({
         const lk = leagues[0].league_key;
         setSelectedLeague(lk);
         try { await fetchAvailablePlayers(lk); } catch(_) {}
+        try { await fetchUserRosterNames(lk); } catch(_) {}
       }
     } catch (error) {
       console.error('Error fetching leagues:', error);
@@ -372,6 +375,28 @@ const WaiverWireAssistant = ({
     }
   };
 
+  // Fetch current roster names for client-side guard
+  const fetchUserRosterNames = async (leagueKey) => {
+    try {
+      const token = localStorage.getItem('yahoo_token');
+      if (!token) return;
+      const tokenObject = JSON.parse(token);
+      const authHeader = `Bearer ${tokenObject.access_token}`;
+      const leagueObj = userLeagues.find(l => l.league_key === leagueKey);
+      const teamKey = leagueObj?.team_key;
+      if (!teamKey) return;
+      const roster = await get(`/yahoo/roster?team_key=${encodeURIComponent(teamKey)}`, {
+        headers: { 'Authorization': authHeader }
+      });
+      const norm = (s) => (typeof s === 'string' ? s.trim().toLowerCase() : '');
+      const names = new Set((Array.isArray(roster) ? roster : []).map(p => norm(p.name)).filter(Boolean));
+      setYahooRosterNames(names);
+    } catch (e) {
+      console.warn('Could not fetch roster names for guard', e);
+      setYahooRosterNames(new Set());
+    }
+  };
+
   // Handle league selection change
   const handleLeagueChange = async (event) => {
     const leagueKey = event.target.value;
@@ -379,6 +404,7 @@ const WaiverWireAssistant = ({
     
     if (leagueKey && useYahooMode) {
       await fetchAvailablePlayers(leagueKey);
+      await fetchUserRosterNames(leagueKey);
       // Clear stale recommendations on league change
       setRecommendations([]);
       setRecMeta(null);
@@ -392,6 +418,7 @@ const WaiverWireAssistant = ({
     setUseYahooMode(next);
     if (next && selectedLeague) {
       fetchAvailablePlayers(selectedLeague);
+      fetchUserRosterNames(selectedLeague);
     }
   };
 
@@ -403,6 +430,8 @@ const WaiverWireAssistant = ({
         alert('Yahoo authentication required. Please log in with Yahoo.');
         return;
       }
+      // Refresh roster names guard before generating recommendations
+      try { fetchUserRosterNames(selectedLeague); } catch (_) {}
       generateRecommendations(selectedLeague, token);
     } else {
       // Traditional mode: use manual roster input
@@ -698,38 +727,14 @@ const WaiverWireAssistant = ({
                         {isLoadingYahooData ? 'Refreshing…' : 'Refresh Recommendations'}
                       </button>
                     </div>
-                    <label className={styles.inlineToggle}>
-                      <input
-                        type="checkbox"
-                        checked={includeAlternatives}
-                        onChange={(e) => {
-                          const v = e.target.checked;
-                          setIncludeAlternatives(v);
-                          setMinBenefit(v ? -1.0 : 0.0);
-                        }}
-                      />
-                      Show Alternatives
-                    </label>
+                    <button className={styles.linkButton} onClick={() => setShowFilters(!showFilters)}>
+                      {showFilters ? 'Hide Filters' : 'Filters'}
+                    </button>
                     <button className={styles.linkButton} onClick={() => setShowMeta(!showMeta)}>
                       {showMeta ? 'Hide Details' : 'Show Details'}
                     </button>
-                    <button className={styles.linkButton} onClick={() => setShowAdvanced(!showAdvanced)}>
-                      {showAdvanced ? 'Hide Advanced' : 'Advanced'}
-                    </button>
-                    <button className={styles.linkButton} onClick={async () => {
-                      const opening = !showPool;
-                      setShowPool(opening);
-                      if (opening && selectedLeague && (!yahooAvailablePlayers || yahooAvailablePlayers.length === 0)) {
-                        try { await fetchAvailablePlayers(selectedLeague); } catch(_) {}
-                      }
-                    }}>
-                      {showPool ? 'Hide Pool' : 'Browse Pool'}
-                    </button>
-                    <button className={styles.linkButton} onClick={() => setShowAiDebug(!showAiDebug)}>
-                      {showAiDebug ? 'Hide AI Debug' : 'Debug AI'}
-                    </button>
                   </div>
-                  {showAdvanced && (
+                  {showFilters && (
                     <div className={styles.advancedRow}>
                       <div className={styles.controlGroup}>
                         <label>Status</label>
@@ -738,6 +743,23 @@ const WaiverWireAssistant = ({
                           <option value="FA">Free Agents (FA)</option>
                           <option value="W">Waivers (W)</option>
                         </select>
+                      </div>
+                      <div className={styles.controlGroup}>
+                        <label className={styles.inlineToggle}>
+                          <input
+                            type="checkbox"
+                            checked={includeAlternatives}
+                            onChange={(e) => {
+                              const v = e.target.checked;
+                              setIncludeAlternatives(v);
+                              setMinBenefit(v ? -1.0 : 0.0);
+                            }}
+                          />
+                          Include near‑neutral moves
+                          <span className={styles.helpText} style={{ marginLeft: 6 }}>
+                            Show small or lateral upgrades that improve balance/depth
+                          </span>
+                        </label>
                       </div>
                       {includeAlternatives && (
                         <div className={styles.controlGroup}>
@@ -750,8 +772,7 @@ const WaiverWireAssistant = ({
                             value={minBenefit}
                             onChange={(e) => setMinBenefit(parseFloat(e.target.value))}
                           />
-                          <span className={styles.rangeValue}>{Number.isFinite(minBenefit) ? minBenefit.toFixed(1) : '-'}
-                          </span>
+                          <span className={styles.rangeValue}>{Number.isFinite(minBenefit) ? minBenefit.toFixed(1) : '-'}</span>
                         </div>
                       )}
                     </div>
@@ -810,7 +831,12 @@ const WaiverWireAssistant = ({
                 {(aiMoves.length > 0 || recommendations.length > 0) && (
                   <div className={styles.opinionBanner}>
                     {(() => {
-                      const list = aiMoves.length ? aiMoves : recommendations;
+                      const baseList = aiMoves.length ? aiMoves : recommendations;
+                      const norm = (s) => (typeof s === 'string' ? s.trim().toLowerCase() : '');
+                      const list = baseList.filter(r => {
+                        const addName = typeof r.add === 'string' ? r.add : (r.add?.name || r.add_player?.name);
+                        return !(addName && yahooRosterNames.has(norm(addName)));
+                      });
                       const maxB = Math.max(...list.map(r => Number((r.estimated_benefit) || 0)));
                       if (!isFinite(maxB) || maxB < 0.3) return <span>No clear upgrades this week — small, balance‑only gains.</span>;
                       const first = list[0];
@@ -821,8 +847,23 @@ const WaiverWireAssistant = ({
                   </div>
                 )}
                 <div className={styles.recommendationsList}>
-                  {(aiMoves.length ? aiMoves : recommendations).map((rec, idx) => (
-                    <div key={idx} className={styles.recCard}>
+                  {(() => {
+                    const baseList = aiMoves.length ? aiMoves : recommendations;
+                    const norm = (s) => (typeof s === 'string' ? s.trim().toLowerCase() : '');
+                    const filtered = baseList.filter(r => {
+                      const addName = typeof r.add === 'string' ? r.add : (r.add?.name || r.add_player?.name);
+                      return !(addName && yahooRosterNames.has(norm(addName)));
+                    });
+                    const hiddenCount = baseList.length - filtered.length;
+                    return (
+                      <>
+                        {hiddenCount > 0 && (
+                          <div className={styles.chipMuted} style={{ marginBottom: 8 }}>
+                            {hiddenCount} move{hiddenCount>1?'s':''} hidden (already on your roster)
+                          </div>
+                        )}
+                        {filtered.map((rec, idx) => (
+                          <div key={idx} className={styles.recCard}>
                       <div className={styles.recHeader}>
                         <div className={styles.recTitle}>Add {typeof rec.add === 'string' ? rec.add : (rec.add?.name || rec.add_player?.name)} • Drop {typeof rec.drop === 'string' ? rec.drop : (rec.drop?.name || rec.drop_player?.name)}</div>
                         <div className={styles.headerRight}>
@@ -903,9 +944,15 @@ const WaiverWireAssistant = ({
                       </div>
                       {rec.claim_only && <div className={styles.claimOnly}>Claim only (on waivers)</div>}
                     </div>
-                  ))}
+                        ))}
+                      </>
+                    );
+                  })()}
                   {!recommendations.length && !isLoadingYahooData && (
-                    <div className={styles.emptyState}>No recommendations yet. Adjust filters or click Get Waiver Recommendations.</div>
+                    <div className={styles.emptyState}>
+                      No clear upgrades found. Open Filters and enable “Include near‑neutral moves” to see small depth/balance improvements. 
+                      Try adjusting Status (A/FA/W) if needed.
+                    </div>
                   )}
                 </div>
 

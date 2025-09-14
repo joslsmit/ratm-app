@@ -227,8 +227,19 @@
 
 - Highest Priority: Waiver Wire v4 — UX Simplification + Quality Overhaul
   - Plan: memory-bank/waiver_wire_v4_ux_quality_overhaul_plan.md
-  - Goals: simplify UI (Filters drawer), eliminate self‑add bugs with ID+name guards, clarify “Alternatives” as “Include near‑neutral moves,” and broaden candidate quality while maintaining speed.
-  - Immediate Phase 0: Backend deterministic guard; frontend label/guard; then Filters refactor.
+  - Status:
+    - Phase 0 — Safety & Hotfixes: COMPLETE
+      - Deterministic and AI endpoints now hard‑guard against self‑adds by Yahoo player_id + normalized name
+      - Client‑side guard hides any stray self‑add and shows a muted “moves hidden (already on your roster)” chip
+      - Alternatives label copy updated (“Include near‑neutral moves”) with helper
+    - Phase 1 — UX Simplification: COMPLETE
+      - Replaced multiple toggles with a single Filters drawer (Status, Include near‑neutral, Min benefit slider)
+      - Removed Debug AI from the main toolbar; summary banner shows “No clear upgrades…” when appropriate
+      - Empty‑state copy polished to instruct enabling near‑neutral moves and adjusting Status
+    - Phase 2 — Recommendation Quality: NEXT
+      - Need‑aware candidate quotas; maintain breadth; strictly non‑negative AI alternatives by default
+    - Phase 3 — Alternatives Reframe: NEXT
+      - Group “Explore options” below top moves; limit list; clearer explanation
 
 - Player Dossier UX Enhancements (Phase A2): Continue polish after waiver v4
   - Apply helper outputs across Value Opportunity and Age Trajectory sections
@@ -373,3 +384,15 @@ Next up:
 ## New Priority (Sept 14, 2025)
 
 Waiver Wire v4 — UX Simplification + Quality Overhaul is the next implementation focus. The previous v3 plan has been archived to `memory-bank/records/waiver_wire_recommendations_v3_plan.md`. All new work should follow `memory-bank/waiver_wire_v4_ux_quality_overhaul_plan.md`.
+
+### Waiver Wire v4 — Progress (Sept 14)
+- Backend
+  - Self‑add guards (ID + normalized name) applied to deterministic v2 and AI paths; pool filtered and final recs re‑validated
+  - AI summary now derives from validated moves only (prevents misleading headlines)
+  - Mild bench penalty for extra DEF/K to prefer trimming surplus in near‑neutral scenarios
+- Frontend
+  - Filters drawer added; Debug AI removed from main UI; empty‑state copy polished
+  - Client guard hides self‑adds; banner shows “No clear upgrades…” when appropriate
+- Dev & Testing
+  - Added scripts: `scripts/dev_config_waiver_v4.zsh`, `scripts/dev_run_waiver_v4.zsh`
+  - Dev endpoints (local only, `RATM_DEV_ENABLE=1`): `/api/dev/configure`, `/api/dev/run_waiver_v4_test`

@@ -126,6 +126,24 @@ This document tracks the progress of the RATM Draft Kit project against the defi
   - v3 plan archived: `memory-bank/records/waiver_wire_recommendations_v3_plan.md`
   - Phase 0 tasks queued: deterministic self‑add guard (ID + normalized name), client label/guard, and control rename to “Include near‑neutral moves”.
   - Next: Consolidate controls into a Filters drawer; broaden candidate quality via need‑aware quotas.
+
+### Sept 14, 2025 — Waiver v4 Phase 0 + 1 Completed
+- Backend
+  - Deterministic v2 and AI endpoints now reject self‑adds by Yahoo `player_id` + normalized name; pool and recs both guarded
+  - AI summary built from validated moves only; shows “No clear upgrades…” when none remain after validation
+  - Light bench penalty for multiple DEF/K on bench (−0.3 each extra) to gently surface sensible trims in near‑neutral cases
+- Frontend
+  - Filters drawer (Status, Include near‑neutral, Min benefit slider) replaces Advanced controls
+  - Alternatives copy: “Include near‑neutral moves” with helper; empty‑state copy now instructs to use Filters
+  - Debug AI removed from the main header; client self‑add guard hides invalid moves with a muted chip
+- Dev & Tests
+  - Added local dev endpoints (enable with `RATM_DEV_ENABLE=1`): `/api/dev/configure`, `/api/dev/run_waiver_v4_test`
+  - Added scripts: `scripts/dev_config_waiver_v4.zsh` (configure once) and `scripts/dev_run_waiver_v4.zsh` (one‑shot run)
+  - Test results (your league/team):
+    - v2 strict (A): 0 clear upgrades
+    - v2 alternatives (A): small‑gain DEF→RB swaps (+0.21) — e.g., drop Cincinnati
+    - v2 alternatives (FA): Add DJ Turner • Drop Rashee Rice (+0.6)
+    - AI (A, alternatives, min_benefit=0): no validated non‑negative moves; summary now correctly reports “No clear upgrades…”
     *   **✅ Roster Endpoint Complete:** Returns `[]` (empty roster - draft hasn't happened yet)
     *   **✅ Player Enrichment Verified:** Mock testing shows successful ECR/team/bye week integration
     *   **✅ Week Parameter Working:** Supports historical/future roster requests

@@ -52,6 +52,9 @@ This document provides detailed technical information about the RATM Draft Kit p
     - `POST /api/optimize_lineup` — Yahoo lineup optimizer: returns `suggested_lineup`, `diff`, `eligibility_info`, plus `ai_note_json` with `{ confidence, headline, reasons[], tags[], score_breakdown{} }`. Supports `?debug=1` (or body `{debug:true}`) to include `consensus_inputs`, `matchup_inputs`, `opponent_projection`, and `slots_filled`.
     - `GET /api/diagnostics/yahoo-data-health` — League diagnostics (CSV freshness, enrichment coverage); requires Yahoo Authorization and `league_key`.
     - `POST /api/admin/refresh_data` — Admin/developer CSV refresh that rebuilds caches.
+    - Dev (local only, enable with `RATM_DEV_ENABLE=1`):
+      - `POST /api/dev/configure` — store Yahoo token, `league_key`, `team_key`, optional `gemini_key` (saved in `backend/.dev/waiver_v4.json`)
+      - `POST /api/dev/run_waiver_v4_test` — runs roster + v2 + AI using stored config; returns compact JSON bundle
 
 ### C. CORS Configuration
 *   **Location:** `backend/app.py`
@@ -180,3 +183,10 @@ This document provides detailed technical information about the RATM Draft Kit p
 - Matchup: opponent + HOME/AWAY always shown; categorical difficulty (Easy/Moderate/Tough) mapped and surfaced when meaningful with a small numeric nudge.
 - UI renders structured card only; markdown hidden.
 - Test script: project root `./test_script` — set `TOKEN` (Yahoo), optional `GEMINI_KEY`; add `INSECURE=1` if using mkcert locally. Smoketest also available at `scripts/test_lineup_optimizer.zsh`.
+## 9. Waiver Wire v4 — Dev Runner & Scripts (Sept 14)
+- Enable dev mode for backend: `export RATM_DEV_ENABLE=1; python app.py`
+- Configure once with your token/keys (local only):
+  - `scripts/dev_config_waiver_v4.zsh` (reads `TOKEN`, `LEAGUE_KEY`, `TEAM_KEY`, optional `GEMINI_KEY` from env)
+- One‑shot run (roster + v2 + AI):
+  - `scripts/dev_run_waiver_v4.zsh` (optional overrides: `STATUS`, `ALTS`, `MINB`, `USE_AI`)
+- Notes: endpoints use loopback HTTPS; scripts pass `-k` to allow mkcert self‑signed certs locally.
