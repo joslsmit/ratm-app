@@ -752,8 +752,8 @@ const WaiverWireAssistant = ({
                             onChange={(e) => {
                               const v = e.target.checked;
                               setIncludeAlternatives(v);
-                              // Default to non-negative floor for alternatives
-                              setMinBenefit(v ? 0.0 : 0.0);
+                              // Default to slight negative floor so small DEF→depth swaps appear
+                              setMinBenefit(v ? -0.5 : 0.0);
                             }}
                           />
                           Include near‑neutral moves
