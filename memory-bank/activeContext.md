@@ -353,8 +353,11 @@ Next up:
 
 ## 10. Current Development Focus - IN-SEASON ENHANCEMENT PHASE
 *   **Primary Status:** **Production deployment complete and operational**
-*   **New Development Priority:** **🔥 Lineup Optimizer Implementation - DETAILED PLANNING COMPLETE**
-*   **Implementation Guide:** `lineup_optimizer_implementation_plan.md` - Comprehensive technical specification ready
+*   **✅ Lineup Optimizer (Yahoo) — Implemented**
+    *   Endpoint: `/api/optimize_lineup` (Yahoo-only). Blocks OUT/IR/BYE; builds actual Yahoo slot map; greedy selection with small tie-break nudges (matchup, opponent DEF correlation, variance by favored/trailing).
+    *   Output: `suggested_lineup`, `diff`, `eligibility_info`, `ai_note_json` (confidence/headline/reasons/tags/score_breakdown). Markdown retained only for compatibility.
+    *   Frontend: `SitStartOptimizer.js` includes league/week, Include debug checkbox, structured card (confidence chip, delta pill, ordered tags, score chips), and optional debug JSON.
+    *   Implementation guide: `lineup_optimizer_implementation_plan.md` updated to reflect completed Y1/Y2.
 *   **Monitoring:** Track application performance, user feedback, and any production issues
 *   **Maintenance:** Regular data updates, security patches, and minor improvements as needed
 

@@ -485,3 +485,12 @@ This document tracks the progress of the RATM Draft Kit project against the defi
   - Phase 4: AI Narrative & Validation Polish (minor copy/metrics; validation parity largely implemented)
   - Phase 5: Observability + E2E (optional regression guardrails; can revisit later)
   - Phase 6: Rollout & Safeguards (feature flag/A-B not required for current scale)
+### Sept 14, 2025 — Lineup Optimizer (Yahoo) Implemented
+- Backend
+  - Endpoint `/api/optimize_lineup` implemented: Yahoo roster parse; OUT/IR/BYE blocking; ordered slots; greedy selection with close-call nudges (matchup, opponent DEF correlation, variance by favored/trailing); safe JSON note builder with Gemini paraphrase optional.
+  - Debug: `debug.lineup_note` includes consensus/matchup inputs, opponent projection, and slots_filled when `debug=true`.
+- Frontend
+  - `SitStartOptimizer.js`: league/week selectors; Include debug checkbox; structured note card with confidence chip, delta pill, ordered tags, and score breakdown; optional debug details section.
+  - Links to Player Dossier for players in suggested/current and diff lists.
+- Scripts
+  - `scripts/test_lineup_optimizer.zsh` available; can be extended with richer failure output.

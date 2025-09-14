@@ -177,12 +177,11 @@ This document provides detailed technical information about the RATM Draft Kit p
 - Offensive scoring settings documented in `records/league_scoring_offense.md`.
 - Bench VOR baselines are aligned to these rules; projections consumed are PPR (r2p_pts).
 ## 8. Sit/Start Optimizer — Implementation Notes (Sept 4–5)
-- Yahoo‑only endpoint implemented; deterministic selection driven by weekly projections; excludes BYE/OUT; Q/D flagged.
-- Structured AI note: up to 3 grounded reasons (Projection/Matchup/Status/Variance/Correlation/Consensus/Usage/Confidence/Context) with canonical tags and a score breakdown (projection plus small nudges: matchup ±0.10, correlation/variance in close calls).
-- ECR: overall ECR used for cross‑position; weekly positional rank only for same‑position; neutral Overall ECR context when gaps are small.
-- Matchup: opponent + HOME/AWAY always shown; categorical difficulty (Easy/Moderate/Tough) mapped and surfaced when meaningful with a small numeric nudge.
-- UI renders structured card only; markdown hidden.
-- Test script: project root `./test_script` — set `TOKEN` (Yahoo), optional `GEMINI_KEY`; add `INSECURE=1` if using mkcert locally. Smoketest also available at `scripts/test_lineup_optimizer.zsh`.
+- Yahoo‑only endpoint implemented; deterministic selection driven by weekly projections with ECR fallbacks; excludes BYE/OUT; Q/D flagged.
+- Close‑call nudges: matchup ±0.10 when categorical difference exists; slight correlation penalty vs opponent DEF; variance tilt when favored/trailing.
+- Structured AI note: headline with delta, confidence, up to 3 grounded reasons (Projection/Matchup/Status/Variance/Correlation/Consensus/Usage/FlexFit), ordered tags, and score breakdown.
+- UI renders structured card (confidence chip + delta pill + ordered tags); markdown hidden. “Include debug” checkbox surfaces `debug.lineup_note`.
+- Test script: `scripts/test_lineup_optimizer.zsh`; set `TOKEN` (Yahoo) and optional `GEMINI_KEY`; add `INSECURE=1` for local mkcert HTTPS.
 ## 9. Waiver Wire v4 — Dev Runner & Scripts (Sept 14)
 - Enable dev mode for backend: `export RATM_DEV_ENABLE=1; python app.py`
 - Configure once with your token/keys (local only):
