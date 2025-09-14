@@ -29,20 +29,20 @@ cd backend && source venv/bin/activate && python app.py
 cd frontend && npm start
 ```
 
-### 2. Fix Yahoo OAuth for Local Testing (CRITICAL)
-**⚠️ Two Required Changes**:
+### 2. Yahoo OAuth for Local Testing (Two‑App Recommended)
+**Preferred**: Use two Yahoo apps so you don’t flip Homepage.
 
-**A. Backend OAuth Redirect URI (via env var, no code edit)**
-```bash
-# In your local shell before starting the backend
-export YAHOO_REDIRECT_URI="https://localhost:5000/api/yahoo/callback"
+**Local Dev app**: Homepage `http://localhost:3000`, Redirect `https://localhost:5000/api/yahoo/callback`
+**Production app**: Homepage `https://ratm-app.vercel.app`, Redirect `https://ratm-app.onrender.com/api/yahoo/callback`
+
+**Local backend config**: put credentials in `backend/.env`:
 ```
-The backend now reads `YAHOO_REDIRECT_URI` from the environment and defaults to the production URL when unset. This avoids branch-specific code flips.
-
-**B. Yahoo Developer Console** - Change Homepage URL (Yahoo allows one Homepage URL at a time):
-- Go to [Yahoo Developer Network](https://developer.yahoo.com/apps/)
-- Set **Homepage URL** to: `http://localhost:3000`
-- Keep both redirect URIs (localhost + production)
+YAHOO_CLIENT_ID=YOUR_DEV_YAHOO_CLIENT_ID
+YAHOO_CLIENT_SECRET=YOUR_DEV_YAHOO_CLIENT_SECRET
+YAHOO_REDIRECT_URI=https://localhost:5000/api/yahoo/callback
+FLASK_SECRET_KEY=YOUR_LOCAL_SECRET  # generate with: python3 -c "import secrets; print(secrets.token_hex(32))"
+```
+Start backend from `backend/` so `load_dotenv()` picks up `backend/.env`.
 
 ### 3. Restart Backend
 ```bash
@@ -56,20 +56,9 @@ python app.py
 
 ## 📤 LOCAL DEVELOPMENT → PRODUCTION
 
-### 1. Revert OAuth Configuration (CRITICAL)
-**⚠️ Two Required Reversions Before Committing/Deploying**:
-
-**A. Backend OAuth Redirect URI**
-- Ensure no local override is set when deploying (unset the env var locally and confirm Render has production value):
-```bash
-unset YAHOO_REDIRECT_URI  # local only
-```
-- On Render: set `YAHOO_REDIRECT_URI=https://ratm-app.onrender.com/api/yahoo/callback` in the service Environment.
-
-**B. Yahoo Developer Console** - Revert Homepage URL:
-- Go to [Yahoo Developer Network](https://developer.yahoo.com/apps/)  
-- Set **Homepage URL** back to: `https://ratm-app.vercel.app/`
-- Keep both redirect URIs (localhost + production for future development)
+### 1. Production deploy checklist (Two‑App model)
+- Render env: `YAHOO_CLIENT_ID`/`YAHOO_CLIENT_SECRET` (PROD), `YAHOO_REDIRECT_URI=https://ratm-app.onrender.com/api/yahoo/callback`, `FLASK_SECRET_KEY`
+- No need to flip Yahoo Homepage if using two apps.
 
 ### 2. Test Production Configuration Locally (Optional but Recommended)
 ```bash
@@ -127,14 +116,12 @@ git revert HEAD && git push origin main
 git checkout -b feature/[name]
 cd backend && source venv/bin/activate && python app.py
 cd frontend && npm start
-# export YAHOO_REDIRECT_URI=https://localhost:5000/api/yahoo/callback
-# Set Yahoo Homepage URL in Yahoo console to http://localhost:3000
+# Ensure backend/.env contains your Local Dev Yahoo credentials
 ```
 
 ### Deploy to Production  
 ```bash
-# Ensure YAHOO_REDIRECT_URI env var is unset locally; set to production in Render
-# Revert Yahoo Homepage URL to https://ratm-app.vercel.app/ in Yahoo console
+# Render has PROD Yahoo credentials + redirect + FLASK_SECRET_KEY
 git checkout main && git merge feature/[name] && git push origin main
 ```
 

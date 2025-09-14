@@ -35,9 +35,11 @@ This document provides detailed technical information about the RATM Draft Kit p
 ## 2. Key Configurations
 
 ### A. Environment Variables
-*   **`FLASK_SECRET_KEY`:** Used by Flask for session management and security. Loaded via `os.getenv("FLASK_SECRET_KEY")` in `backend/app.py`.
-*   **`.env` files:** Used for local development to store environment variables. **`.env` and `.env.test` are listed in `.gitignore` and should not be committed to the repository.**
-*   **Render Environment:** `FLASK_SECRET_KEY` must be set as an environment variable directly in the Render dashboard for production deployment.
+*   **`FLASK_SECRET_KEY`:** Required for Flask sessions (Yahoo OAuth state). Store in Render env (prod) and `backend/.env` (local). Generate with `python3 -c "import secrets; print(secrets.token_hex(32))"`.
+*   **`YAHOO_CLIENT_ID` / `YAHOO_CLIENT_SECRET`:** Yahoo OAuth credentials. Use PROD app credentials on Render; DEV app credentials in `backend/.env` locally.
+*   **`YAHOO_REDIRECT_URI`:** OAuth callback. PROD: `https://ratm-app.onrender.com/api/yahoo/callback`. Local: `https://localhost:5000/api/yahoo/callback` (set in `backend/.env`).
+*   **`.env` files:** Local development uses `backend/.env` (git‑ignored) so secrets are not committed.
+*   **Render Environment:** Set `FLASK_SECRET_KEY`, `YAHOO_CLIENT_ID`, `YAHOO_CLIENT_SECRET`, and `YAHOO_REDIRECT_URI` in the Render dashboard.
 
 ### B. API Endpoints
 *   **Frontend `API_BASE_URL`:** Configured in `frontend/src/context/AppContext.js`.
@@ -63,7 +65,7 @@ This document provides detailed technical information about the RATM Draft Kit p
 
 ### D. Data & Navigation
 *   **`basedir`:** Defined in `backend/app.py` to correctly resolve paths to local data files.
-*   **CSV Files:** `db_fpecr_latest.csv`, `values-players.csv`, `values-picks.csv` are expected to be present in the `backend/` directory.
+*   **CSV Data:** The backend downloads/refreshes CSV data at runtime (`import_data()` at startup and via `/api/admin/refresh_data`). CSV files are no longer tracked in Git and are ignored by `.gitignore`.
 *   **Navigation:** Sidebar uses a Season Mode switch (In‑Season / Pre‑Season) with a Show All toggle; quick actions provide direct access to common in‑season tools.
 
 ## 3. Tool-Specific Context
