@@ -6120,7 +6120,9 @@ def yahoo_waiver_recommendations_ai():
         baseline_balance = _compute_balance_score(baseline_counts)
         baseline_bye = _compute_bye_score(enriched_roster, baseline_lineup)
         alpha, beta, gamma = 0.7, 0.3, 0.3
-        baseline_overall = round(baseline_points + alpha * baseline_bench_vor + beta * baseline_balance + gamma * baseline_bye, 2)
+        # Align AI deterministic baseline with DEF/K small bench penalty
+        baseline_defk_pen = _compute_def_k_penalty(enriched_roster, baseline_lineup)
+        baseline_overall = round(baseline_points + alpha * baseline_bench_vor + beta * baseline_balance + gamma * baseline_bye - baseline_defk_pen, 2)
 
         bench = [rp for rp in enriched_roster if str(rp.get('selected_position','')).upper().startswith('BN')]
         starters = [rp for rp in enriched_roster if rp not in bench and not str(rp.get('selected_position','')).upper().startswith('IR')]

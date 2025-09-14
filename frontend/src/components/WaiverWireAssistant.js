@@ -500,9 +500,10 @@ const WaiverWireAssistant = ({
         exclude_positions: ['K', 'DEF']
       };
 
-      // Prefer AI-authority endpoint when API key is available; fallback to deterministic v2
+      // Fetch both AI (when available) and deterministic v2 in parallel to build a merged view
+      let aiPromise = null;
       if (userApiKey) {
-        const aiResp = await fetch(`${API_BASE_URL}/yahoo/waiver_recommendations_ai?debug=1`, {
+        aiPromise = fetch(`${API_BASE_URL}/yahoo/waiver_recommendations_ai?debug=1`, {
           method: 'POST',
           headers: {
             'Authorization': authHeader,
@@ -511,23 +512,9 @@ const WaiverWireAssistant = ({
           },
           body: JSON.stringify(body)
         });
-        if (aiResp.ok) {
-          const aiData = await aiResp.json();
-          setAiMoves(Array.isArray(aiData.moves) ? aiData.moves : []);
-          setAnalystNoteHtml(aiData.summary ? converter.makeHtml(aiData.summary) : '');
-          setRecMeta(aiData.metadata || null);
-          setAiDebug(aiData.debug || { ai_used: true, ai_moves_count: (aiData.moves||[]).length });
-          // Keep deterministic as fallback if provided
-          setRecommendations(Array.isArray(aiData.recommendations) ? aiData.recommendations : []);
-          return;
-        }
-        // if AI endpoint fails, fall through to deterministic
-        else {
-          try { const errData = await aiResp.json(); setAiDebug(errData && errData.debug ? errData.debug : { ai_used: false, error: `HTTP ${aiResp.status}` }); } catch(_) {}
-        }
       }
 
-      const response = await fetch(`${API_BASE_URL}/yahoo/waiver_recommendations_v2`, {
+      const v2Promise = fetch(`${API_BASE_URL}/yahoo/waiver_recommendations_v2`, {
         method: 'POST',
         headers: {
           'Authorization': authHeader,
@@ -536,14 +523,34 @@ const WaiverWireAssistant = ({
         body: JSON.stringify(body)
       });
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `Failed to fetch recommendations (${response.status})`);
+      // Resolve deterministic first so we always have a baseline list
+      const v2Resp = await v2Promise;
+      if (!v2Resp.ok) {
+        const errData = await v2Resp.json().catch(() => ({}));
+        throw new Error(errData.error || `Failed to fetch recommendations (${v2Resp.status})`);
       }
+      const v2Data = await v2Resp.json();
+      setRecommendations(Array.isArray(v2Data.recommendations) ? v2Data.recommendations : []);
+      setRecMeta(v2Data.metadata || null);
 
-      const data = await response.json();
-      setRecommendations(Array.isArray(data.recommendations) ? data.recommendations : []);
-      setRecMeta(data.metadata || null);
+      // If AI available, resolve and set AI-specific state; UI merges both lists
+      if (aiPromise) {
+        try {
+          const aiResp = await aiPromise;
+          if (aiResp.ok) {
+            const aiData = await aiResp.json();
+            setAiMoves(Array.isArray(aiData.moves) ? aiData.moves : []);
+            setAnalystNoteHtml(aiData.summary ? converter.makeHtml(aiData.summary) : '');
+            setAiDebug(aiData.debug || { ai_used: true, ai_moves_count: (aiData.moves||[]).length });
+            // We keep recommendations from v2; AI recs are merged in render
+          } else {
+            try { const errData = await aiResp.json(); setAiDebug(errData && errData.debug ? errData.debug : { ai_used: false, error: `HTTP ${aiResp.status}` }); } catch(_) {}
+          }
+        } catch (e) {
+          // AI failed; we keep deterministic-only view
+          setAiDebug({ ai_used: false, error: String(e) });
+        }
+      }
     } catch (err) {
       console.error('Recommendations error:', err);
       setRecError(err.message || 'Unknown error fetching recommendations');
@@ -828,52 +835,86 @@ const WaiverWireAssistant = ({
                 {recError && <div className={styles.errorText}>{recError}</div>}
 
                 <h3>Top Waiver Moves</h3>
-                {/* Opinionated banner: show strongest call or low-impact disclaimer */}
+                {/* Opinionated banner: show strongest call or low-impact disclaimer (merged AI + deterministic) */}
                 {(aiMoves.length > 0 || recommendations.length > 0) && (
                   <div className={styles.opinionBanner}>
                     {(() => {
-                      const baseList = aiMoves.length ? aiMoves : recommendations;
                       const norm = (s) => (typeof s === 'string' ? s.trim().toLowerCase() : '');
-                      const list = baseList.filter(r => {
-                        const addName = typeof r.add === 'string' ? r.add : (r.add?.name || r.add_player?.name);
-                        return !(addName && yahooRosterNames.has(norm(addName)));
+                      const mkAddName = (r) => (typeof r.add === 'string' ? r.add : (r.add?.name || r.add_player?.name));
+                      const mkDropName = (r) => (typeof r.drop === 'string' ? r.drop : (r.drop?.name || r.drop_player?.name));
+                      const aiL = (aiMoves || []).map(r => ({...r, __source:'AI'}));
+                      const detL = (recommendations || []).map(r => ({...r, __source:'Deterministic'}));
+                      const raw = [...aiL, ...detL];
+                      const filtered = raw.filter(r => {
+                        const addName = mkAddName(r);
+                        const b = Number(r.estimated_benefit || 0);
+                        return (!addName || !yahooRosterNames.has(norm(addName))) && (Number.isFinite(b) ? b >= minBenefit : true);
                       });
-                      const maxB = Math.max(...list.map(r => Number((r.estimated_benefit) || 0)));
-                      if (!isFinite(maxB) || maxB < 0.3) return <span>No clear upgrades this week — small, balance‑only gains.</span>;
-                      const first = list[0];
-                      const addName = typeof first.add === 'string' ? first.add : (first.add?.name || first.add_player?.name);
-                      const dropName = typeof first.drop === 'string' ? first.drop : (first.drop?.name || first.drop_player?.name);
-                      return <span>Do this: Add {addName} • Drop {dropName}</span>;
+                      const seen = new Set();
+                      const deduped = [];
+                      for (const r of filtered) {
+                        const k = `${norm(mkAddName(r)||'')}|${norm(mkDropName(r)||'')}`;
+                        if (seen.has(k)) continue;
+                        seen.add(k);
+                        deduped.push(r);
+                      }
+                      deduped.sort((a,b) => Number(b.estimated_benefit||0) - Number(a.estimated_benefit||0));
+                      if (!deduped.length) return <span>No clear upgrades this week — small, balance‑only gains.</span>;
+                      const first = deduped[0];
+                      const addName = mkAddName(first);
+                      const dropName = mkDropName(first);
+                      return <span>Do this: Add {addName} • Drop {dropName} <span className={styles.chipMuted}>(merged AI + deterministic)</span></span>;
                     })()}
                   </div>
                 )}
                 <div className={styles.recommendationsList}>
                   {(() => {
-                    const baseList = aiMoves.length ? aiMoves : recommendations;
                     const norm = (s) => (typeof s === 'string' ? s.trim().toLowerCase() : '');
-                    const filtered = baseList.filter(r => {
-                      const addName = typeof r.add === 'string' ? r.add : (r.add?.name || r.add_player?.name);
-                      return !(addName && yahooRosterNames.has(norm(addName)));
+                    const mkAddName = (r) => (typeof r.add === 'string' ? r.add : (r.add?.name || r.add_player?.name));
+                    const mkDropName = (r) => (typeof r.drop === 'string' ? r.drop : (r.drop?.name || r.drop_player?.name));
+                    const aiL = (aiMoves || []).map(r => ({...r, __source:'AI'}));
+                    const detL = (recommendations || []).map(r => ({...r, __source:'Deterministic'}));
+                    const raw = [...aiL, ...detL];
+                    const filtered = raw.filter(r => {
+                      const addName = mkAddName(r);
+                      const b = Number(r.estimated_benefit || 0);
+                      return (!addName || !yahooRosterNames.has(norm(addName))) && (Number.isFinite(b) ? b >= minBenefit : true);
                     });
-                    const hiddenCount = baseList.length - filtered.length;
+                    const counts = filtered.reduce((acc, r) => { acc[r.__source] = (acc[r.__source]||0)+1; return acc; }, {});
+                    const hiddenCount = raw.length - filtered.length;
+                    const seen = new Set();
+                    const deduped = [];
+                    for (const r of filtered) {
+                      const k = `${norm(mkAddName(r)||'')}|${norm(mkDropName(r)||'')}`;
+                      if (seen.has(k)) continue;
+                      seen.add(k);
+                      deduped.push(r);
+                    }
+                    deduped.sort((a,b) => Number(b.estimated_benefit||0) - Number(a.estimated_benefit||0));
+                    const capped = deduped.slice(0, 10);
                     return (
                       <>
+                        {(counts['AI'] || counts['Deterministic']) && (
+                          <div className={styles.chipMuted} style={{ marginBottom: 8 }}>
+                            Showing {(counts['AI']||0)} AI + {(counts['Deterministic']||0)} deterministic options (sorted by benefit)
+                          </div>
+                        )}
                         {hiddenCount > 0 && (
                           <div className={styles.chipMuted} style={{ marginBottom: 8 }}>
                             {hiddenCount} move{hiddenCount>1?'s':''} hidden (already on your roster)
                           </div>
                         )}
-                        {filtered.map((rec, idx) => (
+                        {capped.map((rec, idx) => (
                           <div key={idx} className={styles.recCard}>
-                      <div className={styles.recHeader}>
-                        <div className={styles.recTitle}>Add {typeof rec.add === 'string' ? rec.add : (rec.add?.name || rec.add_player?.name)} • Drop {typeof rec.drop === 'string' ? rec.drop : (rec.drop?.name || rec.drop_player?.name)}</div>
-                        <div className={styles.headerRight}>
-                          <span className={`${styles.confidence} ${styles['conf_'+getConfidence(rec).toLowerCase()]}`}>{getConfidence(rec)}</span>
-                          <span className={styles.benefitBadge}>+{(rec.estimated_benefit ?? 0).toFixed(2)}</span>
-                          <span className={styles.sourceChip}>{aiMoves.length ? 'AI' : 'Deterministic'}</span>
-                        </div>
-                      </div>
-                      <div className={styles.recBody}>
+                            <div className={styles.recHeader}>
+                              <div className={styles.recTitle}>Add {typeof rec.add === 'string' ? rec.add : (rec.add?.name || rec.add_player?.name)} • Drop {typeof rec.drop === 'string' ? rec.drop : (rec.drop?.name || rec.drop_player?.name)}</div>
+                              <div className={styles.headerRight}>
+                                <span className={`${styles.confidence} ${styles['conf_'+getConfidence(rec).toLowerCase()]}`}>{getConfidence(rec)}</span>
+                                <span className={styles.benefitBadge}>+{(rec.estimated_benefit ?? 0).toFixed(2)}</span>
+                                <span className={styles.sourceChip}>{rec.__source || (aiMoves.length ? 'AI' : 'Deterministic')}</span>
+                              </div>
+                            </div>
+                            <div className={styles.recBody}>
                         <div className={styles.recRow}>
                           <div>
                             <div className={styles.recLabel}>Add</div>
@@ -937,7 +978,7 @@ const WaiverWireAssistant = ({
                                 <span>Estimated Benefit</span><span>+{(rec.estimated_benefit ?? 0).toFixed(2)} <em className={styles.helpText}>(overall roster score gain)</em></span>
                                 {recMeta && <>
                                   <span>Baseline Overall</span><span>{recMeta.baseline_overall}</span>
-                                  <span>Source</span><span>{aiMoves.length ? 'AI' : 'Deterministic'}</span>
+                                  <span>Source</span><span>{rec.__source || (aiMoves.length ? 'AI' : 'Deterministic')}</span>
                                 </>}
                               </div>
                             </details>
