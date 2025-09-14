@@ -95,7 +95,7 @@ const WaiverWireAssistant = ({
   isLoading 
 }) => {
   // API_BASE_URL is provided by app context; GET helper via useApi
-  const { API_BASE_URL, converter, userApiKey } = useContext(AppContext);
+  const { API_BASE_URL, userApiKey } = useContext(AppContext);
   const { get, makeApiRequest } = useApi();
   
   const rosterPositions = {
@@ -155,7 +155,6 @@ const WaiverWireAssistant = ({
   const [showPool, setShowPool] = useState(false);
   const [showMeta, setShowMeta] = useState(false);
   const [expandedRecs, setExpandedRecs] = useState({});
-  const [analystNoteHtml, setAnalystNoteHtml] = useState('');
   // Hide AI debug controls by default (available via developer tools only)
   const [showAiDebug, setShowAiDebug] = useState(false);
   const [aiDebug, setAiDebug] = useState(null);
@@ -546,7 +545,6 @@ const WaiverWireAssistant = ({
           if (aiResp.ok) {
             const aiData = await aiResp.json();
             setAiMoves(Array.isArray(aiData.moves) ? aiData.moves : []);
-            setAnalystNoteHtml(aiData.summary ? converter.makeHtml(aiData.summary) : '');
             setAiDebug(aiData.debug || { ai_used: true, ai_moves_count: (aiData.moves||[]).length });
             // We keep recommendations from v2; AI recs are merged in render
           } else {
@@ -806,13 +804,7 @@ const WaiverWireAssistant = ({
                   )}
                 </div>
 
-                {/* Analyst Summary */}
-                {analystNoteHtml && (
-                  <div className={styles.analystBox}>
-                    <div className={styles.analystHeading}>Analyst’s Note</div>
-                    <div className={styles.analystContent} dangerouslySetInnerHTML={{ __html: analystNoteHtml }} />
-                  </div>
-                )}
+                {/* Analyst Summary removed to reduce redundancy with opinion banner */}
 
                 {showAiDebug && (
                   <div className={styles.analystBox}>
