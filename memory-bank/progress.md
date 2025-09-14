@@ -118,6 +118,14 @@ This document tracks the progress of the RATM Draft Kit project against the defi
     *   **✅ Backend/Frontend Running:** Both servers operational
     *   **✅ Yahoo Authentication:** User logged in successfully  
     *   **✅ Leagues Endpoint Verified:** Returns `[{"league_key": "461.l.42889", "league_name": "DA Pope!", "team_key": "461.l.42889.t.8"}]`
+
+## Sept 14, 2025 — Waiver Wire v4 Priority
+
+- New Priority: Waiver Wire v4 — UX Simplification + Quality Overhaul
+  - Plan added: `memory-bank/waiver_wire_v4_ux_quality_overhaul_plan.md`
+  - v3 plan archived: `memory-bank/records/waiver_wire_recommendations_v3_plan.md`
+  - Phase 0 tasks queued: deterministic self‑add guard (ID + normalized name), client label/guard, and control rename to “Include near‑neutral moves”.
+  - Next: Consolidate controls into a Filters drawer; broaden candidate quality via need‑aware quotas.
     *   **✅ Roster Endpoint Complete:** Returns `[]` (empty roster - draft hasn't happened yet)
     *   **✅ Player Enrichment Verified:** Mock testing shows successful ECR/team/bye week integration
     *   **✅ Week Parameter Working:** Supports historical/future roster requests

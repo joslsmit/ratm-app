@@ -225,7 +225,12 @@
 
 ## Upcoming Focus
 
-- Player Dossier UX Enhancements (Phase A2): Resume and complete the interpretation-driven UI per memory-bank/PLAYER_DOSSIER_UX_ENHANCEMENT_STATUS.md
+- Highest Priority: Waiver Wire v4 — UX Simplification + Quality Overhaul
+  - Plan: memory-bank/waiver_wire_v4_ux_quality_overhaul_plan.md
+  - Goals: simplify UI (Filters drawer), eliminate self‑add bugs with ID+name guards, clarify “Alternatives” as “Include near‑neutral moves,” and broaden candidate quality while maintaining speed.
+  - Immediate Phase 0: Backend deterministic guard; frontend label/guard; then Filters refactor.
+
+- Player Dossier UX Enhancements (Phase A2): Continue polish after waiver v4
   - Apply helper outputs across Value Opportunity and Age Trajectory sections
   - Add CSS classes and color coding for badges (projectionBadge, matchupBadge, etc.)
   - Replace remaining raw numbers with badges + plain-English context + actionable guidance
@@ -365,3 +370,6 @@ Next up:
 - Interpreted badges and concise guidance standardized across Weekly Outlook, Market/Ownership, and Age/Trajectory; unified chip style ensures consistent visuals.
 - Responsive layout: Weekly and Market sections use 2‑column grids on desktop, stack on mobile; section order remains CSS‑controlled for stability.
 - Backend dossier test suite green; defensive rendering patterns preserved; no regressions introduced.
+## New Priority (Sept 14, 2025)
+
+Waiver Wire v4 — UX Simplification + Quality Overhaul is the next implementation focus. The previous v3 plan has been archived to `memory-bank/records/waiver_wire_recommendations_v3_plan.md`. All new work should follow `memory-bank/waiver_wire_v4_ux_quality_overhaul_plan.md`.
