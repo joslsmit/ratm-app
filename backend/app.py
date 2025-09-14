@@ -56,6 +56,32 @@ CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000", "https://r
 # Using the latest available preview model as requested
 model = genai.GenerativeModel('gemini-2.5-flash-lite-preview-06-17')
 
+# Developer mode controls (local only)
+DEV_ENABLE = os.getenv('RATM_DEV_ENABLE', '0') == '1'
+DEV_DIR = os.path.join(basedir, '.dev')
+DEV_CFG_PATH = os.path.join(DEV_DIR, 'waiver_v4.json')
+
+def _dev_enabled():
+    return DEV_ENABLE
+
+def _dev_ensure_dir():
+    try:
+        os.makedirs(DEV_DIR, exist_ok=True)
+    except Exception:
+        pass
+
+def _dev_load_cfg():
+    try:
+        with open(DEV_CFG_PATH, 'r') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _dev_save_cfg(cfg: dict):
+    _dev_ensure_dir()
+    with open(DEV_CFG_PATH, 'w') as f:
+        json.dump(cfg, f)
+
 
 # --- Data Caching ---
 player_data_cache, player_name_to_id, static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data, player_values_cache, pick_values_cache, weekly_projections_cache, combined_player_data_cache = None, None, {}, {}, {}, None, None, {}, None
@@ -3145,6 +3171,106 @@ def get_yahoo_roster():
         traceback.print_exc()
         return jsonify({"error": "Failed to process roster data.", "details": str(e)}), 500
 
+# ===== Developer Utilities (local only) =====
+@app.route('/api/dev/configure', methods=['POST', 'GET'])
+def dev_configure():
+    if not _dev_enabled():
+        return jsonify({"error": "Developer endpoints disabled. Set RATM_DEV_ENABLE=1 to enable."}), 403
+    if request.method == 'GET':
+        cfg = _dev_load_cfg()
+        redacted = {
+            'league_key': cfg.get('league_key'),
+            'team_key': cfg.get('team_key'),
+            'token_last6': (cfg.get('token','')[-6:] if cfg.get('token') else None),
+            'gemini_last6': (cfg.get('gemini_key','')[-6:] if cfg.get('gemini_key') else None)
+        }
+        return jsonify(redacted)
+    data = request.get_json(force=True, silent=True) or {}
+    token = data.get('token')
+    league_key = data.get('league_key')
+    team_key = data.get('team_key')
+    gemini_key = data.get('gemini_key')
+    if not (token and league_key and team_key):
+        return jsonify({"error": "token, league_key, and team_key are required"}), 400
+    _dev_save_cfg({'token': token, 'league_key': league_key, 'team_key': team_key, 'gemini_key': gemini_key})
+    return jsonify({"ok": True})
+
+@app.route('/api/dev/run_waiver_v4_test', methods=['POST'])
+def dev_run_waiver_v4_test():
+    if not _dev_enabled():
+        return jsonify({"error": "Developer endpoints disabled. Set RATM_DEV_ENABLE=1 to enable."}), 403
+    # Load config and allow request body to override parts
+    cfg = _dev_load_cfg()
+    body = request.get_json(force=True, silent=True) or {}
+    token = body.get('token') or cfg.get('token')
+    league_key = body.get('league_key') or cfg.get('league_key')
+    team_key = body.get('team_key') or cfg.get('team_key')
+    status = body.get('status') or 'A'
+    top_n = int(body.get('top_n') or 10)
+    include_alts = bool(body.get('include_alternatives', False))
+    min_benefit = float(body.get('min_benefit', 0.0))
+    use_ai = bool(body.get('use_ai', True))
+    gemini_key = body.get('gemini_key') or cfg.get('gemini_key')
+    if not (token and league_key and team_key):
+        return jsonify({"error": "Missing token/league_key/team_key"}), 400
+
+    # Build Authorization header
+    access_token = token
+    # Accept both raw tokens and JSON strings with access_token
+    try:
+        if isinstance(token, str) and token.strip().startswith('{'):
+            j = json.loads(token)
+            access_token = j.get('access_token')
+    except Exception:
+        pass
+    if not access_token:
+        return jsonify({"error": "Invalid token format"}), 400
+
+    # 1) Roster via Yahoo
+    headers = {'Authorization': f'Bearer {access_token}', 'Accept': 'application/json'}
+    try:
+        url_primary = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster/players?format=json'
+        url_fallback = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster?format=json'
+        r = requests.get(url_primary, headers=headers, timeout=10)
+        if r.status_code == 404:
+            r = requests.get(url_fallback, headers=headers, timeout=10)
+        r.raise_for_status()
+        roster_raw = r.json()
+        roster_players = parse_yahoo_roster_response(roster_raw) or []
+        roster_names = [p.get('name') for p in roster_players if p.get('name')]
+    except Exception as e:
+        return jsonify({"error": "Failed roster fetch", "details": str(e)}), 500
+
+    # 2) Call our own API endpoints via loopback (requires threaded dev server)
+    try:
+        base = request.host_url.rstrip('/') + '/api'
+        payload = {
+            'league_key': league_key,
+            'team_key': team_key,
+            'status': status,
+            'top_n': top_n,
+            'include_alternatives': include_alts,
+            'min_benefit': min_benefit,
+            'exclude_positions': ['K', 'DEF']
+        }
+        r2 = requests.post(f"{base}/yahoo/waiver_recommendations_v2", headers={'Authorization': f'Bearer {access_token}', 'Content-Type':'application/json'}, json=payload, timeout=30)
+        try:
+            v2_json = r2.json()
+        except Exception:
+            v2_json = {'error': f'HTTP {r2.status_code}', 'body': r2.text[:500]}
+
+        ai_json = {'info': 'AI skipped (no key)'}
+        if use_ai and gemini_key:
+            hdrs = {'Authorization': f'Bearer {access_token}', 'Content-Type':'application/json', 'X-API-Key': gemini_key}
+            rai = requests.post(f"{base}/yahoo/waiver_recommendations_ai?debug=1", headers=hdrs, json=payload, timeout=60)
+            try:
+                ai_json = rai.json()
+            except Exception:
+                ai_json = {'error': f'HTTP {rai.status_code}', 'body': rai.text[:500]}
+        return jsonify({'roster': roster_names, 'v2': v2_json, 'ai': ai_json})
+    except Exception as e:
+        return jsonify({"error": "Dev run failed", "details": str(e)}), 500
+
 @app.route('/api/yahoo/roster_debug')
 def get_yahoo_roster_debug():
     """
@@ -5237,6 +5363,53 @@ def _compute_bench_counts(enriched_roster: list, lineup: list) -> dict:
             counts[pos] += 1
     return counts
 
+def _bench_counts_simple(enriched_roster: list) -> dict:
+    """Approximate bench composition from selected_position without computing lineup.
+    Excludes K/DEF from counts; returns counts for QB/RB/WR/TE.
+    """
+    counts = {'QB': 0, 'RB': 0, 'WR': 0, 'TE': 0}
+    try:
+        for p in enriched_roster:
+            slot = str(p.get('selected_position','')).upper()
+            if not slot.startswith('BN'):
+                continue
+            pos = (p.get('position') or p.get('primary_position') or '').upper()
+            if pos in ('K','DEF','DST'):
+                continue
+            if pos in counts:
+                counts[pos] += 1
+    except Exception:
+        pass
+    return counts
+
+def _bench_players_all(enriched_roster: list, lineup: list) -> list:
+    """Bench players including all positions (K/DEF included)."""
+    starter_names = set()
+    for slot_entry in lineup:
+        pl = slot_entry.get('player')
+        if pl and pl.get('name'):
+            starter_names.add(pl.get('name'))
+    return [p for p in enriched_roster if p.get('name') not in starter_names]
+
+def _compute_def_k_penalty(enriched_roster: list, lineup: list) -> float:
+    """Small penalty for carrying multiple DEF/K on bench to gently encourage trimming extras.
+    Penalty: 0.3 per extra DEF, 0.3 per extra K (bench only).
+    """
+    try:
+        bench_all = _bench_players_all(enriched_roster, lineup)
+        def_count = 0
+        k_count = 0
+        for bp in bench_all:
+            pos = (bp.get('position') or bp.get('primary_position') or '').upper()
+            if pos in ('DEF', 'DST'):
+                def_count += 1
+            elif pos == 'K':
+                k_count += 1
+        pen = max(0, def_count - 1) * 0.3 + max(0, k_count - 1) * 0.3
+        return round(pen, 2)
+    except Exception:
+        return 0.0
+
 def _compute_balance_score(counts: dict) -> float:
     """Small penalty for imbalanced bench; conservative magnitudes.
     Targets: QB<=1, RB>=2, WR>=2, TE>=1
@@ -5489,9 +5662,27 @@ def yahoo_waiver_recommendations_v2():
 
         # Build required slots from roster
         required_slots = _build_required_slots_from_roster(enriched_roster)
+        # Build roster membership guards (IDs + normalized names)
+        from utils import normalize_player_name as _norm_name
+        def _norm(n):
+            try:
+                return _norm_name(n or '')
+            except Exception:
+                return None
+        roster_id_set = {str(p.get('player_id')) for p in enriched_roster if p.get('player_id')}
+        roster_name_set = {_norm(p.get('name')) for p in enriched_roster if p.get('name')}
 
-        # Collect candidate pool
+        # Collect candidate pool and exclude any players already on the roster (belt-and-suspenders)
         pool = _collect_enriched_pool(access_token, league_key, status, exclude_set, cap=300)
+        if roster_id_set or roster_name_set:
+            filtered_pool = []
+            for c in pool:
+                cid = str(c.get('player_id')) if c.get('player_id') is not None else ''
+                cname = _norm(c.get('name'))
+                if (cid and cid in roster_id_set) or (cname and cname in roster_name_set):
+                    continue
+                filtered_pool.append(c)
+            pool = filtered_pool
         # Bias candidate selection by position to avoid QB crowding the pool
         def _eff_score_local(c):
             wp = c.get('weekly_points')
@@ -5506,7 +5697,17 @@ def yahoo_waiver_recommendations_v2():
         for pos in buckets:
             buckets[pos].sort(key=lambda x: -_eff_score_local(x))
         # Quotas to reach ~120
+        # Dynamic quotas based on bench composition needs (approximate)
         quotas = {'QB': 10, 'RB': 40, 'WR': 50, 'TE': 20}
+        bench_counts_simple = _bench_counts_simple(enriched_roster)
+        if bench_counts_simple.get('QB', 0) >= 1:
+            quotas['QB'] = 5
+        if bench_counts_simple.get('RB', 0) < 2:
+            quotas['RB'] += 10
+        if bench_counts_simple.get('WR', 0) < 2:
+            quotas['WR'] += 10
+        if bench_counts_simple.get('TE', 0) < 1:
+            quotas['TE'] += 5
         candidates = []
         for pos, limit in quotas.items():
             candidates.extend(buckets.get(pos, [])[:limit])
@@ -5532,7 +5733,9 @@ def yahoo_waiver_recommendations_v2():
         alpha = 0.7  # bench VOR weight
         beta = 0.3   # balance weight (small)
         gamma = 0.3  # bye coverage weight (small)
-        baseline_overall = round(baseline_points + alpha * baseline_bench_vor + beta * baseline_balance + gamma * baseline_bye, 2)
+        # Add small bench penalty for extra DEF/K
+        baseline_defk_pen = _compute_def_k_penalty(enriched_roster, baseline_lineup)
+        baseline_overall = round(baseline_points + alpha * baseline_bench_vor + beta * baseline_balance + gamma * baseline_bye - baseline_defk_pen, 2)
 
         # Prepare drop candidates list (prefer bench; then weakest eligible starter by position)
         bench = [rp for rp in enriched_roster if str(rp.get('selected_position','')).upper().startswith('BN')]
@@ -5606,6 +5809,11 @@ def yahoo_waiver_recommendations_v2():
                     best_delta = delta_overall
                     best_after = lineup_after
                     best_drop = dp
+            # Final guard: never recommend adding a player already on roster
+            cid = str(c.get('player_id')) if c.get('player_id') is not None else ''
+            cname = _norm(c.get('name'))
+            if (cid and cid in roster_id_set) or (cname and cname in roster_name_set):
+                continue
             if best_delta > 0 and best_drop is not None:
                 badges = _compute_badges(c, best_drop, enriched_roster, baseline_lineup)
                 recs.append({
@@ -5615,14 +5823,16 @@ def yahoo_waiver_recommendations_v2():
                         'position': cpos,
                         'weekly_points': c.get('weekly_points'),
                         'ecr_overall': c.get('ecr_overall'),
-                        'status': status
+                        'status': status,
+                        'player_id': c.get('player_id')
                     },
                     'drop_player': {
                         'name': best_drop.get('name'),
                         'team': best_drop.get('team'),
                         'position': best_drop.get('position'),
                         'weekly_points': best_drop.get('weekly_points'),
-                        'ecr_overall': best_drop.get('ecr_overall')
+                        'ecr_overall': best_drop.get('ecr_overall'),
+                        'player_id': best_drop.get('player_id')
                     },
                     'estimated_benefit': round(best_delta, 2),
                     'score_breakdown': {
@@ -5658,6 +5868,11 @@ def yahoo_waiver_recommendations_v2():
             for c in candidates:
                 cpos = c.get('position') or c.get('primary_position')
                 if not cpos:
+                    continue
+                # Guard against self-adds here as well
+                cid = str(c.get('player_id')) if c.get('player_id') is not None else ''
+                cname = _norm(c.get('name'))
+                if (cid and cid in roster_id_set) or (cname and cname in roster_name_set):
                     continue
                 potential_drops = []
                 for rp in bench:
@@ -5696,8 +5911,9 @@ def yahoo_waiver_recommendations_v2():
                     extra_qb_pen = 0.0
                     if (cpos or '').upper() == 'QB' and baseline_counts.get('QB', 0) >= 1:
                         extra_qb_pen = 2.0
+                    defk_pen_after = _compute_def_k_penalty(new_roster, lineup_after)
                     overall_after = round(points_after + alpha * bench_vor_after + beta * balance_after + gamma * bye_after
-                                           - cross_penalty - qb_surplus_pen - shortage_pen - extra_qb_pen, 2)
+                                           - cross_penalty - qb_surplus_pen - shortage_pen - extra_qb_pen - defk_pen_after, 2)
                     delta_overall = overall_after - baseline_overall
                     if delta_overall > best_delta:
                         best_delta = delta_overall
@@ -5707,11 +5923,13 @@ def yahoo_waiver_recommendations_v2():
                     alt_recs.append({
                         'add_player': {
                             'name': c.get('name'), 'team': c.get('team'), 'position': cpos,
-                            'weekly_points': c.get('weekly_points'), 'ecr_overall': c.get('ecr_overall'), 'status': status
+                            'weekly_points': c.get('weekly_points'), 'ecr_overall': c.get('ecr_overall'), 'status': status,
+                            'player_id': c.get('player_id')
                         },
                         'drop_player': {
                             'name': best_drop.get('name'), 'team': best_drop.get('team'), 'position': best_drop.get('position'),
-                            'weekly_points': best_drop.get('weekly_points'), 'ecr_overall': best_drop.get('ecr_overall')
+                            'weekly_points': best_drop.get('weekly_points'), 'ecr_overall': best_drop.get('ecr_overall'),
+                            'player_id': best_drop.get('player_id')
                         },
                         'estimated_benefit': round(best_delta, 2),
                         'badges': badges,
@@ -5818,7 +6036,26 @@ def yahoo_waiver_recommendations_ai():
             })
 
         required_slots = _build_required_slots_from_roster(enriched_roster)
+        # Build roster membership guards (IDs + normalized names)
+        from utils import normalize_player_name as _norm_name
+        def _norm(n):
+            try:
+                return _norm_name(n or '')
+            except Exception:
+                return None
+        roster_id_set = {str(p.get('player_id')) for p in enriched_roster if p.get('player_id')}
+        roster_name_set = {_norm(p.get('name')) for p in enriched_roster if p.get('name')}
+
         pool = _collect_enriched_pool(access_token, league_key, status, exclude_set, cap=300)
+        if roster_id_set or roster_name_set:
+            filtered_pool = []
+            for c in pool:
+                cid = str(c.get('player_id')) if c.get('player_id') is not None else ''
+                cname = _norm(c.get('name'))
+                if (cid and cid in roster_id_set) or (cname and cname in roster_name_set):
+                    continue
+                filtered_pool.append(c)
+            pool = filtered_pool
         def _eff_score_local(c):
             wp = c.get('weekly_points')
             if isinstance(wp, (int, float)):
@@ -5832,19 +6069,50 @@ def yahoo_waiver_recommendations_ai():
         for pos in buckets:
             buckets[pos].sort(key=lambda x: -_eff_score_local(x))
         quotas = {'QB': 10, 'RB': 40, 'WR': 50, 'TE': 20}
+        # Dynamic quotas (approximate) based on bench composition
+        bench_counts_simple = _bench_counts_simple(enriched_roster)
+        if bench_counts_simple.get('QB', 0) >= 1:
+            quotas['QB'] = 5
+        if bench_counts_simple.get('RB', 0) < 2:
+            quotas['RB'] += 10
+        if bench_counts_simple.get('WR', 0) < 2:
+            quotas['WR'] += 10
+        if bench_counts_simple.get('TE', 0) < 1:
+            quotas['TE'] += 5
         candidates = []
         for pos, limit in quotas.items():
             candidates.extend(buckets.get(pos, [])[:limit])
-        if len(candidates) < 120:
+        target_count = 120
+        if len(candidates) < target_count:
             selected_ids = set(id(x) for x in candidates)
             remainder = [c for c in pool if id(c) not in selected_ids]
             remainder.sort(key=lambda x: -_eff_score_local(x))
-            candidates.extend(remainder[:(120 - len(candidates))])
+            candidates.extend(remainder[:(target_count - len(candidates))])
 
         roster_proj_total = len(enriched_roster)
         roster_proj_have = sum(1 for rp in enriched_roster if isinstance(rp.get('weekly_points'), (int, float)))
         pool_proj_total = len(candidates)
         pool_proj_have = sum(1 for c in candidates if isinstance(c.get('weekly_points'), (int, float)))
+        try:
+            coverage_rate = (pool_proj_have / pool_proj_total) if pool_proj_total else 0.0
+        except Exception:
+            coverage_rate = 0.0
+        if coverage_rate < 0.6:
+            selected_ids = set(id(x) for x in candidates)
+            remainder = [c for c in pool if id(c) not in selected_ids]
+            remainder.sort(key=lambda x: -_eff_score_local(x))
+            candidates.extend(remainder[:30])
+        # If projection coverage among candidates is low, expand candidate set modestly
+        try:
+            coverage_rate = (pool_proj_have / pool_proj_total) if pool_proj_total else 0.0
+        except Exception:
+            coverage_rate = 0.0
+        if coverage_rate < 0.6:
+            selected_ids = set(id(x) for x in candidates)
+            remainder = [c for c in pool if id(c) not in selected_ids]
+            remainder.sort(key=lambda x: -_eff_score_local(x))
+            extra = 30  # expand by up to 30 more
+            candidates.extend(remainder[:extra])
 
         baseline_lineup, baseline_points = _best_lineup(enriched_roster, required_slots)
         baseline_bench_vor = _compute_bench_vor(enriched_roster, baseline_lineup)
@@ -5852,7 +6120,9 @@ def yahoo_waiver_recommendations_ai():
         baseline_balance = _compute_balance_score(baseline_counts)
         baseline_bye = _compute_bye_score(enriched_roster, baseline_lineup)
         alpha, beta, gamma = 0.7, 0.3, 0.3
-        baseline_overall = round(baseline_points + alpha * baseline_bench_vor + beta * baseline_balance + gamma * baseline_bye, 2)
+        # Align AI deterministic baseline with DEF/K small bench penalty
+        baseline_defk_pen = _compute_def_k_penalty(enriched_roster, baseline_lineup)
+        baseline_overall = round(baseline_points + alpha * baseline_bench_vor + beta * baseline_balance + gamma * baseline_bye - baseline_defk_pen, 2)
 
         bench = [rp for rp in enriched_roster if str(rp.get('selected_position','')).upper().startswith('BN')]
         starters = [rp for rp in enriched_roster if rp not in bench and not str(rp.get('selected_position','')).upper().startswith('IR')]
@@ -5861,6 +6131,11 @@ def yahoo_waiver_recommendations_ai():
         for c in candidates:
             cpos = c.get('position') or c.get('primary_position')
             if not cpos:
+                continue
+            # Guard: never consider adding someone already on roster
+            cid = str(c.get('player_id')) if c.get('player_id') is not None else ''
+            cname = _norm(c.get('name'))
+            if (cid and cid in roster_id_set) or (cname and cname in roster_name_set):
                 continue
             potential_drops = list(bench)
             for rp in starters:
@@ -5893,8 +6168,9 @@ def yahoo_waiver_recommendations_ai():
                 extra_qb_pen = 0.0
                 if (cpos or '').upper() == 'QB' and baseline_counts.get('QB', 0) >= 1:
                     extra_qb_pen = 2.0
+                defk_pen_after = _compute_def_k_penalty(new_roster, lineup_after)
                 overall_after = round(points_after + alpha * bench_vor_after + beta * balance_after + gamma * bye_after
-                                       - cross_penalty - qb_surplus_pen - shortage_pen - extra_qb_pen, 2)
+                                       - cross_penalty - qb_surplus_pen - shortage_pen - extra_qb_pen - defk_pen_after, 2)
                 delta_overall = overall_after - baseline_overall
                 if delta_overall > best_delta:
                     best_delta = delta_overall
@@ -5910,9 +6186,11 @@ def yahoo_waiver_recommendations_ai():
                 badges = _compute_badges(c, best_drop, enriched_roster, baseline_lineup)
                 recs.append({
                     'add_player': {'name': c.get('name'), 'team': c.get('team'), 'position': cpos,
-                                   'weekly_points': c.get('weekly_points'), 'ecr_overall': c.get('ecr_overall'), 'status': status},
+                                   'weekly_points': c.get('weekly_points'), 'ecr_overall': c.get('ecr_overall'), 'status': status,
+                                   'player_id': c.get('player_id')},
                     'drop_player': {'name': best_drop.get('name'), 'team': best_drop.get('team'), 'position': best_drop.get('position'),
-                                    'weekly_points': best_drop.get('weekly_points'), 'ecr_overall': best_drop.get('ecr_overall')},
+                                    'weekly_points': best_drop.get('weekly_points'), 'ecr_overall': best_drop.get('ecr_overall'),
+                                    'player_id': best_drop.get('player_id')},
                     'estimated_benefit': round(best_delta, 2),
                     'badges': badges,
                     'claim_only': (status == 'W'),
@@ -5926,6 +6204,10 @@ def yahoo_waiver_recommendations_ai():
             for c in candidates:
                 cpos = c.get('position') or c.get('primary_position')
                 if not cpos:
+                    continue
+                cid = str(c.get('player_id')) if c.get('player_id') is not None else ''
+                cname = _norm(c.get('name'))
+                if (cid and cid in roster_id_set) or (cname and cname in roster_name_set):
                     continue
                 potential_drops = list(bench)
                 for rp in starters:
@@ -5957,8 +6239,9 @@ def yahoo_waiver_recommendations_ai():
                     extra_qb_pen = 0.0
                     if (cpos or '').upper() == 'QB' and baseline_counts.get('QB', 0) >= 1:
                         extra_qb_pen = 2.0
+                    defk_pen_after = _compute_def_k_penalty(new_roster, lineup_after)
                     overall_after = round(points_after + alpha * bench_vor_after + beta * balance_after + gamma * bye_after
-                                           - cross_penalty - qb_surplus_pen - shortage_pen - extra_qb_pen, 2)
+                                           - cross_penalty - qb_surplus_pen - shortage_pen - extra_qb_pen - defk_pen_after, 2)
                     delta_overall = overall_after - baseline_overall
                     if delta_overall > best_delta:
                         best_delta = delta_overall
@@ -5967,9 +6250,11 @@ def yahoo_waiver_recommendations_ai():
                     badges = _compute_badges(c, best_drop, enriched_roster, baseline_lineup)
                     alt_recs.append({
                         'add_player': {'name': c.get('name'), 'team': c.get('team'), 'position': cpos,
-                                       'weekly_points': c.get('weekly_points'), 'ecr_overall': c.get('ecr_overall'), 'status': status},
+                                       'weekly_points': c.get('weekly_points'), 'ecr_overall': c.get('ecr_overall'), 'status': status,
+                                       'player_id': c.get('player_id')},
                         'drop_player': {'name': best_drop.get('name'), 'team': best_drop.get('team'), 'position': best_drop.get('position'),
-                                        'weekly_points': best_drop.get('weekly_points'), 'ecr_overall': best_drop.get('ecr_overall')},
+                                        'weekly_points': best_drop.get('weekly_points'), 'ecr_overall': best_drop.get('ecr_overall'),
+                                        'player_id': best_drop.get('player_id')},
                         'estimated_benefit': round(best_delta, 2),
                         'badges': badges,
                         'claim_only': (status == 'W')
@@ -6089,18 +6374,8 @@ def yahoo_waiver_recommendations_ai():
             except Exception as _:
                 ai_parsed = {}
 
-        # Optional short summary headline
+        # Optional short summary headline (based on validated moves only)
         summary = ''
-        try:
-            moves_list = ai_parsed.get('moves') if isinstance(ai_parsed, dict) else []
-            max_b = max([float((m.get('estimated_benefit', 0))) for m in (moves_list or [])] or [0])
-            if max_b < 0.3:
-                summary = 'No clear upgrades this week — small, balance-only gains.'
-            elif moves_list:
-                first = moves_list[0]
-                summary = f"Do this: Add {first.get('add')} • Drop {first.get('drop')}"
-        except Exception:
-            pass
 
         # Validate AI moves strictly against deterministic candidates and roster/pool
         from utils import normalize_player_name as _norm_name
@@ -6110,6 +6385,7 @@ def yahoo_waiver_recommendations_ai():
             except Exception:
                 return None
         roster_name_set = {_norm(p.get('name')) for p in enriched_roster if p.get('name')}
+        roster_id_set = {str(p.get('player_id')) for p in enriched_roster if p.get('player_id')}
         pool_name_set = {_norm(c.get('name')) for c in pool if c.get('name')}
         valid_moves = []
         ai_moves_raw = (ai_parsed.get('moves') if isinstance(ai_parsed, dict) else []) or []
@@ -6132,10 +6408,11 @@ def yahoo_waiver_recommendations_ai():
             if not chosen:
                 continue
             add_name = _norm(chosen['add_player'].get('name'))
+            add_id = str(chosen['add_player'].get('player_id') or '')
             drop_name = _norm(chosen['drop_player'].get('name'))
             if not add_name or not drop_name:
                 continue
-            if add_name in roster_name_set:
+            if (add_name in roster_name_set) or (add_id and add_id in roster_id_set):
                 continue
             if add_name not in pool_name_set:
                 continue
@@ -6149,6 +6426,16 @@ def yahoo_waiver_recommendations_ai():
                 'rationale_bullets': (m.get('rationale_bullets') or [])[:4],
                 'badges': chosen.get('badges', [])
             })
+
+        # Build summary from validated moves (authoritative)
+        try:
+            if valid_moves:
+                first = valid_moves[0]
+                summary = f"Do this: Add {first.get('add')} • Drop {first.get('drop')}"
+            else:
+                summary = 'No clear upgrades this week — small, balance-only gains.'
+        except Exception:
+            pass
 
         resp = {
             'summary': summary,

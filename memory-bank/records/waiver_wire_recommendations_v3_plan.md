@@ -1,7 +1,7 @@
-# Waiver Wire Recommendations v2 → v3 — Consolidated Go‑Forward Plan
+# Waiver Wire Recommendations v2 → v3 — Consolidated Plan (Archived)
 
-> Status: In Progress (backend implemented; UI/Narrative next)
-> Purpose: Recommend add/drop pairs that improve the entire roster (not just starters), using Yahoo data + DynastyProcess CSVs. Excludes K/DEF by default. Present a clear “Estimated Benefit” with rationale badges.
+> Archive Note (Sept 14, 2025): Superseded by Waiver Wire v4 — UX Simplification + Quality Overhaul. See `memory-bank/waiver_wire_v4_ux_quality_overhaul_plan.md` for the current go‑forward plan. This v3 document is preserved for reference.
+> Original Purpose: Recommend add/drop pairs that improve the entire roster (not just starters), using Yahoo data + DynastyProcess CSVs. Excludes K/DEF by default. Present a clear “Estimated Benefit” with rationale badges.
 
 ## 1) Objectives
 - Optimize overall roster quality (starters + bench), not only the weekly lineup.

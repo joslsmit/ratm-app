@@ -118,6 +118,45 @@ This document tracks the progress of the RATM Draft Kit project against the defi
     *   **✅ Backend/Frontend Running:** Both servers operational
     *   **✅ Yahoo Authentication:** User logged in successfully  
     *   **✅ Leagues Endpoint Verified:** Returns `[{"league_key": "461.l.42889", "league_name": "DA Pope!", "team_key": "461.l.42889.t.8"}]`
+
+## Sept 14, 2025 — Waiver Wire v4 Priority
+
+- New Priority: Waiver Wire v4 — UX Simplification + Quality Overhaul
+  - Plan added: `memory-bank/waiver_wire_v4_ux_quality_overhaul_plan.md`
+  - v3 plan archived: `memory-bank/records/waiver_wire_recommendations_v3_plan.md`
+  - Phase 0 tasks queued: deterministic self‑add guard (ID + normalized name), client label/guard, and control rename to “Include near‑neutral moves”.
+  - Next: Consolidate controls into a Filters drawer; broaden candidate quality via need‑aware quotas.
+
+### Sept 14, 2025 — Waiver v4 Phase 0 + 1 Completed
+- Backend
+  - Deterministic v2 and AI endpoints now reject self‑adds by Yahoo `player_id` + normalized name; pool and recs both guarded
+  - AI summary built from validated moves only; shows “No clear upgrades…” when none remain after validation
+  - Light bench penalty for multiple DEF/K on bench (−0.3 each extra) to gently surface sensible trims in near‑neutral cases
+- Frontend
+  - Filters drawer (Status, Include near‑neutral, Min benefit slider) replaces Advanced controls
+  - Alternatives copy: “Include near‑neutral moves” with helper; empty‑state copy now instructs to use Filters
+  - Debug AI removed from the main header; client self‑add guard hides invalid moves with a muted chip
+- Dev & Tests
+  - Added local dev endpoints (enable with `RATM_DEV_ENABLE=1`): `/api/dev/configure`, `/api/dev/run_waiver_v4_test`
+  - Added scripts: `scripts/dev_config_waiver_v4.zsh` (configure once) and `scripts/dev_run_waiver_v4.zsh` (one‑shot run)
+  - Test results (your league/team):
+    - v2 strict (A): 0 clear upgrades
+    - v2 alternatives (A): small‑gain DEF→RB swaps (+0.21) — e.g., drop Cincinnati
+    - v2 alternatives (FA): Add DJ Turner • Drop Rashee Rice (+0.6)
+    - AI (A, alternatives, min_benefit=0): no validated non‑negative moves; summary now correctly reports “No clear upgrades…”
+
+### Sept 14, 2025 — Waiver v4 Phase 2 Completed
+- Backend
+  - Dynamic candidate quotas based on bench needs (reduce QB when bench has ≥1; boost RB/WR/TE when shallow)
+  - Expand candidate breadth by +30 when projection coverage among candidates < 60%
+  - Align AI deterministic baseline with DEF/K bench penalty to keep benefit math consistent with v2
+- Frontend
+  - Merge AI + deterministic results in the list (dedupe, slider filter, sort by benefit)
+  - Pin top AI move so at least one AI option appears when alternatives are enabled
+  - Benefit badge color-coded/sign-correct: green (+), grey (±), red (−)
+  - Default Alternatives floor set to −0.5 so small DEF→depth swaps show by default
+- Result
+  - Users see multiple sensible options regardless of source, with clear labeling and consistent thresholds
     *   **✅ Roster Endpoint Complete:** Returns `[]` (empty roster - draft hasn't happened yet)
     *   **✅ Player Enrichment Verified:** Mock testing shows successful ECR/team/bye week integration
     *   **✅ Week Parameter Working:** Supports historical/future roster requests
@@ -129,7 +168,7 @@ This document tracks the progress of the RATM Draft Kit project against the defi
         *   League dropdown populated from `/api/yahoo/leagues`
         *   Empty roster display for pre-draft scenario
         *   Complete error handling and responsive design
-        *   **✅ User Testing Confirmed:** Component works successfully with limited pre-draft data
+      *   **✅ User Testing Confirmed:** Component works successfully with limited pre-draft data
 *   **🚨 PRIORITY CHANGED:** Post-draft testing now secondary to AI enhancement (Phase 0)
 *   **Implementation Guide:** Detailed specifications available in `yahoo_roster_implementation.md`
 
@@ -431,3 +470,18 @@ This document tracks the progress of the RATM Draft Kit project against the defi
 *   **Outcome:** Interpreted badges and concise guidance across Weekly Outlook, Market/Ownership, and Age/Trajectory; unified chip styling; responsive 2‑column Weekly/Market grids; CSS‑controlled section order preserved.
 *   **Quality:** Backend dossier test suite (6/6) passing; null‑safe rendering; no regression to existing flows.
 *   **Docs:** See `PLAYER_DOSSIER_UX_ENHANCEMENT_STATUS.md` for final plan/outcomes and run instructions.
+### Sept 14, 2025 — Waiver v4 Phase 3 Completed
+- Frontend
+  - ID-based dedupe and self-add guard in merged UI (prefer Yahoo `player_id`, fallback to normalized names)
+  - “Explore options” grouping for near-neutral moves, capped at 5 with concise explainer
+  - New “Hide negative moves” checkbox (default ON). If ON, AI items < 0 are hidden even when slider < 0; deterministic continues to follow slider
+- Verification (local, League 461.l.42889, Team .t.8)
+  - A) alternatives ON, min_benefit = −0.5: deterministic small positives surfaced (e.g., Drop Cincinnati → add RB depth at ~+0.21); top 10 show green “+” badges
+  - B) alternatives ON, min_benefit = 0.0: no non‑negative items returned; summary shows “No clear upgrades…”
+
+### Decision — Defer Waiver v4 Phases 4–6
+- Rationale: Remaining items are non‑essential polish or operational safeguards. Current UI and backend already deliver clear top moves, robust safety (ID + name guards), and merged AI/deterministic behavior.
+- Deferred scope:
+  - Phase 4: AI Narrative & Validation Polish (minor copy/metrics; validation parity largely implemented)
+  - Phase 5: Observability + E2E (optional regression guardrails; can revisit later)
+  - Phase 6: Rollout & Safeguards (feature flag/A-B not required for current scale)

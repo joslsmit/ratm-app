@@ -95,7 +95,7 @@ const WaiverWireAssistant = ({
   isLoading 
 }) => {
   // API_BASE_URL is provided by app context; GET helper via useApi
-  const { API_BASE_URL, converter, userApiKey } = useContext(AppContext);
+  const { API_BASE_URL, userApiKey } = useContext(AppContext);
   const { get, makeApiRequest } = useApi();
   
   const rosterPositions = {
@@ -137,6 +137,8 @@ const WaiverWireAssistant = ({
   const [userLeagues, setUserLeagues] = useState([]);
   const [selectedLeague, setSelectedLeague] = useState('');
   const [yahooAvailablePlayers, setYahooAvailablePlayers] = useState([]);
+  const [yahooRosterNames, setYahooRosterNames] = useState(new Set());
+  const [yahooRosterIds, setYahooRosterIds] = useState(new Set());
   const [isLoadingYahooData, setIsLoadingYahooData] = useState(false);
   const [yahooError, setYahooError] = useState('');
   const [useYahooMode, setUseYahooMode] = useState(false);
@@ -147,12 +149,13 @@ const WaiverWireAssistant = ({
   const [recError, setRecError] = useState('');
   const [statusFilter, setStatusFilter] = useState('A'); // A|FA|W
   const [includeAlternatives, setIncludeAlternatives] = useState(false);
+  const [hideNegativeAi, setHideNegativeAi] = useState(true);
   const [minBenefit, setMinBenefit] = useState(0.0); // toggled to -1.0 when alternatives enabled
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const [showPool, setShowPool] = useState(false);
   const [showMeta, setShowMeta] = useState(false);
   const [expandedRecs, setExpandedRecs] = useState({});
-  const [analystNoteHtml, setAnalystNoteHtml] = useState('');
+  // Hide AI debug controls by default (available via developer tools only)
   const [showAiDebug, setShowAiDebug] = useState(false);
   const [aiDebug, setAiDebug] = useState(null);
 
@@ -297,6 +300,7 @@ const WaiverWireAssistant = ({
         const lk = leagues[0].league_key;
         setSelectedLeague(lk);
         try { await fetchAvailablePlayers(lk); } catch(_) {}
+        try { await fetchUserRosterNames(lk); } catch(_) {}
       }
     } catch (error) {
       console.error('Error fetching leagues:', error);
@@ -372,6 +376,32 @@ const WaiverWireAssistant = ({
     }
   };
 
+  // Fetch current roster names for client-side guard
+  const fetchUserRosterNames = async (leagueKey) => {
+    try {
+      const token = localStorage.getItem('yahoo_token');
+      if (!token) return;
+      const tokenObject = JSON.parse(token);
+      const authHeader = `Bearer ${tokenObject.access_token}`;
+      const leagueObj = userLeagues.find(l => l.league_key === leagueKey);
+      const teamKey = leagueObj?.team_key;
+      if (!teamKey) return;
+      const roster = await get(`/yahoo/roster?team_key=${encodeURIComponent(teamKey)}`, {
+        headers: { 'Authorization': authHeader }
+      });
+      const norm = (s) => (typeof s === 'string' ? s.trim().toLowerCase() : '');
+      const arr = Array.isArray(roster) ? roster : [];
+      const names = new Set(arr.map(p => norm(p.name)).filter(Boolean));
+      const ids = new Set(arr.map(p => String(p.player_id || '')).filter(v => v && v !== 'null' && v !== 'undefined'));
+      setYahooRosterNames(names);
+      setYahooRosterIds(ids);
+    } catch (e) {
+      console.warn('Could not fetch roster names for guard', e);
+      setYahooRosterNames(new Set());
+      setYahooRosterIds(new Set());
+    }
+  };
+
   // Handle league selection change
   const handleLeagueChange = async (event) => {
     const leagueKey = event.target.value;
@@ -379,6 +409,7 @@ const WaiverWireAssistant = ({
     
     if (leagueKey && useYahooMode) {
       await fetchAvailablePlayers(leagueKey);
+      await fetchUserRosterNames(leagueKey);
       // Clear stale recommendations on league change
       setRecommendations([]);
       setRecMeta(null);
@@ -392,6 +423,7 @@ const WaiverWireAssistant = ({
     setUseYahooMode(next);
     if (next && selectedLeague) {
       fetchAvailablePlayers(selectedLeague);
+      fetchUserRosterNames(selectedLeague);
     }
   };
 
@@ -403,6 +435,8 @@ const WaiverWireAssistant = ({
         alert('Yahoo authentication required. Please log in with Yahoo.');
         return;
       }
+      // Refresh roster names guard before generating recommendations
+      try { fetchUserRosterNames(selectedLeague); } catch (_) {}
       generateRecommendations(selectedLeague, token);
     } else {
       // Traditional mode: use manual roster input
@@ -471,9 +505,10 @@ const WaiverWireAssistant = ({
         exclude_positions: ['K', 'DEF']
       };
 
-      // Prefer AI-authority endpoint when API key is available; fallback to deterministic v2
+      // Fetch both AI (when available) and deterministic v2 in parallel to build a merged view
+      let aiPromise = null;
       if (userApiKey) {
-        const aiResp = await fetch(`${API_BASE_URL}/yahoo/waiver_recommendations_ai?debug=1`, {
+        aiPromise = fetch(`${API_BASE_URL}/yahoo/waiver_recommendations_ai?debug=1`, {
           method: 'POST',
           headers: {
             'Authorization': authHeader,
@@ -482,23 +517,9 @@ const WaiverWireAssistant = ({
           },
           body: JSON.stringify(body)
         });
-        if (aiResp.ok) {
-          const aiData = await aiResp.json();
-          setAiMoves(Array.isArray(aiData.moves) ? aiData.moves : []);
-          setAnalystNoteHtml(aiData.summary ? converter.makeHtml(aiData.summary) : '');
-          setRecMeta(aiData.metadata || null);
-          setAiDebug(aiData.debug || { ai_used: true, ai_moves_count: (aiData.moves||[]).length });
-          // Keep deterministic as fallback if provided
-          setRecommendations(Array.isArray(aiData.recommendations) ? aiData.recommendations : []);
-          return;
-        }
-        // if AI endpoint fails, fall through to deterministic
-        else {
-          try { const errData = await aiResp.json(); setAiDebug(errData && errData.debug ? errData.debug : { ai_used: false, error: `HTTP ${aiResp.status}` }); } catch(_) {}
-        }
       }
 
-      const response = await fetch(`${API_BASE_URL}/yahoo/waiver_recommendations_v2`, {
+      const v2Promise = fetch(`${API_BASE_URL}/yahoo/waiver_recommendations_v2`, {
         method: 'POST',
         headers: {
           'Authorization': authHeader,
@@ -507,14 +528,33 @@ const WaiverWireAssistant = ({
         body: JSON.stringify(body)
       });
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `Failed to fetch recommendations (${response.status})`);
+      // Resolve deterministic first so we always have a baseline list
+      const v2Resp = await v2Promise;
+      if (!v2Resp.ok) {
+        const errData = await v2Resp.json().catch(() => ({}));
+        throw new Error(errData.error || `Failed to fetch recommendations (${v2Resp.status})`);
       }
+      const v2Data = await v2Resp.json();
+      setRecommendations(Array.isArray(v2Data.recommendations) ? v2Data.recommendations : []);
+      setRecMeta(v2Data.metadata || null);
 
-      const data = await response.json();
-      setRecommendations(Array.isArray(data.recommendations) ? data.recommendations : []);
-      setRecMeta(data.metadata || null);
+      // If AI available, resolve and set AI-specific state; UI merges both lists
+      if (aiPromise) {
+        try {
+          const aiResp = await aiPromise;
+          if (aiResp.ok) {
+            const aiData = await aiResp.json();
+            setAiMoves(Array.isArray(aiData.moves) ? aiData.moves : []);
+            setAiDebug(aiData.debug || { ai_used: true, ai_moves_count: (aiData.moves||[]).length });
+            // We keep recommendations from v2; AI recs are merged in render
+          } else {
+            try { const errData = await aiResp.json(); setAiDebug(errData && errData.debug ? errData.debug : { ai_used: false, error: `HTTP ${aiResp.status}` }); } catch(_) {}
+          }
+        } catch (e) {
+          // AI failed; we keep deterministic-only view
+          setAiDebug({ ai_used: false, error: String(e) });
+        }
+      }
     } catch (err) {
       console.error('Recommendations error:', err);
       setRecError(err.message || 'Unknown error fetching recommendations');
@@ -698,38 +738,14 @@ const WaiverWireAssistant = ({
                         {isLoadingYahooData ? 'Refreshing…' : 'Refresh Recommendations'}
                       </button>
                     </div>
-                    <label className={styles.inlineToggle}>
-                      <input
-                        type="checkbox"
-                        checked={includeAlternatives}
-                        onChange={(e) => {
-                          const v = e.target.checked;
-                          setIncludeAlternatives(v);
-                          setMinBenefit(v ? -1.0 : 0.0);
-                        }}
-                      />
-                      Show Alternatives
-                    </label>
+                    <button className={styles.linkButton} onClick={() => setShowFilters(!showFilters)}>
+                      {showFilters ? 'Hide Filters' : 'Filters'}
+                    </button>
                     <button className={styles.linkButton} onClick={() => setShowMeta(!showMeta)}>
                       {showMeta ? 'Hide Details' : 'Show Details'}
                     </button>
-                    <button className={styles.linkButton} onClick={() => setShowAdvanced(!showAdvanced)}>
-                      {showAdvanced ? 'Hide Advanced' : 'Advanced'}
-                    </button>
-                    <button className={styles.linkButton} onClick={async () => {
-                      const opening = !showPool;
-                      setShowPool(opening);
-                      if (opening && selectedLeague && (!yahooAvailablePlayers || yahooAvailablePlayers.length === 0)) {
-                        try { await fetchAvailablePlayers(selectedLeague); } catch(_) {}
-                      }
-                    }}>
-                      {showPool ? 'Hide Pool' : 'Browse Pool'}
-                    </button>
-                    <button className={styles.linkButton} onClick={() => setShowAiDebug(!showAiDebug)}>
-                      {showAiDebug ? 'Hide AI Debug' : 'Debug AI'}
-                    </button>
                   </div>
-                  {showAdvanced && (
+                  {showFilters && (
                     <div className={styles.advancedRow}>
                       <div className={styles.controlGroup}>
                         <label>Status</label>
@@ -738,6 +754,37 @@ const WaiverWireAssistant = ({
                           <option value="FA">Free Agents (FA)</option>
                           <option value="W">Waivers (W)</option>
                         </select>
+                      </div>
+                      <div className={styles.controlGroup}>
+                        <label className={styles.inlineToggle}>
+                          <input
+                            type="checkbox"
+                            checked={includeAlternatives}
+                            onChange={(e) => {
+                              const v = e.target.checked;
+                              setIncludeAlternatives(v);
+                              // Default to slight negative floor so small DEF→depth swaps appear
+                              setMinBenefit(v ? -0.5 : 0.0);
+                            }}
+                          />
+                          Include near‑neutral moves
+                          <span className={styles.helpText} style={{ marginLeft: 6 }}>
+                            Show small or lateral upgrades that improve balance/depth
+                          </span>
+                        </label>
+                      </div>
+                      <div className={styles.controlGroup}>
+                        <label className={styles.inlineToggle}>
+                          <input
+                            type="checkbox"
+                            checked={hideNegativeAi}
+                            onChange={(e) => setHideNegativeAi(e.target.checked)}
+                          />
+                          Hide negative AI moves
+                          <span className={styles.helpText} style={{ marginLeft: 6 }}>
+                            If enabled, AI items below 0 are hidden even when near‑neutral is on
+                          </span>
+                        </label>
                       </div>
                       {includeAlternatives && (
                         <div className={styles.controlGroup}>
@@ -750,21 +797,14 @@ const WaiverWireAssistant = ({
                             value={minBenefit}
                             onChange={(e) => setMinBenefit(parseFloat(e.target.value))}
                           />
-                          <span className={styles.rangeValue}>{Number.isFinite(minBenefit) ? minBenefit.toFixed(1) : '-'}
-                          </span>
+                          <span className={styles.rangeValue}>{Number.isFinite(minBenefit) ? minBenefit.toFixed(1) : '-'}</span>
                         </div>
                       )}
                     </div>
                   )}
                 </div>
 
-                {/* Analyst Summary */}
-                {analystNoteHtml && (
-                  <div className={styles.analystBox}>
-                    <div className={styles.analystHeading}>Analyst’s Note</div>
-                    <div className={styles.analystContent} dangerouslySetInnerHTML={{ __html: analystNoteHtml }} />
-                  </div>
-                )}
+                {/* Analyst Summary removed to reduce redundancy with opinion banner */}
 
                 {showAiDebug && (
                   <div className={styles.analystBox}>
@@ -806,32 +846,140 @@ const WaiverWireAssistant = ({
                 {recError && <div className={styles.errorText}>{recError}</div>}
 
                 <h3>Top Waiver Moves</h3>
-                {/* Opinionated banner: show strongest call or low-impact disclaimer */}
+                {/* Opinionated banner: show strongest call or low-impact disclaimer (merged AI + deterministic) */}
                 {(aiMoves.length > 0 || recommendations.length > 0) && (
                   <div className={styles.opinionBanner}>
                     {(() => {
-                      const list = aiMoves.length ? aiMoves : recommendations;
-                      const maxB = Math.max(...list.map(r => Number((r.estimated_benefit) || 0)));
-                      if (!isFinite(maxB) || maxB < 0.3) return <span>No clear upgrades this week — small, balance‑only gains.</span>;
-                      const first = list[0];
-                      const addName = typeof first.add === 'string' ? first.add : (first.add?.name || first.add_player?.name);
-                      const dropName = typeof first.drop === 'string' ? first.drop : (first.drop?.name || first.drop_player?.name);
-                      return <span>Do this: Add {addName} • Drop {dropName}</span>;
+                      const norm = (s) => (typeof s === 'string' ? s.trim().toLowerCase() : '');
+                      const mkAddName = (r) => (typeof r.add === 'string' ? r.add : (r.add?.name || r.add_player?.name));
+                      const mkDropName = (r) => (typeof r.drop === 'string' ? r.drop : (r.drop?.name || r.drop_player?.name));
+                      const detL = (recommendations || []).map(r => ({
+                        ...r,
+                        __source:'Deterministic',
+                        __add_id: String(r.add_player?.player_id || ''),
+                        __drop_id: String(r.drop_player?.player_id || ''),
+                      }));
+                      const keyByNames = (a,d) => `${norm(a||'')}|${norm(d||'')}`;
+                      const idsByPair = new Map();
+                      for (const r of detL) {
+                        idsByPair.set(keyByNames(mkAddName(r), mkDropName(r)), {addId: r.__add_id, dropId: r.__drop_id});
+                      }
+                      const aiL = (aiMoves || []).map(r => {
+                        const ids = idsByPair.get(keyByNames(mkAddName(r), mkDropName(r))) || {};
+                        return { ...r, __source:'AI', __add_id: String(ids.addId || ''), __drop_id: String(ids.dropId || '') };
+                      });
+                      const raw = [...aiL, ...detL];
+                      const filtered = raw.filter(r => {
+                        const addName = mkAddName(r);
+                        const addId = String(r.__add_id || '');
+                        const b = Number(r.estimated_benefit || 0);
+                        const selfAdd = (addId && yahooRosterIds.has(addId)) || (!!addName && yahooRosterNames.has(norm(addName)));
+                        if (selfAdd) return false;
+                        if (r.__source === 'AI' && hideNegativeAi && Number.isFinite(b) && b < 0) return false;
+                        return (Number.isFinite(b) ? b >= minBenefit : true);
+                      });
+                      const seen = new Set();
+                      const deduped = [];
+                      for (const r of filtered) {
+                        const addId = String(r.__add_id || '');
+                        const dropId = String(r.__drop_id || '');
+                        const k = (addId && dropId) ? `${addId}|${dropId}` : `${norm(mkAddName(r)||'')}|${norm(mkDropName(r)||'')}`;
+                        if (seen.has(k)) continue;
+                        seen.add(k);
+                        deduped.push(r);
+                      }
+                      deduped.sort((a,b) => Number(b.estimated_benefit||0) - Number(a.estimated_benefit||0));
+                      if (!deduped.length) return <span>No clear upgrades this week — small, balance‑only gains.</span>;
+                      const first = deduped[0];
+                      const addName = mkAddName(first);
+                      const dropName = mkDropName(first);
+                      return <span>Do this: Add {addName} • Drop {dropName} <span className={styles.chipMuted}>(merged AI + deterministic)</span></span>;
                     })()}
                   </div>
                 )}
                 <div className={styles.recommendationsList}>
-                  {(aiMoves.length ? aiMoves : recommendations).map((rec, idx) => (
-                    <div key={idx} className={styles.recCard}>
-                      <div className={styles.recHeader}>
-                        <div className={styles.recTitle}>Add {typeof rec.add === 'string' ? rec.add : (rec.add?.name || rec.add_player?.name)} • Drop {typeof rec.drop === 'string' ? rec.drop : (rec.drop?.name || rec.drop_player?.name)}</div>
-                        <div className={styles.headerRight}>
-                          <span className={`${styles.confidence} ${styles['conf_'+getConfidence(rec).toLowerCase()]}`}>{getConfidence(rec)}</span>
-                          <span className={styles.benefitBadge}>+{(rec.estimated_benefit ?? 0).toFixed(2)}</span>
-                          <span className={styles.sourceChip}>{aiMoves.length ? 'AI' : 'Deterministic'}</span>
-                        </div>
-                      </div>
-                      <div className={styles.recBody}>
+                  {(() => {
+                    const norm = (s) => (typeof s === 'string' ? s.trim().toLowerCase() : '');
+                    const mkAddName = (r) => (typeof r.add === 'string' ? r.add : (r.add?.name || r.add_player?.name));
+                    const mkDropName = (r) => (typeof r.drop === 'string' ? r.drop : (r.drop?.name || r.drop_player?.name));
+                    const detL = (recommendations || []).map(r => ({
+                      ...r,
+                      __source:'Deterministic',
+                      __add_id: String(r.add_player?.player_id || ''),
+                      __drop_id: String(r.drop_player?.player_id || ''),
+                    }));
+                    const keyByNames = (a,d) => `${norm(a||'')}|${norm(d||'')}`;
+                    const idsByPair = new Map();
+                    for (const r of detL) {
+                      idsByPair.set(keyByNames(mkAddName(r), mkDropName(r)), {addId: r.__add_id, dropId: r.__drop_id});
+                    }
+                    const aiL = (aiMoves || []).map(r => {
+                      const ids = idsByPair.get(keyByNames(mkAddName(r), mkDropName(r))) || {};
+                      return { ...r, __source:'AI', __add_id: String(ids.addId || ''), __drop_id: String(ids.dropId || '') };
+                    });
+                    const raw = [...aiL, ...detL];
+                    const filtered = raw.filter(r => {
+                      const addName = mkAddName(r);
+                      const addId = String(r.__add_id || '');
+                      const b = Number(r.estimated_benefit || 0);
+                      const selfAdd = (addId && yahooRosterIds.has(addId)) || (!!addName && yahooRosterNames.has(norm(addName)));
+                      if (selfAdd) return false;
+                      if (r.__source === 'AI' && hideNegativeAi && Number.isFinite(b) && b < 0) return false;
+                      return (Number.isFinite(b) ? b >= minBenefit : true);
+                    });
+                    const counts = filtered.reduce((acc, r) => { acc[r.__source] = (acc[r.__source]||0)+1; return acc; }, {});
+                    const hiddenCount = raw.length - filtered.length;
+                    // Ensure at least one AI option is visible when available (pin top AI move)
+                    const aiOnly = filtered.filter(r => r.__source === 'AI').sort((a,b) => Number(b.estimated_benefit||0) - Number(a.estimated_benefit||0));
+                    const rest = filtered.filter(r => r.__source !== 'AI').sort((a,b) => Number(b.estimated_benefit||0) - Number(a.estimated_benefit||0));
+                    const cap = 10;
+                    const pinned = aiOnly.length ? [aiOnly[0]] : [];
+                    // Merge pinned AI with the rest, highest benefit first, avoiding duplicates
+                    const seen = new Set(pinned.map(r => {
+                      const addId = String(r.__add_id || '');
+                      const dropId = String(r.__drop_id || '');
+                      return (addId && dropId) ? `${addId}|${dropId}` : `${norm(mkAddName(r)||'')}|${norm(mkDropName(r)||'')}`;
+                    }));
+                    const merged = [...pinned];
+                    const sortedAll = [...aiOnly.slice(1), ...rest].sort((a,b) => Number(b.estimated_benefit||0) - Number(a.estimated_benefit||0));
+                    for (const r of sortedAll) {
+                      if (merged.length >= cap) break;
+                      const addId = String(r.__add_id || '');
+                      const dropId = String(r.__drop_id || '');
+                      const k = (addId && dropId) ? `${addId}|${dropId}` : `${norm(mkAddName(r)||'')}|${norm(mkDropName(r)||'')}`;
+                      if (seen.has(k)) continue;
+                      seen.add(k);
+                      merged.push(r);
+                    }
+                    const capped = merged;
+                    const movesTop = capped.filter(r => Number(r.estimated_benefit || 0) >= 0);
+                    const movesExplore = capped.filter(r => {
+                      const b = Number(r.estimated_benefit || 0);
+                      return Number.isFinite(b) && b < 0 && b >= (minBenefit ?? 0);
+                    }).slice(0, 5);
+                    return (
+                      <>
+                        {(counts['AI'] || counts['Deterministic']) && (
+                          <div className={styles.chipMuted} style={{ marginBottom: 8 }}>
+                            Showing {(counts['AI']||0)} AI + {(counts['Deterministic']||0)} deterministic options (sorted by benefit)
+                          </div>
+                        )}
+                        {hiddenCount > 0 && (
+                          <div className={styles.chipMuted} style={{ marginBottom: 8 }}>
+                            {hiddenCount} move{hiddenCount>1?'s':''} hidden (already on your roster)
+                          </div>
+                        )}
+                        {movesTop.map((rec, idx) => (
+                          <div key={idx} className={styles.recCard}>
+                            <div className={styles.recHeader}>
+                              <div className={styles.recTitle}>Add {typeof rec.add === 'string' ? rec.add : (rec.add?.name || rec.add_player?.name)} • Drop {typeof rec.drop === 'string' ? rec.drop : (rec.drop?.name || rec.drop_player?.name)}</div>
+                              <div className={styles.headerRight}>
+                                <span className={`${styles.confidence} ${styles['conf_'+getConfidence(rec).toLowerCase()]}`}>{getConfidence(rec)}</span>
+                                {(() => { const b=Number(rec.estimated_benefit||0); const cls=b>0?styles.benefitBadgePos:(b<0?styles.benefitBadgeNeg:styles.benefitBadgeZero); const s=b>0?'+':(b<0?'−':'±'); return (<span className={`${styles.benefitBadge} ${cls}`}>{s}{Math.abs(b).toFixed(2)}</span>); })()}
+                                <span className={styles.sourceChip}>{rec.__source || (aiMoves.length ? 'AI' : 'Deterministic')}</span>
+                              </div>
+                            </div>
+                            <div className={styles.recBody}>
                         <div className={styles.recRow}>
                           <div>
                             <div className={styles.recLabel}>Add</div>
@@ -895,7 +1043,7 @@ const WaiverWireAssistant = ({
                                 <span>Estimated Benefit</span><span>+{(rec.estimated_benefit ?? 0).toFixed(2)} <em className={styles.helpText}>(overall roster score gain)</em></span>
                                 {recMeta && <>
                                   <span>Baseline Overall</span><span>{recMeta.baseline_overall}</span>
-                                  <span>Source</span><span>{aiMoves.length ? 'AI' : 'Deterministic'}</span>
+                                  <span>Source</span><span>{rec.__source || (aiMoves.length ? 'AI' : 'Deterministic')}</span>
                                 </>}
                               </div>
                             </details>
@@ -903,9 +1051,96 @@ const WaiverWireAssistant = ({
                       </div>
                       {rec.claim_only && <div className={styles.claimOnly}>Claim only (on waivers)</div>}
                     </div>
-                  ))}
+                        ))}
+                        {movesExplore.length > 0 && (
+                          <div className={styles.chipMuted} style={{ marginTop: 16, marginBottom: 8 }}>
+                            Explore options — small or lateral moves to improve balance/depth
+                          </div>
+                        )}
+                        {movesExplore.map((rec, idx) => (
+                          <div key={`x-${idx}`} className={styles.recCard}>
+                            <div className={styles.recHeader}>
+                              <div className={styles.recTitle}>Add {typeof rec.add === 'string' ? rec.add : (rec.add?.name || rec.add_player?.name)} • Drop {typeof rec.drop === 'string' ? rec.drop : (rec.drop?.name || rec.drop_player?.name)}</div>
+                              <div className={styles.headerRight}>
+                                <span className={`${styles.confidence} ${styles['conf_'+getConfidence(rec).toLowerCase()]}`}>{getConfidence(rec)}</span>
+                                {(() => { const b=Number(rec.estimated_benefit||0); const cls=b>0?styles.benefitBadgePos:(b<0?styles.benefitBadgeNeg:styles.benefitBadgeZero); const s=b>0?'+':(b<0?'−':'±'); return (<span className={`${styles.benefitBadge} ${cls}`}>{s}{Math.abs(b).toFixed(2)}</span>); })()}
+                                <span className={styles.sourceChip}>{rec.__source || (aiMoves.length ? 'AI' : 'Deterministic')}</span>
+                              </div>
+                            </div>
+                            <div className={styles.recBody}>
+                              <div className={styles.recRow}>
+                                <div>
+                                  <div className={styles.recLabel}>Add</div>
+                                  <div className={styles.playerLine}>
+                                    <a href={`/?tool=dossier&player=${encodeURIComponent((typeof rec.add === 'string' ? rec.add : (rec.add?.name || rec.add_player?.name)) || '')}`} target="_blank" rel="noopener noreferrer" className={styles.playerLink}>
+                                      {typeof rec.add === 'string' ? rec.add : (rec.add?.name || rec.add_player?.name)}
+                                    </a>
+                                    {(rec.add?.position || rec.add_player?.position || rec.add?.team || rec.add_player?.team) && (
+                                      <>
+                                        {` (`}
+                                        {rec.add?.position || rec.add_player?.position || 'Pos?'}
+                                        {`, `}
+                                        {rec.add?.team || rec.add_player?.team || 'Team?'}
+                                        {`)`}
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className={styles.recLabel}>Drop</div>
+                                  <div className={styles.playerLine}>
+                                    <a href={`/?tool=dossier&player=${encodeURIComponent((typeof rec.drop === 'string' ? rec.drop : (rec.drop?.name || rec.drop_player?.name)) || '')}`} target="_blank" rel="noopener noreferrer" className={styles.playerLink}>
+                                      {typeof rec.drop === 'string' ? rec.drop : (rec.drop?.name || rec.drop_player?.name)}
+                                    </a>
+                                    {(rec.drop?.position || rec.drop_player?.position || rec.drop?.team || rec.drop_player?.team) && (
+                                      <>
+                                        {` (`}
+                                        {rec.drop?.position || rec.drop_player?.position || 'Pos?'}
+                                        {`, `}
+                                        {rec.drop?.team || rec.drop_player?.team || 'Team?'}
+                                        {`)`}
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className={styles.whyBox}>
+                                {Array.isArray(rec.rationale_bullets) && rec.rationale_bullets.length > 0 ? (
+                                  <ul>
+                                    {rec.rationale_bullets.slice(0,4).map((t, i) => <li key={i}>{t}</li>)}
+                                  </ul>
+                                ) : (
+                                  <ul>
+                                    {Array.isArray(rec.badges) && rec.badges.slice(0,3).map((b, i) => {
+                                      const reason = badgeToReason(b);
+                                      return reason ? <li key={i}>{reason}</li> : null;
+                                    })}
+                                    {!rec.badges?.length && <li>Small improvement this week based on roster balance.</li>}
+                                  </ul>
+                                )}
+                                <details className={styles.detailsBox}>
+                                  <summary>Show details</summary>
+                                  <div className={styles.detailsGrid}>
+                                    <span>Estimated Benefit</span><span>+{(rec.estimated_benefit ?? 0).toFixed(2)} <em className={styles.helpText}>(overall roster score gain)</em></span>
+                                    {recMeta && <>
+                                      <span>Baseline Overall</span><span>{recMeta.baseline_overall}</span>
+                                      <span>Source</span><span>{rec.__source || (aiMoves.length ? 'AI' : 'Deterministic')}</span>
+                                    </>}
+                                  </div>
+                                </details>
+                              </div>
+                              {rec.claim_only && <div className={styles.claimOnly}>Claim only (on waivers)</div>}
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    );
+                  })()}
                   {!recommendations.length && !isLoadingYahooData && (
-                    <div className={styles.emptyState}>No recommendations yet. Adjust filters or click Get Waiver Recommendations.</div>
+                    <div className={styles.emptyState}>
+                      No clear upgrades found. Open Filters and enable “Include near‑neutral moves” to see small depth/balance improvements. 
+                      Try adjusting Status (A/FA/W) if needed.
+                    </div>
                   )}
                 </div>
 
