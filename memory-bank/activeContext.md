@@ -24,6 +24,11 @@
 - ECR Auto‑Select: Backend auto‑selects ECR flavor from CSV (`ro/rp` preferred; fallback `do/dp`, `wo/wp`) to handle source changes gracefully.
 - Data Hygiene: CSVs removed from Git tracking; backend downloads at runtime; `.gitignore` updated; `backend/.env` added locally and ignored.
 
+### ✅ September 2025 — Market Inefficiency (In‑Season) Polished
+- Deterministic, league‑aware Sleepers/Traps from available FA/W only; roster‑exclusion via Yahoo auth.
+- Structured outputs with headline + typed reasons; UI shows concise bullets, not numeric walls.
+- Removed league score chip; default Yahoo‑aware = ON; sidebar “Y” badges removed.
+
 ### 🔧 PRODUCTION ISSUE RESOLVED - CORS Fix Applied:
 **Problem**: Frontend blocked by CORS policy - "Access-Control-Allow-Origin" header missing
 **Solution**: Added `https://ratm-app.vercel.app` to backend CORS allowed origins

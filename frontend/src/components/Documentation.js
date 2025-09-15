@@ -72,13 +72,23 @@ const Documentation = () => {
       </section>
 
       <section id="market-inefficiency-finder" className="doc-section">
-        <h2>Market Inefficiency Finder</h2>
-        <p>Identify sleepers and busts. In Yahoo‑enhanced mode (when authenticated), results reflect your league context.</p>
-        <h3>How to Use:</h3>
+        <h2>Sleepers & Traps (Market Inefficiency)</h2>
+        <p>
+          In‑season, this tool surfaces <strong>Sleepers</strong> (available FA/W players with upside this week) and
+          <strong> Traps (Avoid)</strong> (available players likely to underperform replacement).
+          When Yahoo‑connected, it uses your league data and <em>excludes your roster</em> from suggestions. Analysis is concise and human‑readable.
+        </p>
+        <h3>How to Use</h3>
         <ol>
-          <li>Select a position and run the analysis.</li>
-          <li>Review the concise notes to spot value or avoid traps.</li>
+          <li>Pick <em>All</em> or a specific position from the selector, then click Find.</li>
+          <li>Each card shows a brief headline and up to 3 reasons (Projection edge, Trend, Consensus, Waivers).</li>
+          <li>Availability chips indicate Free Agent or Waivers (with a clear time when provided by Yahoo).</li>
+          <li>Yahoo mode is enabled by default in‑season; turn it off to run a general, non‑league analysis.</li>
         </ol>
+        <p>
+          Notes: Sleepers require a small projection edge over a position baseline and reasonable ownership; Traps require
+          below‑baseline projections and negative signals. Your roster is automatically filtered out when Yahoo is connected.
+        </p>
       </section>
 
       <section id="keeper-evaluator" className="doc-section">

@@ -207,3 +207,27 @@ Enhanced the existing Phase 0B AI integration with league-aware methodology:
 The Yahoo-Enhanced Market Inefficiency Finder represents the successful completion of all priority development phases for the RATM Draft Kit. The implementation provides league-specific fantasy football insights while maintaining backward compatibility and world-class user experience.
 
 **Status: 🎉 PRODUCTION READY - Ready for live testing with Yahoo authentication!**
+
+---
+
+## 2025‑09‑14 — In‑Season Refinements (Week 2)
+
+### Deterministic, League‑Aware Scoring (Available‑Only)
+- Sleepers (available FA/W only): position‑aware replacement baselines (QB≈15, RB/WR≈9, TE≈7), projection edge ≥ +0.5, non‑elite ECR (>60), actionable ownership (5–85%), trend/SD modifiers, small waiver penalty.
+- Traps/Avoid (available FA/W): projection below replacement ≤ −0.5, negative trend, require minimal market interest (≥8% owned) to avoid noise.
+- Exclude user’s roster from the available pool using Yahoo Authorization + team_key.
+
+### Endpoint Updates
+- `/api/yahoo/league_inefficiencies` now returns structured sleepers and traps with:
+  - `headline`, `reasons[]` (typed: Projection/Trend/Consensus/Waivers), `confidence`, concise `justification`.
+  - `availability_type` (FA|W) and optional `waiver_deadline` when Yahoo provides it.
+- Authorization support: endpoint can fetch roster when `Authorization: Bearer` or `auth_bearer` is provided and `team_key` is set.
+
+### UX Polish
+- Cards show a one‑line headline and up to 3 concise reasons instead of numeric walls.
+- Removed unreadable “League Score” chip; improved contrast.
+- Right column renamed to “Traps (Avoid)”.
+- Market Inefficiency view defaults Yahoo‑aware to ON in‑season; sidebar “Y” badges removed to reduce clutter.
+
+### Notes
+- This tool is now fully actionable in‑season: both sides come from the available pool and are filtered for replacement‑level relevance and trend.

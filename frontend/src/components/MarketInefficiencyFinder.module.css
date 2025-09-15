@@ -179,6 +179,38 @@
   background-color: rgba(0, 123, 255, 0.2);
 }
 
+/* Availability chips (FA/W with optional clear time) */
+.availabilityChip {
+  margin-left: 8px;
+  background-color: rgba(0,0,0,0.1);
+  color: var(--text-color);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75em;
+  font-weight: 600;
+}
+
+/* Analysis copy: headline + concise reasons */
+.analysisBlock {
+  margin-top: 8px;
+}
+
+.analysisHeadline {
+  font-weight: 600;
+  color: var(--text-color);
+  margin-bottom: 4px;
+}
+
+.reasonList {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+}
+
+.reasonList li {
+  margin-bottom: 2px;
+}
+
 /* Yahoo Mode Integration Styles */
 .yahooModeSection {
   background-color: var(--card-background);
@@ -264,6 +296,23 @@
   margin: 0;
   opacity: 0.9;
   font-size: 0.95em;
+}
+
+/* Small source/fallback chip inside banner */
+.sourceChip {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75em;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.fallbackChip {
+  background-color: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+  border: 1px solid rgba(255, 193, 7, 0.6);
 }
 
 .leagueScore {

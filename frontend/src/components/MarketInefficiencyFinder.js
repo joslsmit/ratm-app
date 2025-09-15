@@ -17,7 +17,7 @@ export default function MarketInefficiencyFinder({
   const [selectedLeague, setSelectedLeague] = useState('');
   const [yahooError, setYahooError] = useState('');
   const [isLoadingYahooData, setIsLoadingYahooData] = useState(false);
-  const [useYahooMode, setUseYahooMode] = useState(false);
+  const [useYahooMode, setUseYahooMode] = useState(true);
   
   // Hooks
   const { get } = useApi();
@@ -197,7 +197,14 @@ export default function MarketInefficiencyFinder({
       <div className={styles.marketResults}>
         {useYahooMode && selectedLeague && (
           <div className={styles.leagueContextBanner}>
-            <h3>Analysis for: {userLeagues.find(l => l.league_key === selectedLeague)?.league_name}</h3>
+            <h3>
+              Analysis for: {userLeagues.find(l => l.league_key === selectedLeague)?.league_name}
+              {marketInefficiencies?.source === 'general' && (
+                <span className={`${styles.sourceChip} ${styles.fallbackChip}`} title="League pool was empty; showing general sleepers/busts">
+                  General fallback
+                </span>
+              )}
+            </h3>
             <p>League-specific opportunities based on player availability and ownership patterns</p>
           </div>
         )}
@@ -209,6 +216,12 @@ export default function MarketInefficiencyFinder({
               <div className={styles.analysisCardHeader}>
                 <h4><a href={`/?tool=dossier&player=${encodeURIComponent(player.name)}`} className={styles.playerLink}>{player.name}</a></h4>
                 <span className={`${styles.confidenceBadge} ${styles[player.confidence]}`}>{player.confidence}</span>
+                {useYahooMode && player.availability_type && (
+                  <span className={styles.availabilityChip} title={player.availability_type === 'W' && player.waiver_deadline ? `Clears: ${player.waiver_deadline}` : (player.availability_type === 'W' ? 'On waivers' : 'Free agent')}>
+                    {player.availability_type === 'W' ? 'Waivers' : 'Free Agent'}
+                    {player.availability_type === 'W' && player.waiver_deadline ? ` • Clears ${player.waiver_deadline}` : ''}
+                  </span>
+                )}
                 <button className={styles.addTargetBtnSmall} title="Add to Target List" onClick={() => handleAddToTargets(player.name)}>
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
                 </button>
@@ -222,13 +235,20 @@ export default function MarketInefficiencyFinder({
                 <span>Worst: {player.worst || 'N/A'}</span>
                 <span>Rank Delta: {typeof player.rank_delta === 'number' ? player.rank_delta.toFixed(1) : 'N/A'}</span>
                 <span>Rookie: {player.is_rookie ? 'Yes' : 'No'}</span>
-                {useYahooMode && player.league_inefficiency_score && (
-                  <span className={styles.leagueScore} title="League-specific opportunity score">
-                    League Score: {player.league_inefficiency_score}
-                  </span>
+                {/* Removed league score chip per UX feedback */}
+              </div>
+              <div className={styles.analysisBlock}>
+                <div className={styles.analysisHeadline}>Why this is a sleeper</div>
+                {Array.isArray(player.reasons) && player.reasons.length > 0 ? (
+                  <ul className={styles.reasonList}>
+                    {player.reasons.slice(0, 3).map((r, idx) => (
+                      <li key={idx}>{r.text || String(r)}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>{player.justification}</p>
                 )}
               </div>
-              <p>{player.justification}</p>
               {useYahooMode && player.league_context_notes && (
                 <div className={styles.leagueContext}>
                   <small><strong>League Context:</strong> {player.league_context_notes}</small>
@@ -239,12 +259,18 @@ export default function MarketInefficiencyFinder({
         </div>
         
         <div className={styles.marketColumn}>
-          <h3>{useYahooMode ? 'League Busts (Overvalued)' : 'Busts (Overvalued)'}</h3>
+          <h3>{useYahooMode ? 'League Traps (Avoid)' : 'Traps (Avoid)'}</h3>
           {marketInefficiencies.busts.length > 0 ? marketInefficiencies.busts.map((player, index) => (
             <div key={`bust-${index}`} className={`${styles.analysisCard} ${styles.bust}`}>
               <div className={styles.analysisCardHeader}>
                 <h4><a href={`/?tool=dossier&player=${encodeURIComponent(player.name)}`} className={styles.playerLink}>{player.name}</a></h4>
                 <span className={`${styles.confidenceBadge} ${styles[player.confidence]}`}>{player.confidence}</span>
+                {useYahooMode && player.availability_type && (
+                  <span className={styles.availabilityChip} title={player.availability_type === 'W' && player.waiver_deadline ? `Clears: ${player.waiver_deadline}` : (player.availability_type === 'W' ? 'On waivers' : 'Free agent')}>
+                    {player.availability_type === 'W' ? 'Waivers' : 'Free Agent'}
+                    {player.availability_type === 'W' && player.waiver_deadline ? ` • Clears ${player.waiver_deadline}` : ''}
+                  </span>
+                )}
                 <button className={styles.addTargetBtnSmall} title="Add to Target List" onClick={() => handleAddToTargets(player.name)}>
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
                 </button>
@@ -258,13 +284,20 @@ export default function MarketInefficiencyFinder({
                 <span>Worst: {player.worst || 'N/A'}</span>
                 <span>Rank Delta: {typeof player.rank_delta === 'number' ? player.rank_delta.toFixed(1) : 'N/A'}</span>
                 <span>Rookie: {player.is_rookie ? 'Yes' : 'No'}</span>
-                {useYahooMode && player.league_inefficiency_score && (
-                  <span className={styles.leagueScore} title="League-specific risk score">
-                    League Score: {player.league_inefficiency_score}
-                  </span>
+                {/* Removed league score chip per UX feedback */}
+              </div>
+              <div className={styles.analysisBlock}>
+                <div className={styles.analysisHeadline}>Why to avoid</div>
+                {Array.isArray(player.reasons) && player.reasons.length > 0 ? (
+                  <ul className={styles.reasonList}>
+                    {player.reasons.slice(0, 3).map((r, idx) => (
+                      <li key={idx}>{r.text || String(r)}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>{player.justification}</p>
                 )}
               </div>
-              <p>{player.justification}</p>
               {useYahooMode && player.league_context_notes && (
                 <div className={styles.leagueContext}>
                   <small><strong>League Context:</strong> {player.league_context_notes}</small>

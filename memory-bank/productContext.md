@@ -34,6 +34,7 @@ The application provides a suite of tools categorized for player analysis and te
     - ECR semantics enforced: overall ECR used for cross‑position decisions; weekly positional rank only within same position; neutral “Overall ECR” context when gaps are small.
     - Matchup uses opponent + HOME/AWAY context; categorical difficulty (Easy/Moderate/Tough) adds a small numeric nudge when meaningful.
 *   **Market Inefficiency Finder (Yahoo Enhanced):** ✅ Identifies undervalued and overvalued players with two modes: (1) Traditional mode for general market analysis, and (2) Yahoo mode for league-specific analysis incorporating ownership patterns, league size, competitive level, and personalized player recommendations.
+    - In‑season (Week 2+) behavior: Sleepers and Traps (Avoid) come strictly from the available FA/W pool; your roster is excluded via Yahoo auth. Cards show a headline and up to 3 concise reasons (Projection/Trend/Consensus/Waivers) for quick, human‑readable decisions.
 
 ### Utility Features:
 *   **API Key Management:** Users provide their own Google Gemini API key, stored locally in their browser for privacy and security.

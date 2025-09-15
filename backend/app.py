@@ -4681,6 +4681,7 @@ def parse_yahoo_waiver_response(data):
             full_name = ''
             team_abbr = ''
             positions = []
+            waiver_date = None
 
             for e in elements:
                 if not player_key and isinstance(e, dict) and 'player_key' in e:
@@ -4699,6 +4700,9 @@ def parse_yahoo_waiver_response(data):
                         for pos_data in eps:
                             if isinstance(pos_data, dict) and pos_data.get('position'):
                                 positions.append(pos_data['position'])
+                # Try to capture waiver date if present on any element
+                if waiver_date is None and isinstance(e, dict) and 'waiver_date' in e:
+                    waiver_date = e.get('waiver_date')
 
             if not player_key or not full_name:
                 return None
@@ -4709,7 +4713,8 @@ def parse_yahoo_waiver_response(data):
                 'name': full_name,
                 'team': team_abbr or '',
                 'positions': positions,
-                'primary_position': positions[0] if positions else 'Unknown'
+                'primary_position': positions[0] if positions else 'Unknown',
+                'waiver_deadline': waiver_date
             }
 
         if isinstance(players_container, dict):
@@ -5653,6 +5658,7 @@ def _collect_enriched_pool(access_token: str, league_key: str, status: str, excl
                 'weekly_points': ci.get('projected_points'),
                 'weekly_ecr': ci.get('weekly_ecr'),
                 'weekly_ownership': ci.get('weekly_ownership'),
+                'availability_type': status  # FA or W or A
             }
             players.append(enriched)
             if len(players) >= cap:
@@ -6572,8 +6578,17 @@ def yahoo_league_inefficiencies():
         data = request.json
         
         league_key = data.get('league_key')
+        team_key = data.get('team_key')
         position = data.get('position', 'all')
         league_context = data.get('league_context', {})
+        client_available = data.get('available_players') or []
+        # Authorization support (header or body token)
+        auth_header = request.headers.get('Authorization')
+        access_token = None
+        if auth_header and auth_header.startswith('Bearer '):
+            access_token = auth_header.split(' ')[1]
+        elif isinstance(data.get('auth_bearer'), str) and data.get('auth_bearer'):
+            access_token = data.get('auth_bearer')
         
         if not league_key or not league_context:
             return jsonify({"error": "league_key and league_context are required"}), 400
@@ -6586,32 +6601,92 @@ def yahoo_league_inefficiencies():
         
         # Build league-aware candidate analysis
         league_candidates = []
-        
-        # Focus on available players for deeper inefficiency analysis
-        available_players = [p for p in player_ownership if p['ownership_status'] == 'available']
+
+        # Determine available players source: prefer client-provided, else derive from ownership
+        if client_available:
+            available_players = client_available
+        else:
+            # Focus on available players for deeper inefficiency analysis
+            available_players = [p for p in player_ownership if p.get('ownership_status') in ('available', 'A', 'FA', 'free_agent', 'waivers')]
+
+        if not available_players:
+            # Fallback: run general market inefficiency over global ECR list to avoid empty UI
+            try:
+                ecr_source = static_ecr_overall_data
+                candidates_list = []
+                for name, ecr_data in sorted(ecr_source.items(), key=lambda item: item[1].get('ecr') if item[1].get('ecr') is not None else 999):
+                    combined = combined_player_data_cache.get(normalize_player_name(name), {})
+                    player_context_data = {
+                        'name': combined.get('display_name', name.title()),
+                        'position': combined.get('position', 'N/A'),
+                        'team': combined.get('team', 'N/A'),
+                        'ecr': combined.get('ecr_overall'),
+                        'sd': combined.get('sd_overall'),
+                        'best': combined.get('best_overall'),
+                        'worst': combined.get('worst_overall'),
+                        'rank_delta': combined.get('rank_delta_overall'),
+                        'is_rookie': bool(combined.get('is_rookie')),
+                    }
+                    candidates_list.append(player_context_data)
+                    if len(candidates_list) >= 150:
+                        break
+                candidates_str = "\n".join([
+                    f"- {p['name']} ({p['position']}, {p['team']}): ECR={p['ecr'] or 'N/A'}, SD={p['sd'] or 'N/A'}, Best={p['best'] or 'N/A'}, Worst={p['worst'] or 'N/A'}, RankDelta={p['rank_delta'] or 'N/A'}, Is Rookie: {'Yes' if p.get('is_rookie') else 'No'}"
+                    for p in candidates_list
+                ])
+                general_prompt = (
+                    f"{PromptBuilder.get_base_system_prompt()}\n\n"
+                    f"TASK: Advanced Market Inefficiency Detection (General) — identify sleepers and busts.\n\n"
+                    f"PLAYER ANALYSIS DATA:\n{candidates_str}\n\n"
+                    f"RESPONSE FORMAT REQUIREMENTS:\n"
+                    f"Your response MUST be a single JSON object with two keys: \"sleepers\" and \"busts\".\n"
+                    f"Each item requires: name, justification, confidence, ecr, sd, best, worst, rank_delta, is_rookie. Use nulls when unknown."
+                )
+                ai_text_gen = make_gemini_request(general_prompt, user_key)
+                cleaned = ai_text_gen.strip()
+                start = cleaned.find('{')
+                end = cleaned.rfind('}') + 1
+                sleepers = []
+                busts = []
+                if start != -1 and end > start:
+                    parsed = json.loads(cleaned[start:end])
+                    sleepers = parsed.get('sleepers', []) or []
+                    busts = parsed.get('busts', []) or []
+                return jsonify({
+                    'league_key': league_key,
+                    'sleepers': sleepers,
+                    'busts': busts,
+                    'fallback': 'general'
+                })
+            except Exception as _:
+                pass
         
         for player in available_players:
             if position != 'all' and player['primary_position'] != position:
                 continue
             
             # Normalize player name for local database lookup
-            normalized_name = normalize_player_name(player['name'])
-            
-            # Get enhanced player context using existing function
-            player_context = get_player_context(
-                player['name'],
-                ecr_type_preference='overall',
-                combined_player_data_cache=combined_player_data_cache,
-                player_name_to_id=player_name_to_id,
-                player_data_cache=player_data_cache,
-                static_ecr_overall_data=static_ecr_overall_data,
-                static_ecr_positional_data=static_ecr_positional_data,
-                static_ecr_rookie_data=static_ecr_rookie_data
-            )
-            
-            # Skip players without sufficient data
-            if not player_context.get('ecr'):
+            normalized_name = normalize_player_name(player.get('name'))
+
+            # Build structured player context from combined cache (dict), not the string formatter
+            combined = combined_player_data_cache.get(normalize_player_name(player.get('name')), {}) or {}
+            # Minimal required fields for inefficiency analysis
+            ctx_ecr = combined.get('ecr_overall')
+            if ctx_ecr is None:
+                # Skip players without ECR context
                 continue
+            player_context = {
+                'name': combined.get('display_name') or player.get('name') or normalized_name.title(),
+                'team': combined.get('team') or player.get('team') or '',
+                'primary_position': combined.get('position') or player.get('primary_position') or 'Unknown',
+                'ecr': ctx_ecr,
+                'sd': combined.get('sd_overall'),
+                'best': combined.get('best_overall'),
+                'worst': combined.get('worst_overall'),
+                'rank_delta': combined.get('rank_delta_overall'),
+                'bye_week': combined.get('bye_week'),
+                'is_rookie': bool(combined.get('is_rookie')),
+            }
             
             # Calculate league-specific inefficiency metrics
             league_specific_context = calculate_league_inefficiency_metrics(
@@ -6630,57 +6705,248 @@ def yahoo_league_inefficiencies():
         # Sort by league-adjusted inefficiency score (descending for sleepers)
         league_candidates.sort(key=lambda x: x.get('league_inefficiency_score', 0), reverse=True)
         
-        # Limit candidates for AI analysis (top 50 most interesting)
-        analysis_candidates = league_candidates[:50]
-        
-        # Build league context summary for AI
-        league_summary = build_league_context_summary(league_settings, availability_stats, team_structure)
-        
-        # Build candidates context for AI analysis
-        candidates_context = build_candidates_context_for_ai(analysis_candidates)
-        
-        # Get market inefficiency examples
-        market_examples = ExampleLibrary.get_examples_for_analysis_type('yahoo_market_inefficiency')
-        
-        # Build enhanced prompt with Yahoo league-specific methodology
-        enhanced_prompt = PromptBuilder.build_enhanced_prompt(
-            task_description="Yahoo League Market Inefficiency Analysis - Identify league-specific sleeper and bust opportunities based on ownership patterns and league context",
-            player_data=f"LEAGUE CONTEXT:\n{league_summary}\n\nAVAILABLE PLAYERS ANALYSIS:\n{candidates_context}",
-            methodology_steps=[
-                "1. LEAGUE-SPECIFIC OPPORTUNITY ASSESSMENT",
-                "   • Evaluate player availability vs. general market ECR rankings",
-                "   • Consider league size impact on player scarcity and value",
-                "   • Assess roster construction needs based on league settings",
-                "   • Factor in competitive landscape and manager sophistication",
-                "",
-                "2. OWNERSHIP PATTERN ANALYSIS",
-                "   • Identify high-ECR players surprisingly available in league",
-                "   • Evaluate position scarcity based on roster requirements",
-                "   • Consider bench depth needs and streaming opportunities",
-                "   • Assess handcuff availability and injury insurance options",
-                "",
-                "3. LEAGUE-ADJUSTED VALUE IDENTIFICATION",
-                "   • Compare player ECR to typical ownership patterns in similar leagues",
-                "   • Identify players with upside potential overlooked by league",
-                "   • Evaluate schedule-based advantages and matchup benefits",
-                "   • Consider league-specific scoring system impact on player value",
-                "",
-                "4. STRATEGIC ACQUISITION RECOMMENDATIONS",
-                "   • Prioritize sleepers with highest league-specific upside",
-                "   • Identify potential busts being overvalued by league managers",
-                "   • Recommend specific acquisition strategies (waivers, trades, FA)",
-                "   • Consider timing and competition for targeted players"
-            ],
-            examples=market_examples
-        )
-        
-        # Make AI request and process response
-        response_text = make_gemini_request(enhanced_prompt, user_key)
-        processed_response = process_ai_response_v2(response_text, 'yahoo_league_market')
-        
-        # Structure response with league context
-        return jsonify({
-            'result': processed_response,
+        # Deterministic selection begins here
+        def _norm(n: str) -> str:
+            if not isinstance(n, str):
+                return ''
+            n2 = re.sub(r"\s(Jr|Sr|[IVX]+)\.?$", '', n, flags=re.IGNORECASE).strip()
+            n2 = re.sub(r"[^a-zA-Z0-9\s]", '', n2).strip()
+            return n2.lower()
+
+        def _nz(x, d=0.0):
+            try:
+                return float(x)
+            except Exception:
+                return d
+
+        # Best FA by position (for bust edge)
+        best_fa_by_pos = {}
+        for p in available_players:
+            pos = (p.get('position') or p.get('primary_position') or '').upper()
+            wp = p.get('weekly_points') or p.get('projected_points')
+            val = _nz(wp, None)
+            if val is None:
+                continue
+            if pos not in best_fa_by_pos or val > best_fa_by_pos[pos]['proj']:
+                best_fa_by_pos[pos] = {'proj': val, 'name': p.get('name')}
+
+        # Sleepers (available)
+        sleepers, busts = [], []
+        sleepers_scored = []
+        for p in league_candidates:
+            ecr = _nz(p.get('ecr'), None)
+            proj = _nz(p.get('weekly_points') or p.get('projected_points'), None)
+            own = _nz(p.get('weekly_ownership'), None)
+            rd = _nz(p.get('rank_delta'), None)
+            sdv = _nz(p.get('sd'), None)
+            comp_ecr = (200 - ecr) / 200 if isinstance(ecr, float) else 0
+            comp_proj = (proj / 25.0) if isinstance(proj, float) else 0
+            comp_own = (own / 100.0) if isinstance(own, float) else 0
+            comp_trend = (-rd / 10.0) if isinstance(rd, float) and rd < 0 else 0
+            comp_sd = (min(sdv, 10) / 10.0) if isinstance(sdv, float) and comp_trend > 0 else 0
+            penalty_waiver = 0.1 if (p.get('availability_type') == 'W') else 0
+            score = 0.4*comp_ecr + 0.4*comp_proj + 0.2*comp_own + 0.2*comp_trend + 0.1*comp_sd - penalty_waiver
+            sleepers_scored.append({**p, 'score': round(score, 3)})
+        sleepers_scored.sort(key=lambda x: x.get('score', 0), reverse=True)
+        # Eligibility filters to avoid surfacing obvious elites or low-signal names
+        def _sleeper_ok(p):
+            pos = (p.get('position') or p.get('primary_position') or '').upper()
+            base = {'QB': 15.0, 'RB': 9.0, 'WR': 9.0, 'TE': 7.0}.get(pos, 8.0)
+            pv = _nz(p.get('weekly_points') or p.get('projected_points'), None)
+            ecr = _nz(p.get('ecr'), None)
+            own = _nz(p.get('weekly_ownership'), None)
+            edge = (pv - base) if isinstance(pv, float) else None
+            # Require projection edge and avoid elite ranks
+            if not (isinstance(edge, float) and edge >= 0.5):
+                return False
+            if isinstance(ecr, float) and ecr <= 60:
+                return False
+            # Ownership window to focus on actionable names
+            if isinstance(own, float) and not (5 <= own <= 85):
+                return False
+            return True
+        top_sleepers = [p for p in sleepers_scored if _sleeper_ok(p)][:8]
+
+        # Busts (owned across league; ensure we at least include your roster)
+        owned_players = [po for po in player_ownership if po.get('ownership_status') == 'owned']
+        if (not owned_players) and team_key and access_token:
+            try:
+                headers = {'Authorization': f'Bearer {access_token}', 'Accept': 'application/json'}
+                url_primary = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster/players?format=json'
+                url_fallback = f'https://fantasysports.yahooapis.com/fantasy/v2/team/{team_key}/roster?format=json'
+                r = requests.get(url_primary, headers=headers, timeout=10)
+                raw = r.json() if r.status_code == 200 else None
+                if (not raw) or r.status_code != 200:
+                    r2 = requests.get(url_fallback, headers=headers, timeout=10)
+                    raw = r2.json() if r2.status_code == 200 else None
+                roster_players = parse_yahoo_roster_response(raw) if raw else []
+                tmp = []
+                for pl in roster_players:
+                    nm = pl.get('name')
+                    if not nm:
+                        continue
+                    eps = []
+                    if isinstance(pl.get('eligible_positions'), list):
+                        for e in pl['eligible_positions']:
+                            if isinstance(e, dict) and e.get('position'):
+                                eps.append(e['position'])
+                            elif isinstance(e, str):
+                                eps.append(e)
+                    tmp.append({
+                        'name': nm,
+                        'positions': eps or [pl.get('selected_position')] if pl.get('selected_position') else eps,
+                        'team': pl.get('team'),
+                        'owner_team_key': team_key,
+                        'ownership_status': 'owned'
+                    })
+                owned_players = tmp
+            except Exception:
+                pass
+        busts_scored = []
+        for po in owned_players:
+            nm = po.get('name')
+            combined = combined_player_data_cache.get(_norm(nm), {}) or {}
+            pos = (combined.get('position') or (po.get('positions') or [None])[0] or '').upper()
+            ecr = _nz(combined.get('ecr_overall'), None)
+            proj = _nz(combined.get('projected_points') or combined.get('weekly_points'), None)
+            rd = _nz(combined.get('rank_delta_overall'), None)
+            sdv = _nz(combined.get('sd_overall'), None)
+            matchup = combined.get('matchup_difficulty')
+            comp_over = (ecr / 200.0) if isinstance(ecr, float) else 0
+            best_fa = best_fa_by_pos.get(pos)
+            edge = 0.0
+            if best_fa and isinstance(proj, float):
+                edge = best_fa['proj'] - proj
+            comp_edge = max(0.0, min(1.0, edge / 10.0))
+            comp_trend_neg = (rd / 10.0) if isinstance(rd, float) and rd > 0 else 0
+            comp_sched = 0.1 if (isinstance(matchup, str) and matchup.lower().startswith('tough')) else 0
+            score = 0.5*comp_edge + 0.35*comp_over + 0.15*comp_trend_neg + comp_sched
+            busts_scored.append({
+                'name': nm,
+                'team': combined.get('team') or po.get('team') or '',
+                'position': pos or 'UNK',
+                'ecr': ecr,
+                'sd': sdv,
+                'best': combined.get('best_overall'),
+                'worst': combined.get('worst_overall'),
+                'rank_delta': rd,
+                'projected_points': proj,
+                'owner_team_key': po.get('owner_team_key'),
+                'availability_type': 'Owned',
+                'edge_vs_best_fa': round(edge, 2) if isinstance(edge, float) else 0,
+                'score': round(score, 3),
+            })
+        def _bust_sort_key(p):
+            mine = 1 if (team_key and p.get('owner_team_key') == team_key) else 0
+            return (mine, p.get('score', 0))
+        busts_scored.sort(key=_bust_sort_key, reverse=True)
+        top_busts = busts_scored[:8]
+
+        # If no owned-player busts found, compute available traps (avoid) from the available pool
+        if not top_busts:
+            traps_scored = []
+            repl = {'QB': 15.0, 'RB': 9.0, 'WR': 9.0, 'TE': 7.0}
+            for p in league_candidates:
+                pos = (p.get('position') or p.get('primary_position') or '').upper()
+                pv = _nz(p.get('weekly_points') or p.get('projected_points'), None)
+                rd = _nz(p.get('rank_delta'), None)
+                own = _nz(p.get('weekly_ownership'), None)
+                base = repl.get(pos, 8.0)
+                comp_proj_bad = max(0.0, (base - pv) / 10.0) if isinstance(pv, float) else 0.3
+                comp_trend_neg = (rd / 10.0) if isinstance(rd, float) and rd > 0 else 0
+                comp_own_low = 1.0 - min(max(own, 0.0), 100.0)/100.0 if isinstance(own, float) else 0.2
+                trap_score = 0.6*comp_proj_bad + 0.3*comp_trend_neg + 0.1*comp_own_low
+                traps_scored.append({**p, 'score': round(trap_score, 3)})
+            traps_scored.sort(key=lambda x: x.get('score', 0), reverse=True)
+            # Eligibility filters: projection below replacement and some market interest
+            def _trap_ok(p):
+                pos = (p.get('position') or p.get('primary_position') or '').upper()
+                base = repl.get(pos, 8.0)
+                pv = _nz(p.get('weekly_points') or p.get('projected_points'), None)
+                own = _nz(p.get('weekly_ownership'), None)
+                if not (isinstance(pv, float) and pv <= base - 0.5):
+                    return False
+                if isinstance(own, float) and own < 8:
+                    return False
+                return True
+            top_busts = [p for p in traps_scored if _trap_ok(p)][:8]
+
+        def _conf(s):
+            if s >= 0.8: return 'High'
+            if s >= 0.5: return 'Medium'
+            return 'Low'
+
+        def _mk_sleep(p):
+            reasons = []
+            pv = p.get('weekly_points') or p.get('projected_points')
+            pos = (p.get('position') or p.get('primary_position') or '').upper()
+            base = {'QB': 15.0, 'RB': 9.0, 'WR': 9.0, 'TE': 7.0}.get(pos, 8.0)
+            # Projection edge
+            if isinstance(pv, float):
+                edge = pv - base
+                if edge >= 0.5:
+                    reasons.append({'type':'Projection','text':f"Projected +{edge:.1f} vs typical {pos} replacement"})
+            # Ownership surprise
+            wo = p.get('weekly_ownership')
+            if isinstance(wo, float) and wo >= 35:
+                reasons.append({'type':'Consensus','text':f"Widely rostered elsewhere ({wo:.0f}% owned)"})
+            # Trend
+            rdv = p.get('rank_delta')
+            if isinstance(rdv, float) and rdv <= -2.0:
+                reasons.append({'type':'Trend','text':f"Climbing in ECR ({rdv:.1f})"})
+            # Waivers timing
+            if p.get('availability_type') == 'W' and p.get('waiver_deadline'):
+                reasons.append({'type':'Waivers','text':f"On waivers — clears {p.get('waiver_deadline')}"})
+            # Trim to 3 concise reasons
+            reasons = reasons[:3]
+            headline = f"Sleeper: {p.get('name')} ({p.get('availability_type') or 'FA'})"
+            justification = reasons[0]['text'] if reasons else 'Available upside with favorable indicators.'
+            return {
+                'name': p.get('name'),
+                'position': p.get('position'),
+                'team': p.get('team'),
+                'ecr': p.get('ecr'),
+                'sd': p.get('sd'),
+                'best': p.get('best'),
+                'worst': p.get('worst'),
+                'rank_delta': p.get('rank_delta'),
+                'projected_points': pv,
+                'availability_type': p.get('availability_type'),
+                'waiver_deadline': p.get('waiver_deadline'),
+                'score': p.get('score'),
+                'confidence': _conf(p.get('score', 0)),
+                'headline': headline,
+                'reasons': reasons,
+                'justification': justification
+            }
+
+        def _mk_bust(p):
+            reasons = []
+            pv = p.get('weekly_points') or p.get('projected_points')
+            pos = (p.get('position') or p.get('primary_position') or '').upper()
+            base = {'QB': 15.0, 'RB': 9.0, 'WR': 9.0, 'TE': 7.0}.get(pos, 8.0)
+            # Below replacement
+            if isinstance(pv, float) and pv < base:
+                reasons.append({'type':'Projection','text':f"Projected below {pos} replacement (−{base - pv:.1f})"})
+            # Declining trend
+            rdv = p.get('rank_delta')
+            if isinstance(rdv, float) and rdv >= 2.0:
+                reasons.append({'type':'Trend','text':f"Falling in ECR (+{rdv:.1f})"})
+            # Low consensus
+            wo = p.get('weekly_ownership')
+            if isinstance(wo, float) and wo <= 10:
+                reasons.append({'type':'Consensus','text':f"Low market confidence ({wo:.0f}% owned)"})
+            reasons = reasons[:3]
+            headline = f"Avoid: {p.get('name')}"
+            justification = reasons[0]['text'] if reasons else 'Available player with weak outlook vs replacement.'
+            q = dict(p)
+            q.update({'confidence': _conf(p.get('score', 0)), 'headline': headline, 'reasons': reasons, 'justification': justification})
+            return q
+
+        sleepers = list(map(_mk_sleep, top_sleepers))
+        busts = list(map(_mk_bust, top_busts))
+
+        resp = {
             'league_key': league_key,
             'league_context_summary': {
                 'league_name': league_settings.get('name', ''),
@@ -6688,9 +6954,13 @@ def yahoo_league_inefficiencies():
                 'available_players': availability_stats.get('available_players', 0),
                 'ownership_percentage': availability_stats.get('ownership_percentage', 0)
             },
-            'candidates_analyzed': len(analysis_candidates),
-            'total_available': len(available_players)
-        })
+            'candidates_analyzed': len(league_candidates),
+            'total_available': len(available_players),
+            'sleepers': sleepers,
+            'busts': busts
+        }
+
+        return jsonify(resp)
         
     except Exception as e:
         print(f"ERROR: Yahoo league inefficiency analysis failed: {e}")

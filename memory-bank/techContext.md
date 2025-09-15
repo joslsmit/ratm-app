@@ -50,6 +50,7 @@ This document provides detailed technical information about the RATM Draft Kit p
     - `POST /api/yahoo/waiver_recommendations_v2`
     - `POST /api/yahoo/waiver_recommendations_ai` — AI‑authority, supports `?debug=1` to return full prompt and diagnostics
     - `POST /api/optimize_lineup` — Yahoo lineup optimizer: returns `suggested_lineup`, `diff`, `eligibility_info`, plus `ai_note_json` with `{ confidence, headline, reasons[], tags[], score_breakdown{} }`. Supports `?debug=1` (or body `{debug:true}`) to include `consensus_inputs`, `matchup_inputs`, `opponent_projection`, and `slots_filled`.
+    - `POST /api/yahoo/league_inefficiencies` — In‑season deterministic Sleepers/Traps (available‑only). Body: `{ league_key, team_key, position, league_context, available_players, auth_bearer? }`. If `Authorization: Bearer` header or `auth_bearer` is provided with `team_key`, the backend fetches the roster to exclude owned players from suggestions. Returns structured `sleepers[]` and `busts[]` with `headline`, `reasons[]` (typed), `confidence`, `availability_type`, optional `waiver_deadline`.
     - `GET /api/diagnostics/yahoo-data-health` — League diagnostics (CSV freshness, enrichment coverage); requires Yahoo Authorization and `league_key`.
     - `POST /api/admin/refresh_data` — Admin/developer CSV refresh that rebuilds caches.
     - Dev (local only, enable with `RATM_DEV_ENABLE=1`):
