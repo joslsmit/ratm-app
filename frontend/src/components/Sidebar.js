@@ -39,7 +39,7 @@ const Sidebar = ({ activeTool, targetList }) => {
     ...(isYahooLoggedIn ? [{ key: 'my-team', label: 'My Team', icon: '👥', yahoo: true }] : []),
     ...(isYahooLoggedIn ? [{ key: 'lineup', label: 'Sit/Start Optimizer', icon: '🏈', yahoo: true }] : []),
     { key: 'waiver', label: 'Waiver Wire Assistant', icon: '🔄' },
-    { key: 'market', label: 'Sleepers & Busts', icon: '💡' },
+    { key: 'market', label: 'Sleepers & Traps', icon: '💡' },
     { key: 'trade', label: 'Trade Analyzer', icon: '🤝' },
     { key: 'trending', label: 'Trending Players', icon: '📈' },
     { key: 'dossier', label: 'Player Dossier', icon: '🧠' },
@@ -112,7 +112,6 @@ const Sidebar = ({ activeTool, targetList }) => {
                   <li key={`in-${item.key}`}>
                     <a href={`#${item.key}`} className={activeTool === item.key ? 'active' : ''}>
                       {item.label}
-                      {item.yahoo && <span className="badge" title="Yahoo"><span>Y</span></span>}
                       {typeof item.badge === 'number' ? <span className="badge">{item.badge}</span> : null}
                     </a>
                   </li>
@@ -141,7 +140,6 @@ const Sidebar = ({ activeTool, targetList }) => {
                 <li key={item.key}>
                   <a href={`#${item.key}`} className={activeTool === item.key ? 'active' : ''}>
                     {item.label}
-                    {item.yahoo && <span className="badge" title="Yahoo"><span>Y</span></span>}
                     {typeof item.badge === 'number' ? <span className="badge">{item.badge}</span> : null}
                   </a>
                 </li>

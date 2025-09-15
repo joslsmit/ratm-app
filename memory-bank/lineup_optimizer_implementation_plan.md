@@ -146,12 +146,14 @@ Notes:
 - Process via `process_ai_response_v2` or strict JSON parse; attach `ai_note_json` with `{ confidence, headline, reasons[], tags[], score_breakdown{} }`.
 - Failure mode: If AI call fails, omit `ai_note` and still return deterministic result.
 
-## 7. Frontend UI/UX (Current + Next)
-- Mode toggle: Reuse Waiver Wire Assistant component; add `assistantMode = 'waiver' | 'lineup'`.
-- Current: Yahoo‑only flow present in `SitStartOptimizer.js` with league/week controls; renders `ai_note_json` card with tags, score chips, and typed reasons. Markdown hidden by default. Debug available server‑side via `?debug=1` or `{debug:true}`.
-- De‑scope: Traditional mode UI will not be added.
-- Next (Yahoo): Add a small “Include debug” checkbox to send `{debug:true}`; minor card polish (confidence chip; clearer tag ordering; delta points as a pill on headline).
-- Side‑by‑side view: Current vs Suggested with changes and points total (already present for Yahoo).
+## 7. Frontend UI/UX (Current)
+- Yahoo‑only flow implemented in `SitStartOptimizer.js` with league/week controls.
+- “Include debug” checkbox implemented; sends `{debug:true}` and renders `debug.lineup_note` when present.
+- Structured note card implemented from `ai_note_json`:
+  - Confidence chip, delta points pill parsed from headline, ordered tags, and score breakdown chips.
+  - Markdown is hidden; structured JSON drives the card.
+- Side‑by‑side view for changes is present (Current vs Suggested via `diff`).
+- De‑scope: Traditional mode UI not added.
 
 ## 8. Security & Config
 - Yahoo OAuth: Reuse existing header/token flow; do not persist tokens server‑side.
@@ -181,21 +183,20 @@ Notes:
 - E2E (optional):
   - Yahoo login → league select → optimize → see suggested lineup and analyst note.
 
-## 11. Next Steps (Phased — Yahoo only)
+## 11. Status & Next Steps (Yahoo)
 
-Phase Y1 — Frontend UX polish (low risk)
-- Add a “Include debug” checkbox in SitStartOptimizer to send `{debug:true}` and render `result.debug.lineup_note` in a collapsible section.
-- Add a confidence chip (High/Medium/Low) next to the headline; add a small delta pill (e.g., `+1.4 pts`).
-- Clarify tags ordering by importance: Projection Edge, Favorable Matchup (only when a categorical difference exists), Consensus/Consensus Diff, Correlation Risk, Variance Bias, Usage, Confidence, Flex Fit.
+Phase Y1 — Frontend UX polish (COMPLETED)
+- Include debug checkbox implemented; collapsible debug JSON rendered.
+- Confidence chip + delta pill implemented; tags ordered by importance.
 
-Phase Y2 — Backend micro‑fixes (surgical)
-- Confidence adjustment: downgrade when the chosen player (`to`) is Q/D; do not downgrade when the benched player (`from`) is Q/D (that should increase confidence). Current code downgrades on `from` — flip the check.
-- Tag gating: add `Favorable Matchup` tag only when a categorical difference exists (already computed for the bonus), not just when opponent names are present.
-- Debug meta: when `debug=true`, attach `debug.opponent_projection` and a simple `debug.slots_filled` summary.
+Phase Y2 — Backend micro‑fixes (COMPLETED)
+- Confidence downgrade applied when chosen starter (`to`) is Q/D; no penalty for `from`.
+- Matchup tag gating based on categorical difference; small nudges only affect close calls.
+- Debug meta includes `opponent_projection` and `slots_filled`.
 
-Phase Y3 — Validation & script polish
-- Expand `scripts/test_lineup_optimizer.zsh` to print HTTP status and a short body snippet on failure for easier local debugging.
-- Add a minimal backend unit test to assert the confidence downgrade behavior when `to.status in {Q,D}`.
+Phase Y3 — Validation & scripts (PARTIAL)
+- `scripts/test_lineup_optimizer.zsh` exists; can be further enhanced for richer failure output.
+- Optional: add a minimal unit test for Q/D confidence behavior if/when test harness is expanded.
 
 ## 11. Implementation Phases & Tasks
 

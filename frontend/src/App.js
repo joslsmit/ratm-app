@@ -498,18 +498,53 @@ function App() {
           'Authorization': authHeader
         }
       });
-      
+      // Also fetch available player pools separately to classify FA vs Waivers
+      const [poolFA, poolW] = await Promise.all([
+        get(`/yahoo/waiver_pool?league_key=${leagueKey}&status=FA`, { headers: { 'Authorization': authHeader } }),
+        get(`/yahoo/waiver_pool?league_key=${leagueKey}&status=W`, { headers: { 'Authorization': authHeader } })
+      ]);
+      const availablePlayers = [
+        ...((poolFA && poolFA.available_players) ? poolFA.available_players.map(p => ({ ...p, availability_type: 'FA' })) : []),
+        ...((poolW && poolW.available_players) ? poolW.available_players.map(p => ({ ...p, availability_type: 'W' })) : []),
+      ];
+
       // Call enhanced Yahoo league inefficiency analysis endpoint
       const analysisData = await makeApiRequest('/yahoo/league_inefficiencies', {
         league_key: leagueKey,
+        team_key: getTeamKeyForLeague(leagueKey) || undefined,
         position: position,
-        league_context: leagueContext
+        league_context: leagueContext,
+        available_players: availablePlayers,
+        // Provide bearer in body so backend can fetch roster if needed
+        auth_bearer: tokenObject.access_token
       });
       
-      if (analysisData && analysisData.result) {
-        // Parse AI response for sleepers and busts
+      // Build quick availability lookup by normalized name
+      const normalize = (s) => (s || '').toLowerCase().replace(/\s+(jr|sr|iii|iv|v)\.?$/i,'').replace(/[^a-z0-9 ]/gi,'').trim();
+      const availMap = new Map();
+      for (const p of availablePlayers) {
+        availMap.set(normalize(p.name), { availability_type: p.availability_type, waiver_deadline: p.waiver_deadline || null });
+      }
+
+      if (analysisData && (analysisData.sleepers || analysisData.busts)) {
+        // Prefer structured JSON if provided by backend
+        const enrich = (arr) => (arr || []).map(p => {
+          const meta = availMap.get(normalize(p.name)) || {};
+          return { ...p, availability_type: meta.availability_type, waiver_deadline: meta.waiver_deadline };
+        });
+        setMarketInefficiencies({
+          sleepers: enrich(analysisData.sleepers),
+          busts: enrich(analysisData.busts),
+          source: analysisData.fallback === 'general' ? 'general' : 'league'
+        });
+      } else if (analysisData && analysisData.result) {
+        // Fallback: parse markdown result
         const parsedResults = parseMarketInefficiencyResponse(analysisData.result);
-        setMarketInefficiencies(parsedResults);
+        const enrich = (arr) => (arr || []).map(p => {
+          const meta = availMap.get(normalize(p.name)) || {};
+          return { ...p, availability_type: meta.availability_type, waiver_deadline: meta.waiver_deadline };
+        });
+        setMarketInefficiencies({ sleepers: enrich(parsedResults.sleepers), busts: enrich(parsedResults.busts), source: 'league-markdown' });
       } else {
         setMarketInefficiencies({ 
           sleepers: [], 

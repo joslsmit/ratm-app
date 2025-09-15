@@ -50,6 +50,7 @@ This document provides detailed technical information about the RATM Draft Kit p
     - `POST /api/yahoo/waiver_recommendations_v2`
     - `POST /api/yahoo/waiver_recommendations_ai` — AI‑authority, supports `?debug=1` to return full prompt and diagnostics
     - `POST /api/optimize_lineup` — Yahoo lineup optimizer: returns `suggested_lineup`, `diff`, `eligibility_info`, plus `ai_note_json` with `{ confidence, headline, reasons[], tags[], score_breakdown{} }`. Supports `?debug=1` (or body `{debug:true}`) to include `consensus_inputs`, `matchup_inputs`, `opponent_projection`, and `slots_filled`.
+    - `POST /api/yahoo/league_inefficiencies` — In‑season deterministic Sleepers/Traps (available‑only). Body: `{ league_key, team_key, position, league_context, available_players, auth_bearer? }`. If `Authorization: Bearer` header or `auth_bearer` is provided with `team_key`, the backend fetches the roster to exclude owned players from suggestions. Returns structured `sleepers[]` and `busts[]` with `headline`, `reasons[]` (typed), `confidence`, `availability_type`, optional `waiver_deadline`.
     - `GET /api/diagnostics/yahoo-data-health` — League diagnostics (CSV freshness, enrichment coverage); requires Yahoo Authorization and `league_key`.
     - `POST /api/admin/refresh_data` — Admin/developer CSV refresh that rebuilds caches.
     - Dev (local only, enable with `RATM_DEV_ENABLE=1`):
@@ -177,12 +178,11 @@ This document provides detailed technical information about the RATM Draft Kit p
 - Offensive scoring settings documented in `records/league_scoring_offense.md`.
 - Bench VOR baselines are aligned to these rules; projections consumed are PPR (r2p_pts).
 ## 8. Sit/Start Optimizer — Implementation Notes (Sept 4–5)
-- Yahoo‑only endpoint implemented; deterministic selection driven by weekly projections; excludes BYE/OUT; Q/D flagged.
-- Structured AI note: up to 3 grounded reasons (Projection/Matchup/Status/Variance/Correlation/Consensus/Usage/Confidence/Context) with canonical tags and a score breakdown (projection plus small nudges: matchup ±0.10, correlation/variance in close calls).
-- ECR: overall ECR used for cross‑position; weekly positional rank only for same‑position; neutral Overall ECR context when gaps are small.
-- Matchup: opponent + HOME/AWAY always shown; categorical difficulty (Easy/Moderate/Tough) mapped and surfaced when meaningful with a small numeric nudge.
-- UI renders structured card only; markdown hidden.
-- Test script: project root `./test_script` — set `TOKEN` (Yahoo), optional `GEMINI_KEY`; add `INSECURE=1` if using mkcert locally. Smoketest also available at `scripts/test_lineup_optimizer.zsh`.
+- Yahoo‑only endpoint implemented; deterministic selection driven by weekly projections with ECR fallbacks; excludes BYE/OUT; Q/D flagged.
+- Close‑call nudges: matchup ±0.10 when categorical difference exists; slight correlation penalty vs opponent DEF; variance tilt when favored/trailing.
+- Structured AI note: headline with delta, confidence, up to 3 grounded reasons (Projection/Matchup/Status/Variance/Correlation/Consensus/Usage/FlexFit), ordered tags, and score breakdown.
+- UI renders structured card (confidence chip + delta pill + ordered tags); markdown hidden. “Include debug” checkbox surfaces `debug.lineup_note`.
+- Test script: `scripts/test_lineup_optimizer.zsh`; set `TOKEN` (Yahoo) and optional `GEMINI_KEY`; add `INSECURE=1` for local mkcert HTTPS.
 ## 9. Waiver Wire v4 — Dev Runner & Scripts (Sept 14)
 - Enable dev mode for backend: `export RATM_DEV_ENABLE=1; python app.py`
 - Configure once with your token/keys (local only):
@@ -190,3 +190,7 @@ This document provides detailed technical information about the RATM Draft Kit p
 - One‑shot run (roster + v2 + AI):
   - `scripts/dev_run_waiver_v4.zsh` (optional overrides: `STATUS`, `ALTS`, `MINB`, `USE_AI`)
 - Notes: endpoints use loopback HTTPS; scripts pass `-k` to allow mkcert self‑signed certs locally.
+- Yahoo Roster Parsing — DST specifics
+  - Roster deep-scan extracts `player_key`, `player_id`, `name`, `selected_position`, `eligible_positions`, `status`, and (when present) `editorial_team_abbr`.
+  - Enrichment for defenses: if name/ID lookup fails, detect DEF/DST via `eligible_positions`, infer team abbr from city (e.g., Cincinnati→CIN), and match combined cache by abbr or city substring.
+  - DST ECR Overall may be missing when the source CSV lacks a row; team and bye still populate.

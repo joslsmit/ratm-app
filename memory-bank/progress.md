@@ -125,7 +125,7 @@ This document tracks the progress of the RATM Draft Kit project against the defi
   - Plan added: `memory-bank/waiver_wire_v4_ux_quality_overhaul_plan.md`
   - v3 plan archived: `memory-bank/records/waiver_wire_recommendations_v3_plan.md`
   - Phase 0 tasks queued: deterministic self‑add guard (ID + normalized name), client label/guard, and control rename to “Include near‑neutral moves”.
-  - Next: Consolidate controls into a Filters drawer; broaden candidate quality via need‑aware quotas.
+  - Status: Filters drawer and need‑aware quotas completed in Phase 1–2; see sections below.
 
 ### Sept 14, 2025 — Waiver v4 Phase 0 + 1 Completed
 - Backend
@@ -168,7 +168,7 @@ This document tracks the progress of the RATM Draft Kit project against the defi
         *   League dropdown populated from `/api/yahoo/leagues`
         *   Empty roster display for pre-draft scenario
         *   Complete error handling and responsive design
-      *   **✅ User Testing Confirmed:** Component works successfully with limited pre-draft data
+    *   **✅ User Testing Confirmed:** Component works successfully with limited pre-draft data
 *   **🚨 PRIORITY CHANGED:** Post-draft testing now secondary to AI enhancement (Phase 0)
 *   **Implementation Guide:** Detailed specifications available in `yahoo_roster_implementation.md`
 
@@ -306,7 +306,7 @@ This document tracks the progress of the RATM Draft Kit project against the defi
 *   **Enrichment:** Exact name + Yahoo ID join; K/DEF excluded; broad pool with position quotas to avoid QB crowding
 *   **Guards:** Cross‑position penalty unless balance improves; avoid surplus bench QBs; preserve RB/WR depth
 *   **Diagnostics:** Weekly freshness (row_count, scrape_date, anchor presence) and coverage scripts
-*   **Next:** Alternatives Mode (opt‑in) and UI badges/“Estimated Benefit”; optional AI narrative
+*   Status: Alternatives Mode (opt‑in) and UI badges/“Estimated Benefit” shipped as part of Waiver v4 Phases 2–3; optional AI narrative deferred to Phase 4 (Deferred).
 
 ### 🥇 ✅ COMPLETED: Phase 9 - Yahoo-Enhanced Market Inefficiency Finder
 *   **Status:** **🎉 FULLY COMPLETED - Production Ready**
@@ -485,3 +485,31 @@ This document tracks the progress of the RATM Draft Kit project against the defi
   - Phase 4: AI Narrative & Validation Polish (minor copy/metrics; validation parity largely implemented)
   - Phase 5: Observability + E2E (optional regression guardrails; can revisit later)
   - Phase 6: Rollout & Safeguards (feature flag/A-B not required for current scale)
+### Sept 14, 2025 — Lineup Optimizer (Yahoo) Implemented
+- Backend
+  - Endpoint `/api/optimize_lineup` implemented: Yahoo roster parse; OUT/IR/BYE blocking; ordered slots; greedy selection with close-call nudges (matchup, opponent DEF correlation, variance by favored/trailing); safe JSON note builder with Gemini paraphrase optional.
+  - Debug: `debug.lineup_note` includes consensus/matchup inputs, opponent projection, and slots_filled when `debug=true`.
+- Frontend
+  - `SitStartOptimizer.js`: league/week selectors; Include debug checkbox; structured note card with confidence chip, delta pill, ordered tags, and score breakdown; optional debug details section.
+  - Links to Player Dossier for players in suggested/current and diff lists.
+- Scripts
+  - `scripts/test_lineup_optimizer.zsh` available; can be extended with richer failure output.
+  - Related: Waiver v4 Phase 3 Completed — merged AI+deterministic list, ID-based dedupe/self‑add, “Explore options” grouping, and “Hide negative moves” toggle (see section: “Sept 14, 2025 — Waiver v4 Phase 3 Completed”).
+
+### Sept 14, 2025 — My Team: DST Enrichment Fix
+- Problem: Yahoo roster returns defenses as city names (e.g., "Cincinnati") with `selected_position: BN`, often without team abbreviation. Name lookup failed, so team/ECR/bye rendered N/A.
+- Fix (backend):
+  - Roster parser now captures Yahoo `editorial_team_abbr` when present.
+  - Enrichment uses a DEF/DST fallback that triggers when `eligible_positions` includes DEF/DST (even if `selected_position` is BN).
+  - Joins by Yahoo `player_id` first; if missing, infers team abbreviation from city (e.g., Cincinnati→CIN) and matches cache by abbr or city substring.
+- Result: My Team shows team and bye for DSTs (e.g., CIN). ECR Overall may still display N/A if the ECR CSV lacks a row for that DST; this is a data-source limitation, not a UI bug.
+### Sept 14, 2025 — Market Inefficiency In‑Season Overhaul
+- Backend
+  - `/api/yahoo/league_inefficiencies` updated to deterministic, league‑aware scoring using FA/W pools only; excludes user roster via Yahoo auth.
+  - Sleepers require position‑aware projection edge and actionable ownership; Traps (Avoid) require below‑replacement projections and negative trend.
+  - Returns structured fields: `headline`, `reasons[]` (typed), `confidence`, `availability_type`, and optional `waiver_deadline`.
+- Frontend
+  - Cards render headline + concise reasons (no numeric walls); right column renamed to “Traps (Avoid)”.
+  - Removed unreadable league score chip; default Yahoo‑aware mode set to ON; removed sidebar “Y” icons to declutter.
+- Result
+  - More actionable, readable in‑season Sleepers/Traps lists; personalized (excludes your roster); consistent across All/position views.

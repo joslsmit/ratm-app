@@ -24,6 +24,11 @@
 - ECR Auto‑Select: Backend auto‑selects ECR flavor from CSV (`ro/rp` preferred; fallback `do/dp`, `wo/wp`) to handle source changes gracefully.
 - Data Hygiene: CSVs removed from Git tracking; backend downloads at runtime; `.gitignore` updated; `backend/.env` added locally and ignored.
 
+### ✅ September 2025 — Market Inefficiency (In‑Season) Polished
+- Deterministic, league‑aware Sleepers/Traps from available FA/W only; roster‑exclusion via Yahoo auth.
+- Structured outputs with headline + typed reasons; UI shows concise bullets, not numeric walls.
+- Removed league score chip; default Yahoo‑aware = ON; sidebar “Y” badges removed.
+
 ### 🔧 PRODUCTION ISSUE RESOLVED - CORS Fix Applied:
 **Problem**: Frontend blocked by CORS policy - "Access-Control-Allow-Origin" header missing
 **Solution**: Added `https://ratm-app.vercel.app` to backend CORS allowed origins
@@ -249,6 +254,11 @@
     - Phases 4–6 — Deferred
       - Phase 4 (AI narrative/validation polish), Phase 5 (observability + E2E tests), and Phase 6 (feature flag/A-B) are considered non‑essential now and deferred. Current implementation already validates AI by ID + name, merges cleanly, and provides clear guidance via the Top Moves banner.
 
+    - My Team (Yahoo) — DST enrichment fix
+      - Backend roster parser now captures `editorial_team_abbr` and enrichment detects DEF/DST via `eligible_positions` even when `selected_position` is BN.
+      - DEF/DST join order: player_id → team abbr match → city-name substring match; ensures team and bye populate for DST cards.
+      - Note: ECR Overall for DST may be N/A when the ECR CSV lacks a corresponding row; not a UI defect.
+
 - Player Dossier UX Enhancements (Phase A2): Continue polish after waiver v4
   - Apply helper outputs across Value Opportunity and Age Trajectory sections
   - Add CSS classes and color coding for badges (projectionBadge, matchupBadge, etc.)
@@ -353,8 +363,11 @@ Next up:
 
 ## 10. Current Development Focus - IN-SEASON ENHANCEMENT PHASE
 *   **Primary Status:** **Production deployment complete and operational**
-*   **New Development Priority:** **🔥 Lineup Optimizer Implementation - DETAILED PLANNING COMPLETE**
-*   **Implementation Guide:** `lineup_optimizer_implementation_plan.md` - Comprehensive technical specification ready
+*   **✅ Lineup Optimizer (Yahoo) — Implemented**
+    *   Endpoint: `/api/optimize_lineup` (Yahoo-only). Blocks OUT/IR/BYE; builds actual Yahoo slot map; greedy selection with small tie-break nudges (matchup, opponent DEF correlation, variance by favored/trailing).
+    *   Output: `suggested_lineup`, `diff`, `eligibility_info`, `ai_note_json` (confidence/headline/reasons/tags/score_breakdown). Markdown retained only for compatibility.
+    *   Frontend: `SitStartOptimizer.js` includes league/week, Include debug checkbox, structured card (confidence chip, delta pill, ordered tags, score chips), and optional debug JSON.
+    *   Implementation guide: `lineup_optimizer_implementation_plan.md` updated to reflect completed Y1/Y2.
 *   **Monitoring:** Track application performance, user feedback, and any production issues
 *   **Maintenance:** Regular data updates, security patches, and minor improvements as needed
 

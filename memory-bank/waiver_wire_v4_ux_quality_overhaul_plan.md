@@ -3,6 +3,8 @@
 > Purpose: Fix confusing UX, eliminate “self‑add” errors (e.g., recommending Rashee Rice when already rostered), and improve recommendation breadth/quality without overwhelming the user. Phased, low‑risk path with clear success metrics and validation.
 > Scope: Frontend Waiver Wire page + Backend waiver v2/v3 endpoints. Yahoo mode first; traditional mode preserved but de‑emphasized.
 
+Status Note: Phases 0–3 are COMPLETE; Phases 4–6 are currently DEFERRED.
+
 ## Executive Summary
 - Problems today
   - Overly complex UI: too many toggles (“Show Alternatives”, Advanced, Browse Pool, Debug AI) with unclear meanings and interactions.
