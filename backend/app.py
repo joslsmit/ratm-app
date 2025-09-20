@@ -4446,184 +4446,212 @@ def yahoo_league_snapshot():
         return jsonify({'error': str(e)}), 500
 
 def _enhance_proposals_with_ai(proposals: list, my_team: dict, teams: list, access_token: str, api_key_override: str = None) -> list:
-    """
-    Enhance trade proposals with AI-generated explanations and re-ranking.
-    Returns enhanced proposals with reasons and negotiation_pitch fields.
-    """
+    """Attach AI generated explanations / negotiation angles while preserving deterministic proposals."""
     try:
         if not proposals:
-            print("AI enhancement: No proposals to enhance")
+            _dbg("AI enhancement skipped: no proposals")
             return proposals
 
-        print(f"AI enhancement: Starting with {len(proposals)} proposals")
+        user_key = api_key_override or os.getenv('GEMINI_API_KEY')
+        if not user_key:
+            _dbg("AI enhancement skipped: GEMINI_API_KEY missing")
+            return proposals
 
-        # Build context for AI
-        my_roster = my_team.get('roster', [])
-        my_starters = [p for p in my_roster if not str(p.get('selected_position', '')).upper().startswith(('BN', 'IR'))]
-        my_bench = [p for p in my_roster if str(p.get('selected_position', '')).upper().startswith('BN')]
+        my_roster = my_team.get('roster', []) if isinstance(my_team, dict) else []
+        starters = [p for p in my_roster if not str(p.get('selected_position', '')).upper().startswith(('BN', 'IR'))]
+        bench = [p for p in my_roster if str(p.get('selected_position', '')).upper().startswith('BN')]
 
-        print(f"AI enhancement: Built roster context - {len(my_starters)} starters, {len(my_bench)} bench")
+        def _player_summary(name: str) -> str:
+            ci = _get_combined_info_by_name(name)
+            if not ci:
+                return name
+            parts = [name]
+            pos = (ci.get('position') or '').upper()
+            team = ci.get('team')
+            if pos:
+                parts.append(f"{pos}")
+            if team:
+                parts.append(team)
+            weekly = ci.get('projected_points')
+            if isinstance(weekly, (int, float)):
+                parts.append(f"proj {weekly:.1f} pts")
+            ecr = ci.get('ecr_overall')
+            if isinstance(ecr, (int, float)):
+                parts.append(f"ECR {int(ecr)}")
+            return " | ".join(parts)
 
-        # Get opponent team context for proposals
-        opponent_teams = {}
-        for proposal in proposals:
-            # Find which team has the players we want
-            their_players = proposal.get('their_side', [])
-            for team in teams:
-                team_roster = team.get('roster', [])
-                team_player_names = [p.get('name') for p in team_roster]
-                if any(player in team_player_names for player in their_players):
-                    opponent_teams[team.get('team_key')] = team
+        def _team_snapshot(team_obj: dict) -> dict:
+            roster = team_obj.get('roster', []) if isinstance(team_obj, dict) else []
+            starters_local = []
+            bench_local = []
+            for pl in roster:
+                nm = pl.get('name')
+                if not nm:
+                    continue
+                slot = str(pl.get('selected_position', '')).upper()
+                entry = _player_summary(nm)
+                if slot.startswith(('BN', 'IR')):
+                    bench_local.append(entry)
+                else:
+                    starters_local.append(entry)
+            return {
+                'name': team_obj.get('name', 'Unknown'),
+                'starters': starters_local,
+                'bench': bench_local
+            }
+
+        team_lookup = {t.get('team_key'): t for t in teams if isinstance(t, dict)}
+
+        context_sections = [
+            "=== MY TEAM OVERVIEW ===",
+            f"Team: {my_team.get('name', 'Unknown')}" if isinstance(my_team, dict) else "Team: Unknown",
+            f"Starters ({len(starters)}): {', '.join([p.get('name') for p in starters if p.get('name')])}",
+            f"Bench ({len(bench)}): {', '.join([p.get('name') for p in bench if p.get('name')])}",
+            "",
+            "=== TRADE PROPOSALS (TOP 6) ==="
+        ]
+
+        proposal_summaries = []
+        for idx, proposal in enumerate(proposals[:6], 1):
+            trade_id = proposal.get('trade_id')
+            their_side = proposal.get('their_side', [])
+            opp_team = None
+            for team_key, team_obj in team_lookup.items():
+                roster_names = {normalize_player_name(p.get('name')) for p in team_obj.get('roster', []) or []}
+                if any(normalize_player_name(tp) in roster_names for tp in their_side):
+                    opp_team = _team_snapshot(team_obj)
                     break
 
-        # Build AI prompt
-        context_lines = []
-        context_lines.append("=== MY TEAM ANALYSIS ===")
-        context_lines.append(f"Team: {my_team.get('name', 'Unknown')}")
-        context_lines.append(f"Starters ({len(my_starters)}): {', '.join([p.get('name') for p in my_starters if p.get('name')])}")
-        context_lines.append(f"Bench ({len(my_bench)}): {', '.join([p.get('name') for p in my_bench if p.get('name')])}")
+            my_players = [ _player_summary(name) for name in proposal.get('my_side', []) ]
+            their_players = [ _player_summary(name) for name in their_side ]
 
-        context_lines.append("\n=== TRADE PROPOSALS TO ANALYZE ===")
-        for i, proposal in enumerate(proposals[:5]):  # Analyze top 5
-            context_lines.append(f"\n** PROPOSAL {i+1}: {proposal.get('trade_id')} **")
-            context_lines.append(f"• My Side: {', '.join(proposal.get('my_side', []))}")
-            context_lines.append(f"• Their Side: {', '.join(proposal.get('their_side', []))}")
-            context_lines.append(f"• My Gain: +{proposal.get('my_delta_points')} points")
-            context_lines.append(f"• Their Gain: {proposal.get('their_delta_points')} points")
-            context_lines.append(f"• Value Parity: {proposal.get('value_parity_pct')}%")
-            context_lines.append(f"• Acceptance Probability: {proposal.get('acceptance_prob')}")
-            context_lines.append(f"• Flags: {', '.join(proposal.get('flags', []))}")
+            summary_lines = [
+                f"PROPOSAL {idx}: {trade_id}",
+                f"  My Side Out: {('; '.join(my_players)) or 'None'}",
+                f"  Their Side Out: {('; '.join(their_players)) or 'None'}",
+                f"  My Delta: {proposal.get('my_delta_points')} pts",
+                f"  Their Delta: {proposal.get('their_delta_points')} pts",
+                f"  Value Parity: {proposal.get('value_parity_pct')}%",
+                f"  Acceptance Prob: {proposal.get('acceptance_prob')}",
+                f"  Flags: {', '.join(proposal.get('flags', [])) or 'None'}"
+            ]
 
-        full_context = "\n".join(context_lines)
+            if opp_team:
+                summary_lines.append(f"  Opponent Team: {opp_team['name']}")
+                summary_lines.append(f"  Opponent Starters Snapshot: {', '.join(opp_team['starters'][:8])}")
+                summary_lines.append(f"  Opponent Bench Snapshot: {', '.join(opp_team['bench'][:8])}")
 
-        # Build enhanced prompt using existing system
-        enhanced_prompt = f"""{PromptBuilder.get_base_system_prompt()}
+            proposal_summaries.append("\n".join(summary_lines))
 
-TASK: Trade Proposal Analysis & Enhancement
-Analyze the trade proposals and provide strategic explanations for why each trade makes sense.
+        context_sections.extend(proposal_summaries)
+        context_str = "\n\n".join(context_sections)
+
+        example_json = {
+            "enhanced_proposals": [
+                {
+                    "trade_id": "1x1-jordan love-tee higgins",
+                    "reasons": [
+                        "Consolidates QB depth into a weekly WR2 upgrade for us",
+                        "Opponent adds QB help to cover bye week and injury risk",
+                        "Parity sits within 5%, so the value exchange stays fair"
+                    ],
+                    "negotiation_pitch": "You get much-needed QB stability while we balance our WR room—fair for both sides.",
+                    "confidence": "Medium",
+                    "ai_rank_adjustment": 0.6
+                }
+            ]
+        }
+
+        prompt = f"""{PromptBuilder.get_base_system_prompt()}
+
+TASK: Enhance trade proposals with strategic reasoning, opponent-aware negotiation pitches, and confidence labels.
 
 ANALYSIS METHODOLOGY:
-1. ROSTER IMPACT: How does each trade improve team composition and weekly lineup
-2. VALUE ASSESSMENT: Evaluate fairness and strategic timing
-3. NEGOTIATION ANGLE: Identify opponent needs and selling points
-4. RISK EVALUATION: Consider injury concerns, schedule, role security
+1. Evaluate how the trade impacts our starting lineup and positional balance.
+2. Identify why the opponent could be motivated (roster gaps, depth issues, schedule).
+3. Highlight fairness signals (value parity, acceptance probability, mutual benefit).
+4. Surface key risks (injury volatility, role uncertainty, short-term vs ROS).
+5. Provide a one-sentence negotiation pitch tailored to the opponent's needs.
 
 CONTEXT DATA:
-{full_context}
+{context_str}
 
-RESPONSE FORMAT REQUIREMENTS:
-Your response MUST be a valid JSON object with this structure:
-{{
-  "enhanced_proposals": [
-    {{
-      "trade_id": "original_trade_id",
-      "reasons": ["Reason 1", "Reason 2", "Reason 3"],
-      "negotiation_pitch": "1-2 sentence pitch tailored to opponent needs",
-      "confidence": "High|Medium|Low",
-      "ai_rank_adjustment": 0
-    }}
-  ]
-}}
+RESPONSE FORMAT (JSON ONLY):
+{json.dumps(example_json, indent=2)}
 
-ANALYSIS FOCUS:
-- Provide 3-5 concise, actionable reasons per trade
-- Focus on strategic value rather than just point differences
-- Consider positional needs and roster construction
-- Identify opponent motivations and selling points
-- Rate confidence based on data quality and trade viability
+REQUIREMENTS:
+- Return the original trade_id values exactly as provided.
+- Reasons must be concise (max 2 sentences each) and grounded in the context.
+- negotiation_pitch should be persuasive but realistic (max 2 sentences).
+- confidence must be one of "High", "Medium", or "Low".
+- ai_rank_adjustment is a float; positive values mean AI prefers ranking it higher.
+- Do not include markdown or extra prose outside the JSON object.
+"""
 
-CRITICAL: Return valid JSON only. No markdown formatting."""
-
-        # Get Gemini API key
-        user_key = os.getenv('GEMINI_API_KEY')
-        if not user_key:
-            print("GEMINI_API_KEY not set, skipping AI enhancement")
+        try:
+            response_text = make_gemini_request(prompt, user_key)
+        except Exception as exc:
+            print(f"AI enhancement request failed: {exc}")
             return proposals
-
-        print(f"AI enhancement starting with {len(proposals)} proposals")
-
-        # Make AI request
-        # For testing purposes, allow passing API key via request
-        if api_key_override:
-            user_key = api_key_override
-            print("Using API key from request payload")
-
-        print("AI enhancement: Making Gemini request...")
-        # Temporary bypass for testing
-        if True:  # Set to False to enable real AI
-            print("AI enhancement: Using mock response for testing")
-            mock_response = {
-                "enhanced_proposals": [
-                    {
-                        "trade_id": proposals[0].get('trade_id'),
-                        "reasons": ["Mock reason 1", "Mock reason 2", "Mock reason 3"],
-                        "negotiation_pitch": "This is a mock negotiation pitch for testing",
-                        "confidence": "High",
-                        "ai_rank_adjustment": 0
-                    }
-                ]
-            }
-            enhanced_proposals = []
-            for proposal in proposals:
-                enhanced = proposal.copy()
-                enhanced['reasons'] = ["Mock AI reason 1", "Mock AI reason 2"]
-                enhanced['negotiation_pitch'] = "Mock negotiation pitch"
-                enhanced['ai_confidence'] = 'High'
-                enhanced_proposals.append(enhanced)
-            print(f"AI enhancement: Returning {len(enhanced_proposals)} mock enhanced proposals")
-            return enhanced_proposals
-
-        response_text = make_gemini_request(enhanced_prompt, user_key)
-        print(f"AI response received: {len(response_text) if response_text else 0} chars")
 
         if not response_text:
-            print("AI enhancement: No response from Gemini, returning original proposals")
+            print("AI enhancement returned empty response")
             return proposals
 
-        # Parse AI response
+        raw_text = response_text.strip()
+        if raw_text.startswith('```'):
+            raw_text = re.sub(r'^```json\s*', '', raw_text, flags=re.IGNORECASE).strip()
+            if raw_text.endswith('```'):
+                raw_text = raw_text[:-3].strip()
+
+        start_idx = raw_text.find('{')
+        end_idx = raw_text.rfind('}')
+        if start_idx == -1 or end_idx == -1:
+            print("AI enhancement: could not locate JSON payload; returning deterministic proposals")
+            return proposals
+
+        json_blob = raw_text[start_idx:end_idx+1]
         try:
-            print("AI enhancement: Parsing JSON response...")
-            # Clean response and extract JSON
-            cleaned_text = response_text.strip()
-            if cleaned_text.startswith('```'):
-                cleaned_text = re.sub(r'^```json\s*|```\s*$', '', cleaned_text, flags=re.MULTILINE)
-
-            print(f"AI enhancement: Cleaned text: {cleaned_text[:200]}...")
-            ai_data = json.loads(cleaned_text)
-            enhanced_proposals_data = ai_data.get('enhanced_proposals', [])
-            print(f"AI enhancement: Parsed {len(enhanced_proposals_data)} enhanced proposals from AI")
-
-            # Merge AI enhancements with original proposals
-            enhanced_proposals = []
-            for proposal in proposals:
-                enhanced = proposal.copy()
-
-                # Find matching AI enhancement
-                ai_enhancement = next(
-                    (ep for ep in enhanced_proposals_data if ep.get('trade_id') == proposal.get('trade_id')),
-                    None
-                )
-
-                if ai_enhancement:
-                    enhanced['reasons'] = ai_enhancement.get('reasons', [])
-                    enhanced['negotiation_pitch'] = ai_enhancement.get('negotiation_pitch', '')
-                    enhanced['ai_confidence'] = ai_enhancement.get('confidence', 'Medium')
-
-                    # Apply AI rank adjustment
-                    rank_adj = ai_enhancement.get('ai_rank_adjustment', 0)
-                    if rank_adj != 0:
-                        enhanced['ai_adjusted'] = True
-
-                enhanced_proposals.append(enhanced)
-
-            print(f"AI enhancement: Returning {len(enhanced_proposals)} enhanced proposals")
-            return enhanced_proposals
-
-        except (json.JSONDecodeError, KeyError) as e:
-            # If AI parsing fails, return original proposals
-            print(f"AI enhancement JSON parsing failed: {e}")
-            print(f"Raw response: {response_text[:500]}")
+            ai_payload = json.loads(json_blob)
+        except json.JSONDecodeError as exc:
+            print(f"AI enhancement JSON decode error: {exc}")
+            print(f"AI raw snippet: {raw_text[:400]}")
             return proposals
+
+        enhanced_lookup = {}
+        for item in ai_payload.get('enhanced_proposals', []) or []:
+            trade_id = item.get('trade_id')
+            if not trade_id:
+                continue
+            reasons = item.get('reasons') or []
+            if isinstance(reasons, list):
+                reasons = [str(r).strip() for r in reasons if r]
+            else:
+                reasons = [str(reasons).strip()]
+            enhanced_lookup[trade_id] = {
+                'reasons': reasons,
+                'negotiation_pitch': str(item.get('negotiation_pitch', '')).strip(),
+                'ai_confidence': str(item.get('confidence', 'Medium')).strip().title(),
+                'ai_rank_adjustment': item.get('ai_rank_adjustment')
+            }
+
+        enhanced_output = []
+        for proposal in proposals:
+            trade_id = proposal.get('trade_id')
+            enriched = proposal.copy()
+            ai_fields = enhanced_lookup.get(trade_id)
+            if ai_fields:
+                if ai_fields['reasons']:
+                    enriched['reasons'] = ai_fields['reasons']
+                if ai_fields['negotiation_pitch']:
+                    enriched['negotiation_pitch'] = ai_fields['negotiation_pitch']
+                enriched['ai_confidence'] = ai_fields['ai_confidence']
+                rank_adj = ai_fields.get('ai_rank_adjustment')
+                if isinstance(rank_adj, (int, float)):
+                    enriched['ai_rank_adjustment'] = round(float(rank_adj), 3)
+            enhanced_output.append(enriched)
+
+        return enhanced_output
 
     except Exception as e:
         print(f"AI enhancement error: {e}")
@@ -4648,6 +4676,8 @@ def trade_suggestions():
         bench_first = True if payload.get('bench_first', True) else False
         top_k = int(payload.get('top_k', 12))
         max_pkg = int(payload.get('max_package_size', 2))
+        use_ai = bool(payload.get('use_ai', False))
+        api_key_override = payload.get('gemini_api_key') or payload.get('ai_api_key')
         if not league_key or not my_team_key:
             return jsonify({'error': 'league_key and my_team_key are required'}), 400
 
@@ -4701,8 +4731,9 @@ def trade_suggestions():
 
         proposals = []
         # Iterate over target teams
+        target_team_set = set(target_team_keys)
         for t in teams:
-            if t.get('team_key') not in set(target_team_keys):
+            if t.get('team_key') not in target_team_set:
                 continue
             opp_roster = t.get('roster', [])
             # Bench-first target pool
@@ -5108,10 +5139,41 @@ def trade_suggestions():
                 return 0.0
         proposals = sorted(proposals, key=_score, reverse=True)[:top_k]
 
-        # AI Enhancement: Disabled for now - TODO: Fix and re-enable
-        # use_ai = bool(payload.get('use_ai', False))
-        # if use_ai and proposals:
-        #     # AI enhancement code will be re-implemented properly
+        ai_meta = {'ai_enabled': False}
+        if use_ai and proposals:
+            import time as _t
+            ai_start = _t.perf_counter()
+            try:
+                enhanced = _enhance_proposals_with_ai(
+                    proposals=proposals,
+                    my_team=my_team,
+                    teams=teams,
+                    access_token=access_token,
+                    api_key_override=api_key_override
+                )
+                if enhanced:
+                    proposals = enhanced
+                duration_ms = round((_t.perf_counter() - ai_start) * 1000, 1)
+
+                def _ai_score(p):
+                    base = _score(p)
+                    adj = p.get('ai_rank_adjustment')
+                    if isinstance(adj, (int, float)):
+                        return base + float(adj)
+                    return base
+
+                proposals = sorted(proposals, key=_ai_score, reverse=True)
+                ai_meta = {
+                    'ai_enabled': True,
+                    'ai_enhanced_count': len(proposals),
+                    'ai_latency_ms': duration_ms
+                }
+            except Exception as ai_exc:
+                print(f"AI enhancement failed: {ai_exc}")
+                ai_meta = {
+                    'ai_enabled': True,
+                    'ai_error': str(ai_exc)[:160]
+                }
 
         meta = {
             'league_key': league_key,
@@ -5120,6 +5182,7 @@ def trade_suggestions():
         }
         if debug_flag:
             meta.update(debug_info)
+        meta.update(ai_meta)
         return jsonify({'proposals': proposals, 'meta': meta})
     except Exception as e:
         traceback.print_exc()
