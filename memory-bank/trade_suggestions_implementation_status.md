@@ -60,65 +60,50 @@
 - When `use_ai=false`, 12+ proposals are returned successfully
 - AI integration temporarily disabled to restore basic functionality
 
-**Symptoms:**
-- Non-AI mode: `{"proposals": [12 working proposals]}`
-- AI mode: `{"proposals": []}`
-- No error messages, but proposals disappear
+**Current Behaviour:**
+- Gemini-backed `_enhance_proposals_with_ai()` enriches the deterministic list with reasons, negotiation pitch, confidence, and optional rank adjustment
+- Trade IDs are normalized so explanations survive Gemini formatting changes; prompts/responses are logged to `backend/ai_debug.log`
+- AI explanations surface in the Trade Center cards whenever `use_ai=true`
 
-**Root Cause:**
-- Exception in AI function preventing proposal return
-- Possible issues with function signature, data passing, or Gemini API integration
-- Need proper debugging and re-implementation
+### 🟡 **Frontend Trade Center MVP**
 
-### ❌ **NOT IMPLEMENTED: Frontend Trade Center**
+**Delivered:**
+- React Trade Center page with Yahoo league bootstrap, filters (horizon, acceptance, package size), dossier links, and debug drilldowns
+- Acceptance fallback keeps proposals visible even when below the slider threshold and flags the relaxed filter state
+- Light/raised styling improves readability on dark theme
 
-**Missing Components:**
-- No frontend UI to display trade proposals
-- No Trade Center page/component
-- No integration with existing React app
-- Backend working but no user interface
+**Still Needed:**
+- Clearer copy/tooltips for horizon slider vs. rest-of-season blend
+- Plain-English context for parity/acceptance percentages (rename, badges, or helper text)
+- Additional UX polish (e.g., metric legends, contextual help)
 
 ## Next Steps Priority Order
 
-### 1. **IMMEDIATE: Fix AI Integration (BACKEND)**
-**Status**: URGENT - Core functionality broken
-**Problem**: When `use_ai=true`, endpoint returns 0 proposals instead of enhanced proposals
-**Tasks**:
-- Debug the `_enhance_proposals_with_ai()` function in `app.py`
-- Fix function signature and data passing issues
-- Test with provided Gemini API key
-- Ensure AI mode returns the same 12 proposals with added explanations
-- **Target**: Get AI integration to work WITHOUT breaking deterministic engine
+### 1. **HIGH: Clarify Trade Center Controls (FRONTEND)**
+**Goal:** Help managers understand how the horizon slider and acceptance threshold impact results.
+**Ideas:** Inline helper copy, mini legends, example tooltips, default descriptions near the sliders.
 
-### 2. **HIGH PRIORITY: Build Frontend Trade Center (FRONTEND)**
-**Status**: Not started - No UI exists
-**Tasks**:
-- Create Trade Center React component in frontend
-- Display 12 trade proposals in user-friendly card format
-- Add controls for package size filters (1x1, 2x1, 1x2, 2x2)
-- Integrate with existing Yahoo authentication flow
-- Add "Generate Trades" button that calls `/api/trade_suggestions`
-- **Target**: MVP Trade Center that displays working backend data
+### 2. **HIGH: Humanize Parity & Acceptance Metrics (FRONTEND/BACKEND COPY)**
+**Goal:** Translate raw percentages into quick insights (e.g., "Fair within 5%" or "Long-shot ~10% chance").
+**Ideas:** Rename badges, add color-coded descriptors, extend API to include short labels.
 
-### 3. **OPTIONAL: Advanced Features**
-- Playoff emphasis and scheduling
-- Waiver wire integration
-- Advanced filtering options
-- Performance optimizations
+### 3. **OPTIONAL: Advanced Trade Center Features**
+- Playoff emphasis, schedule blending
+- Waiver tie-ins and advanced filters
+- Observability/performance optimisations
 
 ## Technical Debt
 
 **Issues Introduced During Development:**
-1. AI function may have syntax/logic errors from rapid iteration
-2. No comprehensive error logging for AI failures
-3. Mock AI code left in place from debugging attempts
-4. Function signatures may be mismatched
+1. Trade Center metrics still use raw parity/acceptance numbers without helper copy
+2. Horizon slider semantics need explicit documentation and inline hints
+3. Additional logging around Yahoo auth failures would aid UX (league snapshot 401s)
 
 **Code Quality:**
 - Core deterministic engine: ✅ Production ready
-- AI integration layer: ❌ Needs complete rewrite
-- Error handling: ⚠️ Needs improvement
-- Documentation: ⚠️ Needs update
+- AI integration layer: ✅ Normalized IDs + logging; monitor for future prompt drift
+- Error handling: ⚠️ Add contextual messaging in frontend
+- Documentation: ⚠️ Update UX notes once slider/metric polish ships
 
 ## Testing Status
 

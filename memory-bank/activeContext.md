@@ -45,22 +45,20 @@
   - ✅ Lineup optimizer and scoring system functional
   - ✅ Bench-first targeting and value parity calculations working
   - ✅ Relaxed filters producing realistic trade proposals (12+ working suggestions)
+- ✅ **Phase 2 AI Integration**: **ONLINE WITH GEMINI EXPLANATIONS**
+  - ✅ `_enhance_proposals_with_ai()` now augments deterministic proposals with reasons, negotiation pitch, confidence, and rank adjustment
+  - ✅ Trade ID normalization + logging (`ai_debug.log`) protect against formatting drift in Gemini responses
+  - 🔍 Follow-up: continue refining copy so explanations stay concise and league-aware
 
-- ❌ **Phase 2 AI Integration**: **URGENT FIX NEEDED**
-  - ❌ `_enhance_proposals_with_ai()` function breaks endpoint (returns 0 vs 12 proposals)
-  - ✅ Gemini API key available for testing
-  - Target: Add AI explanations to working 12 proposals WITHOUT breaking deterministic engine
-  - ❌ AI integration disabled temporarily to restore basic functionality
-
-- ❌ **Phase 3 Frontend Trade Center**: **NOT STARTED**
-  - No React component exists to display trade proposals
-  - Need: Trade Center page with proposal cards, filters, generate button
-  - Integration: Yahoo auth flow, backend API calls
+- 🟡 **Phase 3 Frontend Trade Center**: **MVP LIVE — UX POLISH IN PROGRESS**
+  - ✅ React Trade Center component renders proposals with filters, player dossier links, AI context, and debug drilldowns
+  - ✅ Yahoo-auth bootstrap + acceptance fallback keeps proposals visible even when below threshold
+  - 🔧 Outstanding polish: clarify slider semantics (horizon vs ROS weighting), translate parity/acceptance into plainer language, and surface metric tooltips
 
 **IMMEDIATE PRIORITIES:**
-1. **URGENT**: Fix AI integration bug (backend function causing 0 proposals)
-2. **HIGH**: Build Trade Center MVP frontend to display 12 working proposals
-3. **OPTIONAL**: Phase 3 features (playoff emphasis, waiver tie-ins)
+1. **HIGH**: Add inline education for Trade Center controls (horizon slider, acceptance threshold) so users understand how the knobs influence results
+2. **HIGH**: Humanize parity/acceptance metrics with plain-English labels, tooltips, or secondary copy while retaining numeric detail
+3. **OPTIONAL**: Phase 3+ enhancements (playoff emphasis, waiver tie-ins, advanced filtering) once comprehension polish ships
 
 ### 🔧 PRODUCTION ISSUE RESOLVED - CORS Fix Applied:
 **Problem**: Frontend blocked by CORS policy - "Access-Control-Allow-Origin" header missing

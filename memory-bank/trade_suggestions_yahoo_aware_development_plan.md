@@ -213,15 +213,14 @@ Defaults in effect: `alpha=0.70`, `min_accept=0.35`, bench bonus `+0.03` to Scor
   - Returns: pre/post lineups for both teams, scoring breakdown, inputs to AI, and prompt (if applicable).
 
 ## 9) Frontend UX
-- New “Trade Center” page under Tools.
+- **Status (Sept 19)**: Trade Center MVP live under Tools with Yahoo-auth bootstrap, filters, dossier links, AI explanations, and debug drilldowns.
 - Controls:
-  - Horizon slider (weeks), ROS/playoff toggles, dynasty toggle.
-  - Max package size, include injured, target teams multi-select.
-  - Bench-first (default ON), min acceptance threshold.
+  - Horizon focus slider (balanced by default), acceptance threshold slider, max package size, include injured, bench-first toggle, target team multi-select.
+  - Follow-up: Add inline copy/tooltips so managers understand how horizon/acceptance influence proposal ranking.
 - Results list:
-  - Proposal card: players per side with positions, delta chips for both teams, parity badge, acceptance%, bench badge, flags.
-  - Expand to show: reasons, negotiation pitch, post-trade lineup preview for both teams.
-  - Actions: copy summary, copy Yahoo search links, open debug view.
+  - Proposal cards show both sides, delta chips, parity, acceptance, bench flags, dossier links, AI reasons/pitch, and optional debug lineup diff.
+  - Follow-up: Translate parity/acceptance into human-readable badges (e.g., "Fair within 5%", "Long shot ~10%") while keeping raw numbers.
+- Actions: Generate trades, reset filters, fetch debug payload for deeper validation.
 
 ## 10) Implementation Steps (Phased)
 

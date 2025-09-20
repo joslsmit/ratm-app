@@ -16,10 +16,9 @@ This document tracks the progress of the RATM Draft Kit project against the defi
 
 **IMPLEMENTATION STATUS:**
 - ✅ **Backend Deterministic Engine COMPLETE**: League snapshot, trade generation, scoring system, all package types working
-- ✅ **12+ Working Trade Proposals**: System generating realistic suggestions with proper value parity
-- ❌ **AI Integration BROKEN**: Enhancement function causing 0 proposals, temporarily disabled
-- ❌ **Frontend Trade Center**: Not yet implemented
-- **Next Priority**: Fix AI integration bug, then build frontend MVP
+- ✅ **AI Explanations ONLINE**: Gemini layer enriches the 12+ deterministic proposals with reasons, negotiation pitch, and confidence while preserving baseline results (normalized trade IDs, debug logging in place)
+- 🟡 **Frontend Trade Center MVP**: React surface live with filters, dossier links, and debug drilldowns; needs UX polish to clarify sliders and translate parity/acceptance into plain language
+- **Next Priority**: Add user-facing guidance for horizon/acceptance controls and human-readable parity/acceptance summaries before layering advanced Trade Center features
 
 ## 🎉 DEPLOYMENT GOAL ACHIEVED! 
 **The RATM Draft Kit app is now live and operational for public use at `https://ratm-app.vercel.app`** - Successfully deployed with full feature set, reliable hosting, and 24/7 availability for Yahoo API connections and comprehensive fantasy football analysis.

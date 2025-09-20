@@ -4590,6 +4590,13 @@ REQUIREMENTS:
 
         try:
             response_text = make_gemini_request(prompt, user_key)
+            try:
+                with open(os.path.join(basedir, 'ai_debug.log'), 'a') as dbg_file:
+                    dbg_file.write('\n=== AI REQUEST @ %s ===\n' % datetime.now())
+                    dbg_file.write('PROMPT:\n%s\n' % prompt)
+                    dbg_file.write('RAW RESPONSE:\n%s\n' % (response_text or ''))
+            except Exception:
+                pass
         except Exception as exc:
             print(f"AI enhancement request failed: {exc}")
             return proposals
@@ -4618,9 +4625,14 @@ REQUIREMENTS:
             print(f"AI raw snippet: {raw_text[:400]}")
             return proposals
 
+        def _norm_trade_id(value: str) -> str:
+            if not value:
+                return ''
+            return re.sub(r'[^a-z0-9]+', '', value.lower())
+
         enhanced_lookup = {}
         for item in ai_payload.get('enhanced_proposals', []) or []:
-            trade_id = item.get('trade_id')
+            trade_id = (item.get('trade_id') or '').strip()
             if not trade_id:
                 continue
             reasons = item.get('reasons') or []
@@ -4640,6 +4652,13 @@ REQUIREMENTS:
             trade_id = proposal.get('trade_id')
             enriched = proposal.copy()
             ai_fields = enhanced_lookup.get(trade_id)
+            if not ai_fields:
+                norm_id = _norm_trade_id(trade_id)
+                for key, value in enhanced_lookup.items():
+                    norm_key = _norm_trade_id(key)
+                    if norm_key == norm_id or (norm_id and norm_id in norm_key) or (norm_key and norm_key in norm_id):
+                        ai_fields = value
+                        break
             if ai_fields:
                 if ai_fields['reasons']:
                     enriched['reasons'] = ai_fields['reasons']
@@ -8184,6 +8203,6 @@ if __name__ == '__main__':
     # Data loading is handled by the `load_all_data()` call at the top level.
     if static_ecr_overall_data and player_data_cache is not None:
         # Use SSL context for HTTPS
-        app.run(debug=True, host='0.0.0.0', port=5000, ssl_context=('certs/localhost.pem', 'certs/localhost-key.pem'))
+        app.run(debug=True, host='0.0.0.0', port=5000, ssl_context=('certs/localhost.pem', 'certs/localhost-key.pem'), use_reloader=False)
     else:
         print("Application will not start because essential data failed to load.")
