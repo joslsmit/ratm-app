@@ -2,13 +2,24 @@
 
 > **File Type**: GO-FORWARD  
 > **Review Priority**: High  
-> **Last Updated**: September 6, 2025 (Player Dossier UX complete; Week 1 priorities)  
+> **Last Updated**: September 19, 2025 (Trade Suggestions plan added)  
 > **Purpose**: Overall project progress and current development phase
 
 This document tracks the progress of the RATM Draft Kit project against the defined deployment and integration plan.
 
 ## 📁 Memory Bank Organization
 **Historical Records**: Completed implementation guides, phase logs, and AI enhancement documentation are archived in the `memory-bank/records/` subdirectory for reference. Active files remain at the root level for easy access.
+
+### September 19, 2025 — Yahoo‑Aware Trade Suggestions — PARTIAL IMPLEMENTATION
+- Added detailed development plan at `memory-bank/trade_suggestions_yahoo_aware_development_plan.md`.
+- Defaults relaxed for initial implementation: Next3=0.50, ROS=0.30, PO=0.20; w_pp=0.55, w_vorp=0.30, w_tv=0.10, w_risk=0.05; alpha=0.70; ParityMin=75%; AcceptanceMin=0.25; DEF/K excluded.
+
+**IMPLEMENTATION STATUS:**
+- ✅ **Backend Deterministic Engine COMPLETE**: League snapshot, trade generation, scoring system, all package types working
+- ✅ **12+ Working Trade Proposals**: System generating realistic suggestions with proper value parity
+- ❌ **AI Integration BROKEN**: Enhancement function causing 0 proposals, temporarily disabled
+- ❌ **Frontend Trade Center**: Not yet implemented
+- **Next Priority**: Fix AI integration bug, then build frontend MVP
 
 ## 🎉 DEPLOYMENT GOAL ACHIEVED! 
 **The RATM Draft Kit app is now live and operational for public use at `https://ratm-app.vercel.app`** - Successfully deployed with full feature set, reliable hosting, and 24/7 availability for Yahoo API connections and comprehensive fantasy football analysis.

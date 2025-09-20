@@ -2,7 +2,7 @@
 
 > **File Type**: GO-FORWARD  
 > **Review Priority**: High  
-> **Last Updated**: August 27, 2025 (Production Deployment Complete)  
+> **Last Updated**: September 19, 2025 (Trade Suggestions plan added)  
 > **Purpose**: Current status, priorities, and next steps
 
 ## 1. Current Status - PRODUCTION DEPLOYMENT SUCCESSFUL! 🎉
@@ -28,6 +28,39 @@
 - Deterministic, league‑aware Sleepers/Traps from available FA/W only; roster‑exclusion via Yahoo auth.
 - Structured outputs with headline + typed reasons; UI shows concise bullets, not numeric walls.
 - Removed league score chip; default Yahoo‑aware = ON; sidebar “Y” badges removed.
+
+### 🧠 September 19, 2025 — Trade Suggestions (Yahoo‑aware) — PARTIALLY IMPLEMENTED
+- Plan added: `memory-bank/trade_suggestions_yahoo_aware_development_plan.md`.
+- Scope: Bench‑first targets, package trades (1‑for‑1, 2‑for‑1, 1‑for‑2, 2‑for‑2), roster legality checks.
+- Scoring: Season‑focused defaults locked (Next3=0.50, ROS=0.30, PO=0.20; w_pp=0.55, w_vorp=0.30, w_tv=0.10, w_risk=0.05; alpha=0.70; ParityMin=75% relaxed; AcceptanceMin=0.25 relaxed; DEF/K excluded by default).
+
+**VERIFIED STATUS (September 19, 2025):**
+- ✅ **Phase 1 Deterministic Engine**: ✅ **COMPLETE AND VERIFIED WORKING**
+  - ✅ `/api/yahoo/league_snapshot` - League data aggregation confirmed working
+  - ✅ `/api/trade_suggestions` - **12 realistic trade proposals generated successfully**
+  - ✅ `/api/trade_suggestions/debug` - Debug functionality working
+  - ✅ All package types (1x1, 2x1, 1x2, 2x2) confirmed generating realistic proposals
+  - ✅ **Filter optimization complete**: 50% parity, 0.10 acceptance, -5.0 delta tolerance
+  - ✅ **Example working trade**: Rashee Rice + Jordan Love → Christian McCaffrey + Calvin Ridley
+  - ✅ Lineup optimizer and scoring system functional
+  - ✅ Bench-first targeting and value parity calculations working
+  - ✅ Relaxed filters producing realistic trade proposals (12+ working suggestions)
+
+- ❌ **Phase 2 AI Integration**: **URGENT FIX NEEDED**
+  - ❌ `_enhance_proposals_with_ai()` function breaks endpoint (returns 0 vs 12 proposals)
+  - ✅ Gemini API key available for testing
+  - Target: Add AI explanations to working 12 proposals WITHOUT breaking deterministic engine
+  - ❌ AI integration disabled temporarily to restore basic functionality
+
+- ❌ **Phase 3 Frontend Trade Center**: **NOT STARTED**
+  - No React component exists to display trade proposals
+  - Need: Trade Center page with proposal cards, filters, generate button
+  - Integration: Yahoo auth flow, backend API calls
+
+**IMMEDIATE PRIORITIES:**
+1. **URGENT**: Fix AI integration bug (backend function causing 0 proposals)
+2. **HIGH**: Build Trade Center MVP frontend to display 12 working proposals
+3. **OPTIONAL**: Phase 3 features (playoff emphasis, waiver tie-ins)
 
 ### 🔧 PRODUCTION ISSUE RESOLVED - CORS Fix Applied:
 **Problem**: Frontend blocked by CORS policy - "Access-Control-Allow-Origin" header missing

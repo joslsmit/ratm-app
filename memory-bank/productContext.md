@@ -2,7 +2,7 @@
 
 > **File Type**: GO-FORWARD  
 > **Review Priority**: Medium  
-> **Last Updated**: August 19, 2025  
+> **Last Updated**: September 19, 2025  
 > **Purpose**: Product vision, features, and user experience specifications
 
 ## 1. Product Vision & Mission
@@ -23,6 +23,7 @@ The application provides a suite of tools categorized for player analysis and te
 ### Team Management Tools:
 *   **Keeper Evaluator:** Helps users assess the value of keeping players from previous seasons by comparing their ECR to their keeper cost (draft round equivalent).
 *   **Trade Analyzer:** Evaluates proposed trades by analyzing the collective value of assets involved for both teams, providing an AI-driven verdict on fairness and winners.
+*   **Trade Suggestions (Yahoo Enhanced) - PARTIAL:** ⚠️ Intelligent trade proposal generator with two components: (1) Deterministic engine ✅ WORKING - generates 1x1, 2x1, 1x2, 2x2 package trades based on lineup optimization, value parity, and acceptance probability, and (2) AI enhancement ❌ BROKEN - would add explanations and negotiation pitches but currently causes 0 proposals to be returned. Backend endpoints implemented but no frontend Trade Center exists yet.
 *   **Draft Assistant:** Supports users during live drafts by providing real-time pick evaluations, suggesting optimal positions to target based on roster composition, and offering overall roster balance analysis.
 *   **Target List:** Allows users to maintain a personalized list of players they want to target, enabling quick access to their data and analysis.
 *   **Waiver Wire Assistant (Yahoo Enhanced):** ✅ Aids in making informed waiver wire claims with two modes: (1) Traditional mode for manual roster input, and (2) Yahoo mode for authenticated users showing actual league free agents and personalized AI recommendations based on real roster and available players.
@@ -33,6 +34,7 @@ The application provides a suite of tools categorized for player analysis and te
     - Structured card shows: tags (Projection Edge, Favorable Matchup, etc.), numeric score chips (projection, matchup ±0.10), headline, and up to 3 typed reasons.
     - ECR semantics enforced: overall ECR used for cross‑position decisions; weekly positional rank only within same position; neutral “Overall ECR” context when gaps are small.
     - Matchup uses opponent + HOME/AWAY context; categorical difficulty (Easy/Moderate/Tough) adds a small numeric nudge when meaningful.
+*   **Trade Suggestions (Yahoo‑Aware):** Proposed — Generates league‑aware trade packages prioritizing opponent bench assets, blending projections, VORP, and trade values with an acceptance heuristic and AI explanations. See `memory-bank/trade_suggestions_yahoo_aware_development_plan.md`.
 *   **Market Inefficiency Finder (Yahoo Enhanced):** ✅ Identifies undervalued and overvalued players with two modes: (1) Traditional mode for general market analysis, and (2) Yahoo mode for league-specific analysis incorporating ownership patterns, league size, competitive level, and personalized player recommendations.
     - In‑season (Week 2+) behavior: Sleepers and Traps (Avoid) come strictly from the available FA/W pool; your roster is excluded via Yahoo auth. Cards show a headline and up to 3 concise reasons (Projection/Trend/Consensus/Waivers) for quick, human‑readable decisions.
 

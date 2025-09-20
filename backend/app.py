@@ -15,6 +15,8 @@ from datetime import datetime # Import datetime class
 from apscheduler.schedulers.background import BackgroundScheduler
 from data_importer import import_data
 from utils import normalize_player_name, fuzzy_find_player_key, get_player_context, make_gemini_request, process_ai_response, process_ai_response_v2
+from typing import Optional, Tuple
+import itertools
 from prompt_templates import PromptBuilder
 from few_shot_examples import ExampleLibrary
 from chain_of_thought import ChainOfThoughtBuilder, ReasoningType
@@ -86,6 +88,80 @@ def _dev_save_cfg(cfg: dict):
 # --- Data Caching ---
 player_data_cache, player_name_to_id, static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data, player_values_cache, pick_values_cache, weekly_projections_cache, combined_player_data_cache = None, None, {}, {}, {}, None, None, {}, None
 yahoo_id_to_key = {}
+
+# --- Trade Suggestions (Deterministic Core Helpers) ---
+def _get_value_1qb(name: str) -> float:
+    try:
+        ci = _get_combined_info_by_name(name)
+        v = ci.get('value_1qb')
+        if isinstance(v, (int, float)):
+            return float(v)
+        if v is not None:
+            return float(v)
+    except Exception:
+        pass
+    return 0.0
+
+def _window_points(name: str) -> float:
+    """Season-focused window metric using weekly projection fallback to ECR-derived estimate."""
+    return _player_weekly_score(name, None)
+
+def _enrich_for_lineup_from_roster(roster_players: list, week: Optional[str] = None) -> Tuple[list, list[str]]:
+    """
+    Build enriched players list and slot list from a Yahoo roster payload (already parsed via parse_yahoo_roster_response).
+    Excludes DEF/K from slot construction by design; marks Out/IR and BYE as blocked.
+    """
+    enriched = []
+    for p in roster_players:
+        name = p.get('name')
+        if not name:
+            continue
+        ci = _get_combined_info_by_name(name)
+        pos = (ci.get('position') or p.get('selected_position') or '').upper()
+        status = str(p.get('status', '')).upper()
+        bye_week = ci.get('bye_week')
+        blocked = False
+        if status in ('OUT', 'IR'):
+            blocked = True
+        if week and bye_week and str(bye_week) == str(week):
+            blocked = True
+        enriched.append({
+            'name': name,
+            'position': pos,
+            'selected_position': p.get('selected_position'),
+            'weekly_points': ci.get('projected_points'),
+            'ecr_overall': ci.get('ecr_overall'),
+            'bye_week': bye_week,
+            'status': status,
+            'blocked': blocked
+        })
+    slots = _build_required_slots_from_roster(roster_players)
+    return enriched, slots
+
+def _lineup_total(enriched_players: list, slots: list[str]) -> float:
+    _, total = _best_lineup(enriched_players, slots)
+    return total
+
+def _parity_pct(a_value: float, b_value: float) -> int:
+    try:
+        a = float(a_value)
+        b = float(b_value)
+        m = max(a, b)
+        if m <= 0:
+            return 0
+        return int(round(100 * (1.0 - abs(a - b) / m)))
+    except Exception:
+        return 0
+
+def _acceptance_prob(their_delta: float, parity_pct: int) -> float:
+    # Simple proxy: scale and pass through a sigmoid-like mapping
+    try:
+        x = 0.20 * float(their_delta) + 0.04 * float(parity_pct) - 5.0 * 0  # other penalties currently 0
+        # fast sigmoid approximation
+        import math
+        return 1.0 / (1.0 + math.exp(-0.25 * (x - 10)))
+    except Exception:
+        return 0.3
 name_aliases = {}
 
 # --- Name Aliases (optional file: backend/name_aliases.json) ---
@@ -4249,6 +4325,977 @@ def optimize_lineup():
         return jsonify(resp)
     except requests.exceptions.RequestException:
         return jsonify({'error': 'Failed to connect to Yahoo API'}), 500
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/yahoo/league_snapshot')
+def yahoo_league_snapshot():
+    """
+    Aggregate league teams and rosters into a concise snapshot for trade analysis.
+    Query: league_key (required). Uses Authorization Bearer token.
+    Returns: { league_key, teams: [{ team_key, name, roster: [{player_key, player_id, name, selected_position, eligible_positions, status}] }] }
+    """
+    try:
+        league_key = request.args.get('league_key')
+        if not league_key:
+            return jsonify({"error": "league_key parameter is required"}), 400
+
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Valid Authorization header with Bearer token is required"}), 401
+        access_token = auth_header.split(' ')[1]
+
+        headers = {'Authorization': f'Bearer {access_token}', 'Accept': 'application/json'}
+        base = 'https://fantasysports.yahooapis.com/fantasy/v2'
+
+        # Fetch teams list for the league
+        teams_resp = requests.get(f"{base}/league/{league_key}/teams?format=json", headers=headers, timeout=10)
+        teams_resp.raise_for_status()
+        teams_data = teams_resp.json()
+
+        # Parse teams
+        fantasy_content = teams_data.get('fantasy_content', {}) if isinstance(teams_data, dict) else {}
+        league_arr = fantasy_content.get('league', [])
+        if not (isinstance(league_arr, list) and len(league_arr) >= 2):
+            return jsonify({"error": "Unexpected Yahoo teams response"}), 500
+        teams_container = league_arr[1].get('teams', {})
+        if not isinstance(teams_container, dict):
+            return jsonify({"error": "Unexpected Yahoo teams container"}), 500
+
+        result = {'league_key': league_key, 'teams': []}
+        team_entries = []
+
+        def _scan_for_field(container, key):
+            try:
+                if isinstance(container, dict):
+                    return container.get(key)
+                if isinstance(container, list):
+                    for item in container:
+                        if isinstance(item, dict) and key in item:
+                            return item.get(key)
+                        if isinstance(item, list):
+                            for sub in item:
+                                if isinstance(sub, dict) and key in sub:
+                                    return sub.get(key)
+                return None
+            except Exception:
+                return None
+
+        def _extract_team_key_name(team_obj):
+            team_key = None
+            name = ''
+            if isinstance(team_obj, list):
+                for el in team_obj:
+                    if isinstance(el, dict):
+                        team_key = team_key or el.get('team_key') or _scan_for_field(el, 'team_key')
+                        name = name or el.get('name') or _scan_for_field(el, 'name') or ''
+                    elif isinstance(el, list):
+                        team_key = team_key or _scan_for_field(el, 'team_key')
+                        name = name or (_scan_for_field(el, 'name') or '')
+            elif isinstance(team_obj, dict):
+                team_key = team_obj.get('team_key')
+                name = team_obj.get('name', '')
+            return team_key, name
+
+        for k, v in teams_container.items():
+            if not str(k).isdigit():
+                continue
+            arr = v.get('team', [])
+            if not arr:
+                continue
+            team_key, name = _extract_team_key_name(arr)
+            if not team_key and isinstance(arr, list) and len(arr) > 0:
+                team_key = _scan_for_field(arr[0], 'team_key') or team_key
+                name = name or (_scan_for_field(arr[0], 'name') or '')
+            if team_key:
+                team_entries.append({'team_key': team_key, 'name': name})
+
+        # For each team, fetch roster and parse
+        for t in team_entries:
+            tk = t['team_key']
+            # Prefer explicit players subresource
+            urlp = f"{base}/team/{tk}/roster/players?format=json"
+            urlf = f"{base}/team/{tk}/roster?format=json"
+            rr = requests.get(urlp, headers=headers, timeout=10)
+            if rr.status_code == 404:
+                rr = requests.get(urlf, headers=headers, timeout=10)
+            roster_raw = rr.json() if rr.ok else {}
+            roster_players = parse_yahoo_roster_response(roster_raw) or []
+            # Optionally enrich eligible positions via batch (best-effort)
+            try:
+                pkeys = [p['player_key'] for p in roster_players if p.get('player_key')]
+                det = _fetch_yahoo_player_details_by_keys(access_token, league_key, pkeys)
+                if det:
+                    for p in roster_players:
+                        if p.get('player_key') in det:
+                            p['eligible_positions'] = det[p['player_key']].get('eligible_positions', p.get('eligible_positions'))
+            except Exception:
+                pass
+            # Normalize is_starter flag
+            for p in roster_players:
+                sp = str(p.get('selected_position') or '').upper()
+                p['is_starter'] = not (sp.startswith('BN') or sp.startswith('IR'))
+            result['teams'].append({'team_key': tk, 'name': t['name'], 'roster': roster_players})
+
+        return jsonify(result)
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': 'Failed to connect to Yahoo API', 'details': str(e)}), 500
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+def _enhance_proposals_with_ai(proposals: list, my_team: dict, teams: list, access_token: str, api_key_override: str = None) -> list:
+    """
+    Enhance trade proposals with AI-generated explanations and re-ranking.
+    Returns enhanced proposals with reasons and negotiation_pitch fields.
+    """
+    try:
+        if not proposals:
+            print("AI enhancement: No proposals to enhance")
+            return proposals
+
+        print(f"AI enhancement: Starting with {len(proposals)} proposals")
+
+        # Build context for AI
+        my_roster = my_team.get('roster', [])
+        my_starters = [p for p in my_roster if not str(p.get('selected_position', '')).upper().startswith(('BN', 'IR'))]
+        my_bench = [p for p in my_roster if str(p.get('selected_position', '')).upper().startswith('BN')]
+
+        print(f"AI enhancement: Built roster context - {len(my_starters)} starters, {len(my_bench)} bench")
+
+        # Get opponent team context for proposals
+        opponent_teams = {}
+        for proposal in proposals:
+            # Find which team has the players we want
+            their_players = proposal.get('their_side', [])
+            for team in teams:
+                team_roster = team.get('roster', [])
+                team_player_names = [p.get('name') for p in team_roster]
+                if any(player in team_player_names for player in their_players):
+                    opponent_teams[team.get('team_key')] = team
+                    break
+
+        # Build AI prompt
+        context_lines = []
+        context_lines.append("=== MY TEAM ANALYSIS ===")
+        context_lines.append(f"Team: {my_team.get('name', 'Unknown')}")
+        context_lines.append(f"Starters ({len(my_starters)}): {', '.join([p.get('name') for p in my_starters if p.get('name')])}")
+        context_lines.append(f"Bench ({len(my_bench)}): {', '.join([p.get('name') for p in my_bench if p.get('name')])}")
+
+        context_lines.append("\n=== TRADE PROPOSALS TO ANALYZE ===")
+        for i, proposal in enumerate(proposals[:5]):  # Analyze top 5
+            context_lines.append(f"\n** PROPOSAL {i+1}: {proposal.get('trade_id')} **")
+            context_lines.append(f"• My Side: {', '.join(proposal.get('my_side', []))}")
+            context_lines.append(f"• Their Side: {', '.join(proposal.get('their_side', []))}")
+            context_lines.append(f"• My Gain: +{proposal.get('my_delta_points')} points")
+            context_lines.append(f"• Their Gain: {proposal.get('their_delta_points')} points")
+            context_lines.append(f"• Value Parity: {proposal.get('value_parity_pct')}%")
+            context_lines.append(f"• Acceptance Probability: {proposal.get('acceptance_prob')}")
+            context_lines.append(f"• Flags: {', '.join(proposal.get('flags', []))}")
+
+        full_context = "\n".join(context_lines)
+
+        # Build enhanced prompt using existing system
+        enhanced_prompt = f"""{PromptBuilder.get_base_system_prompt()}
+
+TASK: Trade Proposal Analysis & Enhancement
+Analyze the trade proposals and provide strategic explanations for why each trade makes sense.
+
+ANALYSIS METHODOLOGY:
+1. ROSTER IMPACT: How does each trade improve team composition and weekly lineup
+2. VALUE ASSESSMENT: Evaluate fairness and strategic timing
+3. NEGOTIATION ANGLE: Identify opponent needs and selling points
+4. RISK EVALUATION: Consider injury concerns, schedule, role security
+
+CONTEXT DATA:
+{full_context}
+
+RESPONSE FORMAT REQUIREMENTS:
+Your response MUST be a valid JSON object with this structure:
+{{
+  "enhanced_proposals": [
+    {{
+      "trade_id": "original_trade_id",
+      "reasons": ["Reason 1", "Reason 2", "Reason 3"],
+      "negotiation_pitch": "1-2 sentence pitch tailored to opponent needs",
+      "confidence": "High|Medium|Low",
+      "ai_rank_adjustment": 0
+    }}
+  ]
+}}
+
+ANALYSIS FOCUS:
+- Provide 3-5 concise, actionable reasons per trade
+- Focus on strategic value rather than just point differences
+- Consider positional needs and roster construction
+- Identify opponent motivations and selling points
+- Rate confidence based on data quality and trade viability
+
+CRITICAL: Return valid JSON only. No markdown formatting."""
+
+        # Get Gemini API key
+        user_key = os.getenv('GEMINI_API_KEY')
+        if not user_key:
+            print("GEMINI_API_KEY not set, skipping AI enhancement")
+            return proposals
+
+        print(f"AI enhancement starting with {len(proposals)} proposals")
+
+        # Make AI request
+        # For testing purposes, allow passing API key via request
+        if api_key_override:
+            user_key = api_key_override
+            print("Using API key from request payload")
+
+        print("AI enhancement: Making Gemini request...")
+        # Temporary bypass for testing
+        if True:  # Set to False to enable real AI
+            print("AI enhancement: Using mock response for testing")
+            mock_response = {
+                "enhanced_proposals": [
+                    {
+                        "trade_id": proposals[0].get('trade_id'),
+                        "reasons": ["Mock reason 1", "Mock reason 2", "Mock reason 3"],
+                        "negotiation_pitch": "This is a mock negotiation pitch for testing",
+                        "confidence": "High",
+                        "ai_rank_adjustment": 0
+                    }
+                ]
+            }
+            enhanced_proposals = []
+            for proposal in proposals:
+                enhanced = proposal.copy()
+                enhanced['reasons'] = ["Mock AI reason 1", "Mock AI reason 2"]
+                enhanced['negotiation_pitch'] = "Mock negotiation pitch"
+                enhanced['ai_confidence'] = 'High'
+                enhanced_proposals.append(enhanced)
+            print(f"AI enhancement: Returning {len(enhanced_proposals)} mock enhanced proposals")
+            return enhanced_proposals
+
+        response_text = make_gemini_request(enhanced_prompt, user_key)
+        print(f"AI response received: {len(response_text) if response_text else 0} chars")
+
+        if not response_text:
+            print("AI enhancement: No response from Gemini, returning original proposals")
+            return proposals
+
+        # Parse AI response
+        try:
+            print("AI enhancement: Parsing JSON response...")
+            # Clean response and extract JSON
+            cleaned_text = response_text.strip()
+            if cleaned_text.startswith('```'):
+                cleaned_text = re.sub(r'^```json\s*|```\s*$', '', cleaned_text, flags=re.MULTILINE)
+
+            print(f"AI enhancement: Cleaned text: {cleaned_text[:200]}...")
+            ai_data = json.loads(cleaned_text)
+            enhanced_proposals_data = ai_data.get('enhanced_proposals', [])
+            print(f"AI enhancement: Parsed {len(enhanced_proposals_data)} enhanced proposals from AI")
+
+            # Merge AI enhancements with original proposals
+            enhanced_proposals = []
+            for proposal in proposals:
+                enhanced = proposal.copy()
+
+                # Find matching AI enhancement
+                ai_enhancement = next(
+                    (ep for ep in enhanced_proposals_data if ep.get('trade_id') == proposal.get('trade_id')),
+                    None
+                )
+
+                if ai_enhancement:
+                    enhanced['reasons'] = ai_enhancement.get('reasons', [])
+                    enhanced['negotiation_pitch'] = ai_enhancement.get('negotiation_pitch', '')
+                    enhanced['ai_confidence'] = ai_enhancement.get('confidence', 'Medium')
+
+                    # Apply AI rank adjustment
+                    rank_adj = ai_enhancement.get('ai_rank_adjustment', 0)
+                    if rank_adj != 0:
+                        enhanced['ai_adjusted'] = True
+
+                enhanced_proposals.append(enhanced)
+
+            print(f"AI enhancement: Returning {len(enhanced_proposals)} enhanced proposals")
+            return enhanced_proposals
+
+        except (json.JSONDecodeError, KeyError) as e:
+            # If AI parsing fails, return original proposals
+            print(f"AI enhancement JSON parsing failed: {e}")
+            print(f"Raw response: {response_text[:500]}")
+            return proposals
+
+    except Exception as e:
+        print(f"AI enhancement error: {e}")
+        return proposals
+
+@app.route('/api/trade_suggestions', methods=['POST'])
+def trade_suggestions():
+    """
+    Deterministic, season-focused trade suggestions (1-for-1 MVP).
+    Body: {
+      league_key, my_team_key, target_team_keys?, horizon_weeks?, ros_weight?, playoff_weight?,
+      max_package_size?, include_injured?, bench_first?, debug?
+    }
+    Returns: { proposals: [...], meta: {...} }
+    """
+    try:
+        payload = request.get_json(force=True, silent=True) or {}
+        league_key = payload.get('league_key')
+        my_team_key = payload.get('my_team_key')
+        target_team_keys = payload.get('target_team_keys') or []
+        include_injured = bool(payload.get('include_injured', False))
+        bench_first = True if payload.get('bench_first', True) else False
+        top_k = int(payload.get('top_k', 12))
+        max_pkg = int(payload.get('max_package_size', 2))
+        if not league_key or not my_team_key:
+            return jsonify({'error': 'league_key and my_team_key are required'}), 400
+
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'Valid Authorization header with Bearer token is required'}), 401
+        access_token = auth_header.split(' ')[1]
+
+        # Fetch league snapshot (teams + rosters)
+        with app.test_request_context(environ_base={'HTTP_AUTHORIZATION': f'Bearer {access_token}'}, query_string={'league_key': league_key}):
+            snap_resp = yahoo_league_snapshot()
+        if hasattr(snap_resp, 'status_code') and snap_resp.status_code != 200:
+            return snap_resp
+        snapshot = snap_resp.get_json() if hasattr(snap_resp, 'get_json') else snap_resp
+        teams = snapshot.get('teams', []) if isinstance(snapshot, dict) else []
+
+        # Identify my team and targets
+        my_team = next((t for t in teams if t.get('team_key') == my_team_key), None)
+        if not my_team:
+            return jsonify({'error': 'my_team_key not found in snapshot'}), 400
+        if not target_team_keys:
+            target_team_keys = [t['team_key'] for t in teams if t.get('team_key') != my_team_key]
+
+        # Prepare my enriched roster and slots
+        my_roster = my_team.get('roster', [])
+        my_enriched, my_slots = _enrich_for_lineup_from_roster(my_roster)
+        my_baseline = _lineup_total(my_enriched, my_slots)
+
+        # Check debug mode for relaxed filters
+        debug_flag = bool(payload.get('debug')) or str(request.args.get('debug','')).strip() in ('1','true','True')
+
+        # Build my starter set for surplus calc
+        my_lineup, _ = _best_lineup(my_enriched, my_slots)
+        starters = set()
+        for sl in my_lineup:
+            if sl.get('player') and sl['player'].get('name'):
+                starters.add(sl['player']['name'])
+        # Surplus candidates: bench players with positive weekly score, excluding DEF/K
+        my_surplus = []
+        for pl in my_enriched:
+            name = pl.get('name')
+            pos = (pl.get('position') or '').upper()
+            if name in starters:
+                continue
+            if pos in ('DEF', 'DST', 'K'):
+                continue
+            if (not include_injured) and (pl.get('status') in ('OUT','IR')):
+                continue
+            if _window_points(name) > 0.0:
+                my_surplus.append(pl)
+
+        proposals = []
+        # Iterate over target teams
+        for t in teams:
+            if t.get('team_key') not in set(target_team_keys):
+                continue
+            opp_roster = t.get('roster', [])
+            # Bench-first target pool
+            opp_targets_bench = []
+            opp_targets_starters = []
+            for p in opp_roster:
+                name = p.get('name')
+                if not name:
+                    continue
+                pos = (_get_combined_info_by_name(name).get('position') or '').upper()
+                if pos in ('DEF','DST','K'):
+                    continue
+                status = str(p.get('status','')).upper()
+                if (not include_injured) and status in ('OUT','IR'):
+                    continue
+                if _window_points(name) <= 0.0:
+                    continue
+                if str(p.get('selected_position') or '').upper().startswith(('BN','IR')):
+                    opp_targets_bench.append(p)
+                else:
+                    opp_targets_starters.append(p)
+
+            opp_targets = (opp_targets_bench + opp_targets_starters) if bench_first else (opp_targets_starters + opp_targets_bench)
+
+            # Prepare opponent enriched/slots once
+            opp_enriched, opp_slots = _enrich_for_lineup_from_roster(opp_roster)
+            opp_baseline = _lineup_total(opp_enriched, opp_slots)
+
+            # Order pools by window points (desc) for tractable search
+            def _wp_sort_key(pl):
+                try:
+                    return _window_points(pl.get('name'))
+                except Exception:
+                    return 0.0
+            my_surplus_sorted = sorted(my_surplus, key=_wp_sort_key, reverse=True)[:10]
+            opp_targets_sorted = sorted(opp_targets, key=lambda p: _window_points(p.get('name')), reverse=True)[:12]
+
+            # 1-for-1 seeds
+            for mine in my_surplus_sorted:
+                for their in opp_targets_sorted:
+                    my_name = mine.get('name')
+                    th_name = their.get('name')
+                    if not my_name or not th_name:
+                        continue
+                    # Build post-trade enriched rosters
+                    my_post = [p.copy() for p in my_enriched]
+                    opp_post = [p.copy() for p in opp_enriched]
+                    # swap by name
+                    for arr_from, arr_to, out_name, in_name in [
+                        (my_post, opp_post, my_name, th_name),
+                        (opp_post, my_post, th_name, my_name)
+                    ]:
+                        for pl in arr_from:
+                            if pl.get('name') == out_name:
+                                # mark as moved by excluding later selection
+                                pl['blocked'] = True
+                        # ensure inbound appears in target arr
+                        # We will append a lightweight inbound entry with combined context
+                        ci_in = _get_combined_info_by_name(in_name)
+                        arr_to.append({
+                            'name': in_name,
+                            'position': (ci_in.get('position') or '').upper(),
+                            'selected_position': None,
+                            'weekly_points': ci_in.get('projected_points'),
+                            'ecr_overall': ci_in.get('ecr_overall'),
+                            'bye_week': ci_in.get('bye_week'),
+                            'status': '',
+                            'blocked': False
+                        })
+
+                    my_after = _lineup_total(my_post, my_slots)
+                    opp_after = _lineup_total(opp_post, opp_slots)
+                    my_delta = round(my_after - my_baseline, 2)
+                    their_delta = round(opp_after - opp_baseline, 2)
+
+                    # Value parity (values-players.csv value_1qb)
+                    va = _get_value_1qb(my_name)
+                    vb = _get_value_1qb(th_name)
+                    parity = _parity_pct(va, vb)
+
+                    # Filters: require my improvement and minimal acceptance
+                    # ParityMin=92% or TheirDelta>=5
+                    accept_prob = _acceptance_prob(their_delta, parity)
+
+                    # Relaxed filters for debug mode
+                    if debug_flag:
+                        # Debug mode: much more relaxed filters
+                        if my_delta <= -5.0:  # Allow some negative trades for testing
+                            continue
+                        if not (parity >= 70 or their_delta >= 1.0):  # Lower parity threshold
+                            continue
+                        if accept_prob < 0.15:  # Lower acceptance threshold
+                            continue
+                    else:
+                        # Production filters: strict
+                        if my_delta <= 0:
+                            continue
+                        if not (parity >= 92 or their_delta >= 5.0):
+                            continue
+                        if accept_prob < 0.35:
+                            continue
+
+                    proposals.append({
+                        'trade_id': f"1x1-{normalize_player_name(my_name)}-{normalize_player_name(th_name)}",
+                        'my_side': [my_name],
+                        'their_side': [th_name],
+                        'my_delta_points': my_delta,
+                        'their_delta_points': their_delta,
+                        'value_parity_pct': parity,
+                        'acceptance_prob': round(accept_prob, 2),
+                        'flags': ['bench_target'] if their in opp_targets_bench else [],
+                    })
+
+            # 2-for-1 seeds (my two for their one)
+            if max_pkg >= 2:
+                for mine_pair in itertools.combinations(my_surplus_sorted[:6], 2):
+                    for their in opp_targets_sorted:
+                        my_names = [mine_pair[0].get('name'), mine_pair[1].get('name')]
+                        th_name = their.get('name')
+                        if not th_name or any(not n for n in my_names):
+                            continue
+                        # Build post-trade rosters
+                        my_post = [p.copy() for p in my_enriched]
+                        opp_post = [p.copy() for p in opp_enriched]
+                        # mark outgoing as blocked
+                        for out_n in my_names:
+                            for pl in my_post:
+                                if pl.get('name') == out_n:
+                                    pl['blocked'] = True
+                        for pl in opp_post:
+                            if pl.get('name') == th_name:
+                                pl['blocked'] = True
+                        # inbound entries
+                        ci_in = _get_combined_info_by_name(th_name)
+                        opp_in_entries = []
+                        for out_n in my_names:
+                            ci_to_opp = _get_combined_info_by_name(out_n)
+                            opp_in_entries.append({
+                                'name': out_n,
+                                'position': (ci_to_opp.get('position') or '').upper(),
+                                'selected_position': None,
+                                'weekly_points': ci_to_opp.get('projected_points'),
+                                'ecr_overall': ci_to_opp.get('ecr_overall'),
+                                'bye_week': ci_to_opp.get('bye_week'),
+                                'status': '',
+                                'blocked': False
+                            })
+                        my_post.append({
+                            'name': th_name,
+                            'position': (ci_in.get('position') or '').upper(),
+                            'selected_position': None,
+                            'weekly_points': ci_in.get('projected_points'),
+                            'ecr_overall': ci_in.get('ecr_overall'),
+                            'bye_week': ci_in.get('bye_week'),
+                            'status': '',
+                            'blocked': False
+                        })
+                        opp_post.extend(opp_in_entries)
+
+                        my_after = _lineup_total(my_post, my_slots)
+                        opp_after = _lineup_total(opp_post, opp_slots)
+                        my_delta = round(my_after - my_baseline, 2)
+                        their_delta = round(opp_after - opp_baseline, 2)
+
+                        # Parity on sums
+                        va = sum(_get_value_1qb(n) for n in my_names)
+                        vb = _get_value_1qb(th_name)
+                        parity = _parity_pct(va, vb)
+                        accept_prob = _acceptance_prob(their_delta, parity)
+                        # Apply same debug/production filter logic
+                        if debug_flag:
+                            if my_delta <= -5.0:
+                                continue
+                            if not (parity >= 70 or their_delta >= 1.0):
+                                continue
+                            if accept_prob < 0.15:
+                                continue
+                        else:
+                            # Production filters: very relaxed for testing
+                            if my_delta <= -5.0:  # Allow more negative trades
+                                continue
+                            if not (parity >= 50 or their_delta >= 1.0):  # Much lower parity requirement
+                                continue
+                            if accept_prob < 0.10:  # Much lower acceptance threshold
+                                continue
+                        bench_flag = their in opp_targets_bench
+                        proposals.append({
+                            'trade_id': f"2x1-{normalize_player_name(my_names[0])}+{normalize_player_name(my_names[1])}-{normalize_player_name(th_name)}",
+                            'my_side': my_names,
+                            'their_side': [th_name],
+                            'my_delta_points': my_delta,
+                            'their_delta_points': their_delta,
+                            'value_parity_pct': parity,
+                            'acceptance_prob': round(accept_prob, 2),
+                            'flags': ['bench_target'] if bench_flag else [],
+                        })
+
+            # 1-for-2 seeds (my one for their two) — add suggested drop on my side
+            if max_pkg >= 2:
+                for mine in my_surplus_sorted:
+                    for their_pair in itertools.combinations(opp_targets_sorted[:8], 2):
+                        my_name = mine.get('name')
+                        th_names = [their_pair[0].get('name'), their_pair[1].get('name')]
+                        if not my_name or any(not n for n in th_names):
+                            continue
+                        # Build post-trade rosters
+                        my_post = [p.copy() for p in my_enriched]
+                        opp_post = [p.copy() for p in opp_enriched]
+                        # mark outgoing
+                        for pl in my_post:
+                            if pl.get('name') == my_name:
+                                pl['blocked'] = True
+                        for out_n in th_names:
+                            for pl in opp_post:
+                                if pl.get('name') == out_n:
+                                    pl['blocked'] = True
+                        # inbound entries
+                        for in_name in th_names:
+                            ci_in = _get_combined_info_by_name(in_name)
+                            my_post.append({
+                                'name': in_name,
+                                'position': (ci_in.get('position') or '').upper(),
+                                'selected_position': None,
+                                'weekly_points': ci_in.get('projected_points'),
+                                'ecr_overall': ci_in.get('ecr_overall'),
+                                'bye_week': ci_in.get('bye_week'),
+                                'status': '',
+                                'blocked': False
+                            })
+                        opp_in_ci = _get_combined_info_by_name(my_name)
+                        opp_post.append({
+                            'name': my_name,
+                            'position': (opp_in_ci.get('position') or '').upper(),
+                            'selected_position': None,
+                            'weekly_points': opp_in_ci.get('projected_points'),
+                            'ecr_overall': opp_in_ci.get('ecr_overall'),
+                            'bye_week': opp_in_ci.get('bye_week'),
+                            'status': '',
+                            'blocked': False
+                        })
+
+                        my_after = _lineup_total(my_post, my_slots)
+                        opp_after = _lineup_total(opp_post, opp_slots)
+                        my_delta = round(my_after - my_baseline, 2)
+                        their_delta = round(opp_after - opp_baseline, 2)
+
+                        # Parity on sums
+                        va = _get_value_1qb(my_name)
+                        vb = sum(_get_value_1qb(n) for n in th_names)
+                        parity = _parity_pct(va, vb)
+                        accept_prob = _acceptance_prob(their_delta, parity)
+                        # Apply same debug/production filter logic
+                        if debug_flag:
+                            if my_delta <= -5.0:
+                                continue
+                            if not (parity >= 70 or their_delta >= 1.0):
+                                continue
+                            if accept_prob < 0.15:
+                                continue
+                        else:
+                            # Production filters: very relaxed for testing
+                            if my_delta <= -5.0:  # Allow more negative trades
+                                continue
+                            if not (parity >= 50 or their_delta >= 1.0):  # Much lower parity requirement
+                                continue
+                            if accept_prob < 0.10:  # Much lower acceptance threshold
+                                continue
+
+                        # Suggested drop (my roster inflow +1): pick weakest bench not in trade or starters
+                        bench_pool = [p for p in my_enriched if p.get('name') not in starters and p.get('name') not in ([my_name] + th_names)]
+                        drop_cand = None
+                        if bench_pool:
+                            drop_cand = min(bench_pool, key=lambda p: _window_points(p.get('name') or ''))
+                        bench_flag = any(tp in opp_targets_bench for tp in their_pair)
+                        proposals.append({
+                            'trade_id': f"1x2-{normalize_player_name(my_name)}-{normalize_player_name(th_names[0])}+{normalize_player_name(th_names[1])}",
+                            'my_side': [my_name],
+                            'their_side': th_names,
+                            'my_delta_points': my_delta,
+                            'their_delta_points': their_delta,
+                            'value_parity_pct': parity,
+                            'acceptance_prob': round(accept_prob, 2),
+                            'flags': ['bench_target'] if bench_flag else [],
+                            'suggested_drop': (drop_cand.get('name') if drop_cand else None)
+                        })
+
+            # 2-for-2 seeds
+            if max_pkg >= 2:
+                for mine_pair in itertools.combinations(my_surplus_sorted[:6], 2):
+                    for their_pair in itertools.combinations(opp_targets_sorted[:8], 2):
+                        my_names = [mine_pair[0].get('name'), mine_pair[1].get('name')]
+                        th_names = [their_pair[0].get('name'), their_pair[1].get('name')]
+                        if any(not n for n in my_names + th_names):
+                            continue
+                        # Build post-trade
+                        my_post = [p.copy() for p in my_enriched]
+                        opp_post = [p.copy() for p in opp_enriched]
+                        # mark outgoing
+                        for out_n in my_names:
+                            for pl in my_post:
+                                if pl.get('name') == out_n:
+                                    pl['blocked'] = True
+                        for out_n in th_names:
+                            for pl in opp_post:
+                                if pl.get('name') == out_n:
+                                    pl['blocked'] = True
+                        # inbound entries
+                        for in_name in th_names:
+                            ci_in = _get_combined_info_by_name(in_name)
+                            my_post.append({
+                                'name': in_name,
+                                'position': (ci_in.get('position') or '').upper(),
+                                'selected_position': None,
+                                'weekly_points': ci_in.get('projected_points'),
+                                'ecr_overall': ci_in.get('ecr_overall'),
+                                'bye_week': ci_in.get('bye_week'),
+                                'status': '',
+                                'blocked': False
+                            })
+                        for in_name in my_names:
+                            ci_in = _get_combined_info_by_name(in_name)
+                            opp_post.append({
+                                'name': in_name,
+                                'position': (ci_in.get('position') or '').upper(),
+                                'selected_position': None,
+                                'weekly_points': ci_in.get('projected_points'),
+                                'ecr_overall': ci_in.get('ecr_overall'),
+                                'bye_week': ci_in.get('bye_week'),
+                                'status': '',
+                                'blocked': False
+                            })
+
+                        my_after = _lineup_total(my_post, my_slots)
+                        opp_after = _lineup_total(opp_post, opp_slots)
+                        my_delta = round(my_after - my_baseline, 2)
+                        their_delta = round(opp_after - opp_baseline, 2)
+
+                        # Parity on sums
+                        va = sum(_get_value_1qb(n) for n in my_names)
+                        vb = sum(_get_value_1qb(n) for n in th_names)
+                        parity = _parity_pct(va, vb)
+                        accept_prob = _acceptance_prob(their_delta, parity)
+                        # Apply same debug/production filter logic
+                        if debug_flag:
+                            if my_delta <= -5.0:
+                                continue
+                            if not (parity >= 70 or their_delta >= 1.0):
+                                continue
+                            if accept_prob < 0.15:
+                                continue
+                        else:
+                            # Production filters: very relaxed for testing
+                            if my_delta <= -5.0:  # Allow more negative trades
+                                continue
+                            if not (parity >= 50 or their_delta >= 1.0):  # Much lower parity requirement
+                                continue
+                            if accept_prob < 0.10:  # Much lower acceptance threshold
+                                continue
+                        bench_flag = any(tp in opp_targets_bench for tp in their_pair)
+                        proposals.append({
+                            'trade_id': f"2x2-{normalize_player_name(my_names[0])}+{normalize_player_name(my_names[1])}-{normalize_player_name(th_names[0])}+{normalize_player_name(th_names[1])}",
+                            'my_side': my_names,
+                            'their_side': th_names,
+                            'my_delta_points': my_delta,
+                            'their_delta_points': their_delta,
+                            'value_parity_pct': parity,
+                            'acceptance_prob': round(accept_prob, 2),
+                            'flags': ['bench_target'] if bench_flag else [],
+                        })
+
+        # Debug info for troubleshooting
+        debug_info = {}
+        if debug_flag:
+            debug_info = {
+                'my_baseline': my_baseline,
+                'my_slots': my_slots,
+                'my_surplus_count': len(my_surplus),
+                'my_surplus_names': [p.get('name') for p in my_surplus[:5]],
+                'target_teams_count': len(target_team_keys),
+                'sample_team_targets': {}
+            }
+            # Add sample of opponent targets for first team
+            if teams:
+                for t in teams[:1]:
+                    if t.get('team_key') in target_team_keys:
+                        opp_roster = t.get('roster', [])
+                        bench_count = sum(1 for p in opp_roster if str(p.get('selected_position', '')).upper().startswith('BN'))
+                        starter_count = len(opp_roster) - bench_count
+                        debug_info['sample_team_targets'][t.get('team_key')] = {
+                            'total_roster': len(opp_roster),
+                            'bench_players': bench_count,
+                            'starter_players': starter_count
+                        }
+
+        # Rank proposals: 0.70 my_delta + 0.30 acceptance_prob (+bench bonus)
+        def _score(p):
+            try:
+                base = 0.70 * float(p.get('my_delta_points', 0)) + 0.30 * float(p.get('acceptance_prob', 0))
+                if 'bench_target' in (p.get('flags') or []):
+                    base += 0.03
+                return base
+            except Exception:
+                return 0.0
+        proposals = sorted(proposals, key=_score, reverse=True)[:top_k]
+
+        # AI Enhancement: Disabled for now - TODO: Fix and re-enable
+        # use_ai = bool(payload.get('use_ai', False))
+        # if use_ai and proposals:
+        #     # AI enhancement code will be re-implemented properly
+
+        meta = {
+            'league_key': league_key,
+            'teams_considered': len(target_team_keys),
+            'proposals_returned': len(proposals),
+        }
+        if debug_flag:
+            meta.update(debug_info)
+        return jsonify({'proposals': proposals, 'meta': meta})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/trade_suggestions/debug')
+def trade_suggestions_debug():
+    """
+    Debug a specific proposal by recomputing pre/post lineups and deltas.
+    Query: league_key (req), my_team_key (req), trade_id (req), include_injured? false, bench_first? true
+    Auth: Authorization Bearer Yahoo token required.
+    """
+    try:
+        league_key = request.args.get('league_key')
+        my_team_key = request.args.get('my_team_key')
+        trade_id = request.args.get('trade_id')
+        include_injured = str(request.args.get('include_injured','')).strip() in ('1','true','True')
+        bench_first = str(request.args.get('bench_first','1')).strip() in ('1','true','True')
+        if not (league_key and my_team_key and trade_id):
+            return jsonify({'error': 'league_key, my_team_key, and trade_id are required'}), 400
+
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'Valid Authorization header with Bearer token is required'}), 401
+        access_token = auth_header.split(' ')[1]
+
+        # Parse trade_id
+        # Formats: 1x1-a-b, 2x1-a+b-c, 1x2-a-b+c, 2x2-a+b-c+d
+        try:
+            typ, rest = trade_id.split('-', 1)
+            left, right = rest.split('-', 1)
+            my_names_n = [s for s in left.split('+') if s]
+            their_names_n = [s for s in right.split('+') if s]
+        except Exception:
+            return jsonify({'error': 'Invalid trade_id format'}), 400
+
+        # Fetch snapshot
+        with app.test_request_context(environ_base={'HTTP_AUTHORIZATION': f'Bearer {access_token}'}, query_string={'league_key': league_key}):
+            snap_resp = yahoo_league_snapshot()
+        if hasattr(snap_resp, 'status_code') and snap_resp.status_code != 200:
+            return snap_resp
+        snapshot = snap_resp.get_json() if hasattr(snap_resp, 'get_json') else snap_resp
+        teams = snapshot.get('teams', []) if isinstance(snapshot, dict) else []
+
+        my_team = next((t for t in teams if t.get('team_key') == my_team_key), None)
+        if not my_team:
+            return jsonify({'error': 'my_team_key not found'}), 400
+
+        # Find opponent by matching their names to roster
+        def norm(n):
+            return normalize_player_name(n) if n else n
+        their_norm_set = set(their_names_n)
+        best_team = None
+        best_hits = -1
+        for t in teams:
+            if t.get('team_key') == my_team_key:
+                continue
+            hits = 0
+            for p in (t.get('roster') or []):
+                n = norm(p.get('name'))
+                if n in their_norm_set:
+                    hits += 1
+            if hits > best_hits:
+                best_hits = hits
+                best_team = t
+        if not best_team:
+            return jsonify({'error': 'Unable to identify opponent team for trade_id'}), 400
+
+        # Helper to map normalized names back to display names using snapshot
+        def resolve_display_names(names_n: list[str], roster: list) -> list[str]:
+            resolved = []
+            for nn in names_n:
+                found = None
+                for p in roster:
+                    if norm(p.get('name')) == nn:
+                        found = p.get('name')
+                        break
+                if not found:
+                    # fallback to title-cased normalized
+                    found = (nn or '').replace('-', ' ').title()
+                resolved.append(found)
+            return resolved
+
+        my_roster = my_team.get('roster', [])
+        opp_roster = best_team.get('roster', [])
+        my_names = resolve_display_names(my_names_n, my_roster)
+        their_names = resolve_display_names(their_names_n, opp_roster)
+
+        # Build enriched and slots
+        my_enriched, my_slots = _enrich_for_lineup_from_roster(my_roster)
+        opp_enriched, opp_slots = _enrich_for_lineup_from_roster(opp_roster)
+        my_baseline_lineup, my_baseline_total = _best_lineup(my_enriched, my_slots)
+        opp_baseline_lineup, opp_baseline_total = _best_lineup(opp_enriched, opp_slots)
+
+        # Build post-trade rosters
+        my_post = [p.copy() for p in my_enriched]
+        opp_post = [p.copy() for p in opp_enriched]
+        for out_n in my_names:
+            for pl in my_post:
+                if normalize_player_name(pl.get('name')) == normalize_player_name(out_n):
+                    pl['blocked'] = True
+        for out_n in their_names:
+            for pl in opp_post:
+                if normalize_player_name(pl.get('name')) == normalize_player_name(out_n):
+                    pl['blocked'] = True
+        for in_name in their_names:
+            ci_in = _get_combined_info_by_name(in_name)
+            my_post.append({
+                'name': in_name,
+                'position': (ci_in.get('position') or '').upper(),
+                'selected_position': None,
+                'weekly_points': ci_in.get('projected_points'),
+                'ecr_overall': ci_in.get('ecr_overall'),
+                'bye_week': ci_in.get('bye_week'),
+                'status': '',
+                'blocked': False
+            })
+        for in_name in my_names:
+            ci_in = _get_combined_info_by_name(in_name)
+            opp_post.append({
+                'name': in_name,
+                'position': (ci_in.get('position') or '').upper(),
+                'selected_position': None,
+                'weekly_points': ci_in.get('projected_points'),
+                'ecr_overall': ci_in.get('ecr_overall'),
+                'bye_week': ci_in.get('bye_week'),
+                'status': '',
+                'blocked': False
+            })
+
+        my_after_lineup, my_after_total = _best_lineup(my_post, my_slots)
+        opp_after_lineup, opp_after_total = _best_lineup(opp_post, opp_slots)
+        my_delta = round(my_after_total - my_baseline_total, 2)
+        their_delta = round(opp_after_total - opp_baseline_total, 2)
+
+        # Parity and acceptance
+        va = sum(_get_value_1qb(n) for n in my_names)
+        vb = sum(_get_value_1qb(n) for n in their_names)
+        parity = _parity_pct(va, vb)
+        accept_prob = _acceptance_prob(their_delta, parity)
+
+        def lineup_to_simple(lu):
+            simple = []
+            for slot in lu:
+                s = slot.get('slot')
+                pl = slot.get('player')
+                if pl and pl.get('name'):
+                    simple.append({
+                        'slot': s,
+                        'name': pl.get('name'),
+                        'position': pl.get('position'),
+                        'weekly_points': _window_points(pl.get('name'))
+                    })
+                else:
+                    simple.append({'slot': s, 'name': None})
+            return simple
+
+        return jsonify({
+            'trade_id': trade_id,
+            'my_team_key': my_team_key,
+            'opp_team_key': best_team.get('team_key'),
+            'my_side': my_names,
+            'their_side': their_names,
+            'my_baseline_total': my_baseline_total,
+            'their_baseline_total': opp_baseline_total,
+            'my_after_total': my_after_total,
+            'their_after_total': opp_after_total,
+            'my_delta_points': my_delta,
+            'their_delta_points': their_delta,
+            'value_parity_pct': parity,
+            'acceptance_prob': round(accept_prob, 2),
+            'my_baseline_lineup': lineup_to_simple(my_baseline_lineup),
+            'their_baseline_lineup': lineup_to_simple(opp_baseline_lineup),
+            'my_after_lineup': lineup_to_simple(my_after_lineup),
+            'their_after_lineup': lineup_to_simple(opp_after_lineup)
+        })
     except Exception as e:
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
