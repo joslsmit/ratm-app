@@ -132,6 +132,28 @@ const Documentation = () => {
         </ol>
       </section>
 
+      <section id="trade-center" className="doc-section">
+        <h2>Trade Center (Yahoo)</h2>
+        <p>
+          Trade Center generates tailored trade ideas using your actual Yahoo league snapshot. We prioritize the
+          teams that need your surplus positions, then run a capped beam search so you see a balanced mix of opponents.
+          Each card shows the opponent, AI reasons (when enabled), parity, and acceptance context badges.
+        </p>
+        <h3>How to Use:</h3>
+        <ol>
+          <li>Connect Yahoo, pick your league/team, and adjust sliders if needed.</li>
+          <li><strong>Horizon focus</strong> changes how we rank the list (quick gains ⇄ rest of season); it does not change the proposal pool.</li>
+          <li><strong>Acceptance minimum</strong> hides low-probability ideas. If everything falls below the bar, we still surface the closest fits and call that out.</li>
+          <li>The toggle now reads <em>“Relax filters &amp; enable debug view”</em>: it lowers the filters, logs extra context, and unlocks lineup aftermath details.</li>
+        </ol>
+        <h3>What to Expect:</h3>
+        <ul>
+          <li>Opponent mix: each team can contribute at most a few proposals (top 4 or top_k/3) and repeated trades incur a diversity penalty, so the list isn’t dominated by one roster.</li>
+          <li>Metadata includes per-opponent counts (shown in the UI and the API) so you can sanity check the distribution.</li>
+          <li>Hover tooltips and badges translate parity/acceptance into plain English so you know when an offer is even, close, or a long shot.</li>
+        </ul>
+      </section>
+
       <section id="waiver-wire-assistant" className="doc-section">
         <h2>Waiver Wire Assistant</h2>
         <p>Make add/drop decisions with recommendations first. In Yahoo mode (default if authenticated), suggestions reflect your actual roster and available players.</p>

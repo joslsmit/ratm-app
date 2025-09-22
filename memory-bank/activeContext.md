@@ -54,7 +54,7 @@
   - ✅ React Trade Center component renders proposals with filters, player dossier links, AI context, and debug drilldowns
   - ✅ Yahoo-auth bootstrap + acceptance fallback keeps proposals visible even when below threshold
   - ✅ Horizon & acceptance sliders now have inline helper copy; parity/acceptance metrics show plain-English badges and an education callout; opponent team label appears on every card.
-  - ✅ Backend now seeds opponents by need score and runs a per-team beam search with diversity penalties so proposal lists are less dominated by one roster; metadata surfaces opponent counts for sanity checks.
+  - ✅ Backend now seeds opponents by need score and runs a per-team beam search with diversity penalties so proposal lists are less dominated by one roster (per-team cap tightened to max 4/top_k//3, penalty raised to 0.12); metadata surfaces opponent counts for sanity checks.
   - 🔧 Outstanding polish: continue tuning need score weighting and AI copy tone, and explore richer tooltips/empty-state guidance once further scoring refinements land.
 
 **IMMEDIATE PRIORITIES:**

@@ -5174,11 +5174,11 @@ def trade_suggestions():
                 per_team_candidates[opp_team_key] = team_candidates
 
         if per_team_candidates:
-            diversity_penalty = 0.08
+            diversity_penalty = 0.12
             proposals = []
             heap = []
             per_team_ordered = {}
-            per_team_cap = max(top_k, 4)
+            per_team_cap = max(4, top_k // 3)
             for team_key, candidates in per_team_candidates.items():
                 ordered = sorted(candidates, key=_score, reverse=True)[:per_team_cap]
                 per_team_ordered[team_key] = ordered

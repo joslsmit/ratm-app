@@ -13,7 +13,7 @@ This document tracks the progress of the RATM Draft Kit project against the defi
 ### September 24, 2025 — Yahoo‑Aware Trade Suggestions — UX, AI, and Diversity Upgrades
 - Added inline education for Trade Center sliders, parity/acceptance context badges, an education callout, and opponent labels on cards so users understand the knobs and matchups instantly.
 - Backend AI enhancer now processes proposals in 6-item chunks (up to 12) so extended lists keep explanations; response metadata reports opponent distribution for confidence checks.
-- Introduced opponent need scoring + per-team beam search with diversity penalties so proposal lists stay balanced even when one roster has many candidates; API now returns opponent metadata alongside proposals.
+- Introduced opponent need scoring + per-team beam search with diversity penalties (per-team cap tightened; penalty increased) so proposal lists stay balanced even when one roster has many candidates; API now returns opponent metadata alongside proposals for sanity checks.
 
 **IMPLEMENTATION STATUS:**
 - ✅ **Backend Deterministic Engine COMPLETE**: League snapshot, trade generation, scoring system, all package types working
