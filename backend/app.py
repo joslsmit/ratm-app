@@ -4766,6 +4766,15 @@ def trade_suggestions():
         per_team_candidates = {}
         target_team_set = set(target_team_keys)
 
+        def _score(p):
+            try:
+                base = 0.70 * float(p.get('my_delta_points', 0)) + 0.30 * float(p.get('acceptance_prob', 0))
+                if 'bench_target' in (p.get('flags') or []):
+                    base += 0.03
+                return base
+            except Exception:
+                return 0.0
+
         my_surplus_pos_points = {}
         for pl in my_surplus:
             pos = (pl.get('position') or '').upper()
@@ -5212,15 +5221,6 @@ def trade_suggestions():
                             'starter_players': starter_count
                         }
 
-        # Rank proposals: 0.70 my_delta + 0.30 acceptance_prob (+bench bonus)
-        def _score(p):
-            try:
-                base = 0.70 * float(p.get('my_delta_points', 0)) + 0.30 * float(p.get('acceptance_prob', 0))
-                if 'bench_target' in (p.get('flags') or []):
-                    base += 0.03
-                return base
-            except Exception:
-                return 0.0
         proposals = sorted(proposals, key=_score, reverse=True)[:top_k]
 
         ai_meta = {'ai_enabled': False}
