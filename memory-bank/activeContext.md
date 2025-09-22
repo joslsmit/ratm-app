@@ -54,12 +54,13 @@
   - ✅ React Trade Center component renders proposals with filters, player dossier links, AI context, and debug drilldowns
   - ✅ Yahoo-auth bootstrap + acceptance fallback keeps proposals visible even when below threshold
   - ✅ Horizon & acceptance sliders now have inline helper copy; parity/acceptance metrics show plain-English badges and an education callout; opponent team label appears on every card.
-  - 🔧 Outstanding polish: diversify proposal sourcing (less repetition per opponent), tighten AI copy tone, and explore richer tooltips/empty-state guidance once backend scoring refinements land.
+  - ✅ Backend now seeds opponents by need score and runs a per-team beam search with diversity penalties so proposal lists are less dominated by one roster; metadata surfaces opponent counts for sanity checks.
+  - 🔧 Outstanding polish: continue tuning need score weighting and AI copy tone, and explore richer tooltips/empty-state guidance once further scoring refinements land.
 
 **IMMEDIATE PRIORITIES:**
-1. **HIGH**: Enhance trade diversity/quality heuristics (dynamic opponent prioritization, better candidate expansion) so top results aren’t dominated by a single roster.
-2. **HIGH**: Continue AI narrative polish (tone/length) and ensure explanations stay consistent once diversity changes land.
-3. **OPTIONAL**: Phase 3+ enhancements (playoff emphasis, waiver tie-ins, advanced filtering) after confidence-in-results work is complete.
+1. **HIGH**: Monitor and fine-tune the new need-score + beam-search heuristics (adjust penalties, add telemetry) to ensure balanced proposal mixes across leagues.
+2. **HIGH**: Continue AI narrative polish (tone/length) now that proposals span more opponents; consider short opponent-specific notes for low-acceptance trades.
+3. **OPTIONAL**: Phase 3+ enhancements (playoff emphasis, waiver tie-ins, advanced filtering) after the diversity heuristics prove stable.
 
 ### 🔧 PRODUCTION ISSUE RESOLVED - CORS Fix Applied:
 **Problem**: Frontend blocked by CORS policy - "Access-Control-Allow-Origin" header missing

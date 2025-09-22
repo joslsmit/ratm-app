@@ -17,6 +17,7 @@ from data_importer import import_data
 from utils import normalize_player_name, fuzzy_find_player_key, get_player_context, make_gemini_request, process_ai_response, process_ai_response_v2
 from typing import Optional, Tuple
 import itertools
+import heapq
 from prompt_templates import PromptBuilder
 from few_shot_examples import ExampleLibrary
 from chain_of_thought import ChainOfThoughtBuilder, ReasoningType
@@ -4762,19 +4763,32 @@ def trade_suggestions():
                 my_surplus.append(pl)
 
         proposals = []
-        # Iterate over target teams
+        per_team_candidates = {}
         target_team_set = set(target_team_keys)
+
+        my_surplus_pos_points = {}
+        for pl in my_surplus:
+            pos = (pl.get('position') or '').upper()
+            if not pos:
+                continue
+            my_surplus_pos_points.setdefault(pos, []).append(_window_points(pl.get('name')))
+        my_surplus_pos_avg = {
+            pos: (sum(vals) / len(vals)) if vals else 0.0
+            for pos, vals in my_surplus_pos_points.items()
+        }
+        my_surplus_sorted = sorted(my_surplus, key=lambda pl: _window_points(pl.get('name')), reverse=True)[:10]
+
+        opponent_contexts = []
         for t in teams:
             if t.get('team_key') not in target_team_set:
                 continue
             opp_roster = t.get('roster', [])
             opp_team_key = t.get('team_key')
-            opp_team_name = (t.get('name') or t.get('team_name') or '').strip()
-            if not opp_team_name:
-                opp_team_name = opp_team_key
-            # Bench-first target pool
+            opp_team_name = (t.get('name') or t.get('team_name') or '').strip() or opp_team_key
+
             opp_targets_bench = []
             opp_targets_starters = []
+            bench_points_by_pos = {}
             for p in opp_roster:
                 name = p.get('name')
                 if not name:
@@ -4787,25 +4801,51 @@ def trade_suggestions():
                     continue
                 if _window_points(name) <= 0.0:
                     continue
-                if str(p.get('selected_position') or '').upper().startswith(('BN','IR')):
-                    opp_targets_bench.append(p)
-                else:
-                    opp_targets_starters.append(p)
+                target_container = opp_targets_bench if str(p.get('selected_position') or '').upper().startswith(('BN','IR')) else opp_targets_starters
+                target_container.append(p)
+                if target_container is opp_targets_bench:
+                    bench_points_by_pos.setdefault(pos, []).append(_window_points(name))
 
             opp_targets = (opp_targets_bench + opp_targets_starters) if bench_first else (opp_targets_starters + opp_targets_bench)
-
-            # Prepare opponent enriched/slots once
             opp_enriched, opp_slots = _enrich_for_lineup_from_roster(opp_roster)
             opp_baseline = _lineup_total(opp_enriched, opp_slots)
-
-            # Order pools by window points (desc) for tractable search
-            def _wp_sort_key(pl):
-                try:
-                    return _window_points(pl.get('name'))
-                except Exception:
-                    return 0.0
-            my_surplus_sorted = sorted(my_surplus, key=_wp_sort_key, reverse=True)[:10]
             opp_targets_sorted = sorted(opp_targets, key=lambda p: _window_points(p.get('name')), reverse=True)[:12]
+
+            need_score = 0.0
+            if my_surplus_pos_avg:
+                for pos, my_avg in my_surplus_pos_avg.items():
+                    opp_vals = bench_points_by_pos.get(pos)
+                    opp_avg = (sum(opp_vals) / len(opp_vals)) if opp_vals else 0.0
+                    gap = my_avg - opp_avg
+                    if gap > 0:
+                        need_score += gap
+
+            opponent_contexts.append({
+                'team': t,
+                'team_key': opp_team_key,
+                'team_name': opp_team_name,
+                'opp_targets_sorted': opp_targets_sorted,
+                'opp_targets_bench': opp_targets_bench,
+                'opp_enriched': opp_enriched,
+                'opp_slots': opp_slots,
+                'opp_baseline': opp_baseline,
+                'need_score': need_score
+            })
+
+        opponent_contexts.sort(key=lambda ctx: (-ctx['need_score'], ctx['team_name']))
+
+        for ctx in opponent_contexts:
+            opp_targets_sorted = ctx['opp_targets_sorted']
+            if not opp_targets_sorted:
+                continue
+            opp_targets_bench = ctx['opp_targets_bench']
+            opp_enriched_base = ctx['opp_enriched']
+            opp_slots = ctx['opp_slots']
+            opp_baseline = ctx['opp_baseline']
+            opp_team_key = ctx['team_key']
+            opp_team_name = ctx['team_name']
+
+            team_candidates = []
 
             # 1-for-1 seeds
             for mine in my_surplus_sorted:
@@ -4814,20 +4854,15 @@ def trade_suggestions():
                     th_name = their.get('name')
                     if not my_name or not th_name:
                         continue
-                    # Build post-trade enriched rosters
                     my_post = [p.copy() for p in my_enriched]
-                    opp_post = [p.copy() for p in opp_enriched]
-                    # swap by name
+                    opp_post = [p.copy() for p in opp_enriched_base]
                     for arr_from, arr_to, out_name, in_name in [
                         (my_post, opp_post, my_name, th_name),
                         (opp_post, my_post, th_name, my_name)
                     ]:
                         for pl in arr_from:
                             if pl.get('name') == out_name:
-                                # mark as moved by excluding later selection
                                 pl['blocked'] = True
-                        # ensure inbound appears in target arr
-                        # We will append a lightweight inbound entry with combined context
                         ci_in = _get_combined_info_by_name(in_name)
                         arr_to.append({
                             'name': in_name,
@@ -4845,26 +4880,19 @@ def trade_suggestions():
                     my_delta = round(my_after - my_baseline, 2)
                     their_delta = round(opp_after - opp_baseline, 2)
 
-                    # Value parity (values-players.csv value_1qb)
                     va = _get_value_1qb(my_name)
                     vb = _get_value_1qb(th_name)
                     parity = _parity_pct(va, vb)
-
-                    # Filters: require my improvement and minimal acceptance
-                    # ParityMin=92% or TheirDelta>=5
                     accept_prob = _acceptance_prob(their_delta, parity)
 
-                    # Relaxed filters for debug mode
                     if debug_flag:
-                        # Debug mode: much more relaxed filters
-                        if my_delta <= -5.0:  # Allow some negative trades for testing
+                        if my_delta <= -5.0:
                             continue
-                        if not (parity >= 70 or their_delta >= 1.0):  # Lower parity threshold
+                        if not (parity >= 70 or their_delta >= 1.0):
                             continue
-                        if accept_prob < 0.15:  # Lower acceptance threshold
+                        if accept_prob < 0.15:
                             continue
                     else:
-                        # Production filters: strict
                         if my_delta <= 0:
                             continue
                         if not (parity >= 92 or their_delta >= 5.0):
@@ -4872,7 +4900,7 @@ def trade_suggestions():
                         if accept_prob < 0.35:
                             continue
 
-                    proposals.append({
+                    team_candidates.append({
                         'trade_id': f"1x1-{normalize_player_name(my_name)}-{normalize_player_name(th_name)}",
                         'my_side': [my_name],
                         'their_side': [th_name],
@@ -4894,10 +4922,8 @@ def trade_suggestions():
                         th_name = their.get('name')
                         if not th_name or any(not n for n in my_names):
                             continue
-                        # Build post-trade rosters
                         my_post = [p.copy() for p in my_enriched]
-                        opp_post = [p.copy() for p in opp_enriched]
-                        # mark outgoing as blocked
+                        opp_post = [p.copy() for p in opp_enriched_base]
                         for out_n in my_names:
                             for pl in my_post:
                                 if pl.get('name') == out_n:
@@ -4905,7 +4931,6 @@ def trade_suggestions():
                         for pl in opp_post:
                             if pl.get('name') == th_name:
                                 pl['blocked'] = True
-                        # inbound entries
                         ci_in = _get_combined_info_by_name(th_name)
                         opp_in_entries = []
                         for out_n in my_names:
@@ -4937,12 +4962,10 @@ def trade_suggestions():
                         my_delta = round(my_after - my_baseline, 2)
                         their_delta = round(opp_after - opp_baseline, 2)
 
-                        # Parity on sums
                         va = sum(_get_value_1qb(n) for n in my_names)
                         vb = _get_value_1qb(th_name)
                         parity = _parity_pct(va, vb)
                         accept_prob = _acceptance_prob(their_delta, parity)
-                        # Apply same debug/production filter logic
                         if debug_flag:
                             if my_delta <= -5.0:
                                 continue
@@ -4951,15 +4974,14 @@ def trade_suggestions():
                             if accept_prob < 0.15:
                                 continue
                         else:
-                            # Production filters: very relaxed for testing
-                            if my_delta <= -5.0:  # Allow more negative trades
+                            if my_delta <= -5.0:
                                 continue
-                            if not (parity >= 50 or their_delta >= 1.0):  # Much lower parity requirement
+                            if not (parity >= 50 or their_delta >= 1.0):
                                 continue
-                            if accept_prob < 0.10:  # Much lower acceptance threshold
+                            if accept_prob < 0.10:
                                 continue
                         bench_flag = their in opp_targets_bench
-                        proposals.append({
+                        team_candidates.append({
                             'trade_id': f"2x1-{normalize_player_name(my_names[0])}+{normalize_player_name(my_names[1])}-{normalize_player_name(th_name)}",
                             'my_side': my_names,
                             'their_side': [th_name],
@@ -4981,10 +5003,8 @@ def trade_suggestions():
                         th_names = [their_pair[0].get('name'), their_pair[1].get('name')]
                         if not my_name or any(not n for n in th_names):
                             continue
-                        # Build post-trade rosters
                         my_post = [p.copy() for p in my_enriched]
-                        opp_post = [p.copy() for p in opp_enriched]
-                        # mark outgoing
+                        opp_post = [p.copy() for p in opp_enriched_base]
                         for pl in my_post:
                             if pl.get('name') == my_name:
                                 pl['blocked'] = True
@@ -4992,7 +5012,6 @@ def trade_suggestions():
                             for pl in opp_post:
                                 if pl.get('name') == out_n:
                                     pl['blocked'] = True
-                        # inbound entries
                         for in_name in th_names:
                             ci_in = _get_combined_info_by_name(in_name)
                             my_post.append({
@@ -5022,12 +5041,10 @@ def trade_suggestions():
                         my_delta = round(my_after - my_baseline, 2)
                         their_delta = round(opp_after - opp_baseline, 2)
 
-                        # Parity on sums
                         va = _get_value_1qb(my_name)
                         vb = sum(_get_value_1qb(n) for n in th_names)
                         parity = _parity_pct(va, vb)
                         accept_prob = _acceptance_prob(their_delta, parity)
-                        # Apply same debug/production filter logic
                         if debug_flag:
                             if my_delta <= -5.0:
                                 continue
@@ -5036,21 +5053,19 @@ def trade_suggestions():
                             if accept_prob < 0.15:
                                 continue
                         else:
-                            # Production filters: very relaxed for testing
-                            if my_delta <= -5.0:  # Allow more negative trades
+                            if my_delta <= -5.0:
                                 continue
-                            if not (parity >= 50 or their_delta >= 1.0):  # Much lower parity requirement
+                            if not (parity >= 50 or their_delta >= 1.0):
                                 continue
-                            if accept_prob < 0.10:  # Much lower acceptance threshold
+                            if accept_prob < 0.10:
                                 continue
 
-                        # Suggested drop (my roster inflow +1): pick weakest bench not in trade or starters
                         bench_pool = [p for p in my_enriched if p.get('name') not in starters and p.get('name') not in ([my_name] + th_names)]
                         drop_cand = None
                         if bench_pool:
                             drop_cand = min(bench_pool, key=lambda p: _window_points(p.get('name') or ''))
                         bench_flag = any(tp in opp_targets_bench for tp in their_pair)
-                        proposals.append({
+                        team_candidates.append({
                             'trade_id': f"1x2-{normalize_player_name(my_name)}-{normalize_player_name(th_names[0])}+{normalize_player_name(th_names[1])}",
                             'my_side': [my_name],
                             'their_side': th_names,
@@ -5073,10 +5088,8 @@ def trade_suggestions():
                         th_names = [their_pair[0].get('name'), their_pair[1].get('name')]
                         if any(not n for n in my_names + th_names):
                             continue
-                        # Build post-trade
                         my_post = [p.copy() for p in my_enriched]
-                        opp_post = [p.copy() for p in opp_enriched]
-                        # mark outgoing
+                        opp_post = [p.copy() for p in opp_enriched_base]
                         for out_n in my_names:
                             for pl in my_post:
                                 if pl.get('name') == out_n:
@@ -5085,7 +5098,6 @@ def trade_suggestions():
                             for pl in opp_post:
                                 if pl.get('name') == out_n:
                                     pl['blocked'] = True
-                        # inbound entries
                         for in_name in th_names:
                             ci_in = _get_combined_info_by_name(in_name)
                             my_post.append({
@@ -5116,12 +5128,10 @@ def trade_suggestions():
                         my_delta = round(my_after - my_baseline, 2)
                         their_delta = round(opp_after - opp_baseline, 2)
 
-                        # Parity on sums
                         va = sum(_get_value_1qb(n) for n in my_names)
                         vb = sum(_get_value_1qb(n) for n in th_names)
                         parity = _parity_pct(va, vb)
                         accept_prob = _acceptance_prob(their_delta, parity)
-                        # Apply same debug/production filter logic
                         if debug_flag:
                             if my_delta <= -5.0:
                                 continue
@@ -5130,15 +5140,14 @@ def trade_suggestions():
                             if accept_prob < 0.15:
                                 continue
                         else:
-                            # Production filters: very relaxed for testing
-                            if my_delta <= -5.0:  # Allow more negative trades
+                            if my_delta <= -5.0:
                                 continue
-                            if not (parity >= 50 or their_delta >= 1.0):  # Much lower parity requirement
+                            if not (parity >= 50 or their_delta >= 1.0):
                                 continue
-                            if accept_prob < 0.10:  # Much lower acceptance threshold
+                            if accept_prob < 0.10:
                                 continue
                         bench_flag = any(tp in opp_targets_bench for tp in their_pair)
-                        proposals.append({
+                        team_candidates.append({
                             'trade_id': f"2x2-{normalize_player_name(my_names[0])}+{normalize_player_name(my_names[1])}-{normalize_player_name(th_names[0])}+{normalize_player_name(th_names[1])}",
                             'my_side': my_names,
                             'their_side': th_names,
@@ -5151,6 +5160,33 @@ def trade_suggestions():
                             'opponent_team_name': opp_team_name,
                             'opponent_team_key': opp_team_key
                         })
+
+            if team_candidates:
+                per_team_candidates[opp_team_key] = team_candidates
+
+        if per_team_candidates:
+            diversity_penalty = 0.08
+            proposals = []
+            heap = []
+            per_team_ordered = {}
+            per_team_cap = max(top_k, 4)
+            for team_key, candidates in per_team_candidates.items():
+                ordered = sorted(candidates, key=_score, reverse=True)[:per_team_cap]
+                per_team_ordered[team_key] = ordered
+                if ordered:
+                    initial_score = _score(ordered[0])
+                    heapq.heappush(heap, (-initial_score, team_key, 0))
+            diversity_counts = {k: 0 for k in per_team_ordered.keys()}
+            while heap and len(proposals) < top_k:
+                priority, team_key, idx = heapq.heappop(heap)
+                candidate = per_team_ordered[team_key][idx]
+                proposals.append(candidate)
+                diversity_counts[team_key] += 1
+                next_idx = idx + 1
+                if next_idx < len(per_team_ordered[team_key]):
+                    penalty = diversity_penalty * diversity_counts[team_key]
+                    next_score = _score(per_team_ordered[team_key][next_idx]) - penalty
+                    heapq.heappush(heap, (-next_score, team_key, next_idx))
 
         # Debug info for troubleshooting
         debug_info = {}

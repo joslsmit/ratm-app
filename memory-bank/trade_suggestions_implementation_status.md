@@ -68,16 +68,17 @@
 - React Trade Center page with Yahoo league bootstrap, filters (horizon, acceptance, package size), dossier links, and debug drilldowns
 - Acceptance fallback keeps proposals visible even when below the slider threshold and flags the relaxed filter state
 - Inline slider helper copy, parity/acceptance context badges, education callout, and opponent labels improve comprehension
+- Opponent need scoring + per-team beam search with diversity penalty surfaces a more balanced mix of trades across teams; metadata exposes per-opponent counts.
 
 **Still Needed:**
-- Improve proposal diversity/heuristics so lists aren’t dominated by a single opponent when filters are strict
+- Continue tuning the new diversity heuristics (need weighting, penalty strength) with telemetry to ensure balanced output in edge leagues
 - Continue AI copy polish (tone/length) and consider richer tooltips/empty-state guidance
 - Additional UX polish once backend scoring refinements land
 
 ## Next Steps Priority Order
 
-### 1. **HIGH: Diversify Proposal Set (BACKEND/FRONTEND)**
-**Goal:** Adjust candidate expansion and scoring so multiple opponents surface when quality trades exist. Add telemetry to confirm distribution.
+### 1. **HIGH: Tune Diversity Heuristics (BACKEND)**
+**Goal:** Instrument and adjust need-score weighting, penalties, and per-team caps so the new beam search stays stable across leagues.
 
 ### 2. **HIGH: AI Copy/Tone Polish (FRONTEND/BACKEND PROMPT)**
 **Goal:** Tighten explanation length, ensure negotiation pitches stay opponent-specific as diversity work lands.

@@ -572,7 +572,7 @@ const TradeCenter = () => {
               checked={debugMode}
               onChange={(event) => setDebugMode(event.target.checked)}
             />
-            <span>Include debug metadata</span>
+            <span>Relax filters & enable debug view</span>
           </label>
           <div className={styles.buttonRow}>
             <button type="button" className={styles.secondaryButton} onClick={resetFilters}>Reset filters</button>

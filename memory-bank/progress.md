@@ -10,10 +10,10 @@ This document tracks the progress of the RATM Draft Kit project against the defi
 ## 📁 Memory Bank Organization
 **Historical Records**: Completed implementation guides, phase logs, and AI enhancement documentation are archived in the `memory-bank/records/` subdirectory for reference. Active files remain at the root level for easy access.
 
-### September 24, 2025 — Yahoo‑Aware Trade Suggestions — UX & AI Polish Continues
+### September 24, 2025 — Yahoo‑Aware Trade Suggestions — UX, AI, and Diversity Upgrades
 - Added inline education for Trade Center sliders, parity/acceptance context badges, an education callout, and opponent labels on cards so users understand the knobs and matchups instantly.
 - Backend AI enhancer now processes proposals in 6-item chunks (up to 12) so extended lists keep explanations; response metadata reports opponent distribution for confidence checks.
-- Opponent metadata shipped with each proposal to support clearer UI and debugging.
+- Introduced opponent need scoring + per-team beam search with diversity penalties so proposal lists stay balanced even when one roster has many candidates; API now returns opponent metadata alongside proposals.
 
 **IMPLEMENTATION STATUS:**
 - ✅ **Backend Deterministic Engine COMPLETE**: League snapshot, trade generation, scoring system, all package types working
