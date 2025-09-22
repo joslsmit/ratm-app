@@ -90,6 +90,25 @@ def _dev_save_cfg(cfg: dict):
 player_data_cache, player_name_to_id, static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data, player_values_cache, pick_values_cache, weekly_projections_cache, combined_player_data_cache = None, None, {}, {}, {}, None, None, {}, None
 yahoo_id_to_key = {}
 
+POSITION_TOKENS = {'QB', 'RB', 'WR', 'TE', 'DST', 'DEF', 'K'}
+
+
+def _positions_for_names(names: list[str]) -> set[str]:
+    positions = set()
+    for nm in names or []:
+        if not nm:
+            continue
+        ci = _get_combined_info_by_name(nm)
+        pos = (ci.get('position') or '').upper() if ci else ''
+        if not pos:
+            continue
+        primary = pos.split('/')[0].strip()
+        if primary in ('DEF', 'DST'):
+            positions.add('DST')
+        elif primary:
+            positions.add(primary)
+    return positions
+
 # --- Trade Suggestions (Deterministic Core Helpers) ---
 def _get_value_1qb(name: str) -> float:
     try:
@@ -4519,11 +4538,11 @@ def _enhance_proposals_with_ai(proposals: list, my_team: dict, teams: list, acce
                 {
                     "trade_id": "1x1-jordan love-tee higgins",
                     "reasons": [
-                        "Consolidates QB depth into a weekly WR2 upgrade for us",
-                        "Opponent adds QB help to cover bye week and injury risk",
-                        "Parity sits within 5%, so the value exchange stays fair"
+                        "Lineup: Higgins slides into WR2, adding ~3.2 pts to our weekly floor.",
+                        "Opponent: Black Sheep land QB depth for bye week gaps and bench injuries.",
+                        "Fairness: Value gap under 4% with their delta +1.2 pts, so pitch feels balanced."
                     ],
-                    "negotiation_pitch": "You get much-needed QB stability while we balance our WR room—fair for both sides.",
+                    "negotiation_pitch": "Black Sheep - this swaps your excess WR for needed QB cover while we steady our WR room.",
                     "confidence": "Medium",
                     "ai_rank_adjustment": 0.6
                 }
@@ -4556,6 +4575,7 @@ def _enhance_proposals_with_ai(proposals: list, my_team: dict, teams: list, acce
 
                 my_players = [_player_summary(name) for name in proposal.get('my_side', [])]
                 their_players = [_player_summary(name) for name in their_side]
+                positions_in_play = sorted(_positions_for_names((proposal.get('my_side') or []) + their_side))
 
                 summary_lines = [
                     f"PROPOSAL {global_idx}: {trade_id}",
@@ -4568,10 +4588,35 @@ def _enhance_proposals_with_ai(proposals: list, my_team: dict, teams: list, acce
                     f"  Flags: {', '.join(proposal.get('flags', [])) or 'None'}"
                 ]
 
+                if positions_in_play:
+                    summary_lines.append(f"  Positions In Play: {', '.join(positions_in_play)}")
+
                 if opp_team:
                     summary_lines.append(f"  Opponent Team: {opp_team['name']}")
                     summary_lines.append(f"  Opponent Starters Snapshot: {', '.join(opp_team['starters'][:8])}")
                     summary_lines.append(f"  Opponent Bench Snapshot: {', '.join(opp_team['bench'][:8])}")
+
+                needs = proposal.get('opponent_needs') or []
+                needs_rendered = []
+                if isinstance(needs, list):
+                    for entry in needs:
+                        if isinstance(entry, dict):
+                            pos = entry.get('position')
+                            gap = entry.get('gap_points')
+                            if pos and isinstance(gap, (int, float)):
+                                needs_rendered.append(f"{pos} depth gap ~+{gap:.1f} pts")
+                                continue
+                            note_val = entry.get('note')
+                            if note_val:
+                                needs_rendered.append(str(note_val))
+                        elif entry:
+                            needs_rendered.append(str(entry))
+                if needs_rendered:
+                    summary_lines.append(f"  Opponent Needs: {', '.join(needs_rendered)}")
+
+                suggested_drop = proposal.get('suggested_drop')
+                if suggested_drop:
+                    summary_lines.append(f"  Suggested Drop: {suggested_drop}")
 
                 proposal_summaries.append("\n".join(summary_lines))
 
@@ -4592,6 +4637,15 @@ ANALYSIS METHODOLOGY:
 3. Highlight fairness signals (value parity, acceptance probability, mutual benefit).
 4. Surface key risks (injury volatility, role uncertainty, short-term vs ROS).
 5. Provide a one-sentence negotiation pitch tailored to the opponent's needs.
+6. If a suggested drop appears, confirm why the roster spot is safe to free or note the waiver follow-up.
+
+STYLE & TONE GUARDRAILS:
+- Provide 2-3 reasons total. Reason 1 = our lineup/roster benefit; Reason 2 = opponent benefit referencing their team name; Reason 3 (optional) = fairness, risk, or playoff outlook.
+- Each reason must be <= 18 words, declarative, and grounded in provided context (include numbers when meaningful).
+- Weave any listed opponent needs into the opponent-focused reason.
+- If a suggested drop is present, justify in a reason why that player is expendable (bench role, waiver pivot, etc.).
+- negotiation_pitch: single sentence <= 18 words. Start with the opponent team name (e.g., "Black Sheep - ...") and keep the tone collaborative.
+- Mention only positions that appear in the proposal (My Side Out or Their Side Out). Do not reference other positions.
 
 CONTEXT DATA:
 {context_str}
@@ -4601,8 +4655,10 @@ RESPONSE FORMAT (JSON ONLY):
 
 REQUIREMENTS:
 - Return the original trade_id values exactly as provided.
-- Reasons must be concise (max 2 sentences each) and grounded in the context.
-- negotiation_pitch should be persuasive but realistic (max 2 sentences).
+- Provide 2-3 reasons following the guardrails (plain text, no numbering or markdown).
+- Each reason must remain <= 18 words.
+- Mention the opponent team name at least once (reason or negotiation pitch).
+- negotiation_pitch must be a single sentence (<= 18 words) starting with the opponent team name.
 - confidence must be one of "High", "Medium", or "Low".
 - ai_rank_adjustment is a float; positive values mean AI prefers ranking it higher.
 - Do not include markdown or extra prose outside the JSON object.
@@ -4674,10 +4730,40 @@ REQUIREMENTS:
                         ai_fields = value
                         break
             if ai_fields:
+                allowed_positions = _positions_for_names((proposal.get('my_side') or []) + (proposal.get('their_side') or []))
+                allowed_positions = set(allowed_positions or [])
+                if 'DST' in allowed_positions:
+                    allowed_positions.add('DEF')
+                if 'DEF' in allowed_positions:
+                    allowed_positions.add('DST')
+
+                def _mentions_forbidden(text: str) -> bool:
+                    if not text:
+                        return False
+                    upper_text = text.upper()
+                    for token in POSITION_TOKENS:
+                        if re.search(rf"\\b{token}\\b", upper_text):
+                            canonical = 'DST' if token in ('DST', 'DEF') else token
+                            if canonical not in allowed_positions:
+                                return True
+                    return False
+
                 if ai_fields['reasons']:
-                    enriched['reasons'] = ai_fields['reasons']
+                    filtered_reasons = [r for r in ai_fields['reasons'] if not _mentions_forbidden(r)]
+                    if not filtered_reasons:
+                        parity_val = proposal.get('value_parity_pct')
+                        acceptance_val = proposal.get('acceptance_prob')
+                        fallback_reason = (
+                            f"Fairness: Value parity {parity_val if parity_val is not None else '—'}% with acceptance "
+                            f"{acceptance_val if acceptance_val is not None else '—'}."
+                        )
+                        filtered_reasons = [fallback_reason]
+                    enriched['reasons'] = filtered_reasons
                 if ai_fields['negotiation_pitch']:
-                    enriched['negotiation_pitch'] = ai_fields['negotiation_pitch']
+                    pitch = ai_fields['negotiation_pitch']
+                    if _mentions_forbidden(pitch):
+                        pitch = ''
+                    enriched['negotiation_pitch'] = pitch
                 enriched['ai_confidence'] = ai_fields['ai_confidence']
                 rank_adj = ai_fields.get('ai_rank_adjustment')
                 if isinstance(rank_adj, (int, float)):
@@ -4711,6 +4797,13 @@ def trade_suggestions():
         max_pkg = int(payload.get('max_package_size', 2))
         use_ai = bool(payload.get('use_ai', False))
         api_key_override = payload.get('gemini_api_key') or payload.get('ai_api_key')
+        try:
+            acceptance_floor = float(payload.get('acceptance_floor', 0.10))
+        except (TypeError, ValueError):
+            acceptance_floor = 0.10
+        acceptance_floor = max(0.0, min(0.5, acceptance_floor))
+        effective_acceptance_floor = max(0.02, min(0.5, acceptance_floor * 0.75))
+        debug_acceptance_floor = max(0.01, min(0.1, effective_acceptance_floor * 0.6))
         if not league_key or not my_team_key:
             return jsonify({'error': 'league_key and my_team_key are required'}), 400
 
@@ -4815,19 +4908,38 @@ def trade_suggestions():
                 if target_container is opp_targets_bench:
                     bench_points_by_pos.setdefault(pos, []).append(_window_points(name))
 
+            pos_gap_details = []
+            total_gap = 0.0
+            if my_surplus_pos_avg:
+                for pos, my_avg in my_surplus_pos_avg.items():
+                    if my_avg is None:
+                        continue
+                    try:
+                        my_avg_val = float(my_avg)
+                    except (TypeError, ValueError):
+                        continue
+                    if my_avg_val <= 0:
+                        continue
+                    opp_vals = bench_points_by_pos.get(pos) or []
+                    opp_avg = (sum(opp_vals) / len(opp_vals)) if opp_vals else 0.0
+                    gap = round(my_avg_val - opp_avg, 2)
+                    if gap <= 0:
+                        continue
+                    total_gap += gap
+                    pos_gap_details.append({
+                        'position': pos,
+                        'gap_points': gap,
+                        'our_bench_avg': round(my_avg_val, 2),
+                        'their_bench_avg': round(opp_avg, 2) if opp_vals else None
+                    })
+            pos_gap_details.sort(key=lambda entry: entry.get('gap_points', 0), reverse=True)
+
             opp_targets = (opp_targets_bench + opp_targets_starters) if bench_first else (opp_targets_starters + opp_targets_bench)
             opp_enriched, opp_slots = _enrich_for_lineup_from_roster(opp_roster)
             opp_baseline = _lineup_total(opp_enriched, opp_slots)
             opp_targets_sorted = sorted(opp_targets, key=lambda p: _window_points(p.get('name')), reverse=True)[:12]
 
-            need_score = 0.0
-            if my_surplus_pos_avg:
-                for pos, my_avg in my_surplus_pos_avg.items():
-                    opp_vals = bench_points_by_pos.get(pos)
-                    opp_avg = (sum(opp_vals) / len(opp_vals)) if opp_vals else 0.0
-                    gap = my_avg - opp_avg
-                    if gap > 0:
-                        need_score += gap
+            need_score = total_gap
 
             opponent_contexts.append({
                 'team': t,
@@ -4838,7 +4950,8 @@ def trade_suggestions():
                 'opp_enriched': opp_enriched,
                 'opp_slots': opp_slots,
                 'opp_baseline': opp_baseline,
-                'need_score': need_score
+                'need_score': need_score,
+                'pos_gap_details': pos_gap_details
             })
 
         opponent_contexts.sort(key=lambda ctx: (-ctx['need_score'], ctx['team_name']))
@@ -4853,6 +4966,42 @@ def trade_suggestions():
             opp_baseline = ctx['opp_baseline']
             opp_team_key = ctx['team_key']
             opp_team_name = ctx['team_name']
+            pos_gap_notes = ctx.get('pos_gap_details') or []
+
+            def _serialize_pos_gaps(notes: list, relevant_positions: set[str]) -> list:
+                if not notes:
+                    return []
+                allowed_positions = {pos.upper() for pos in (relevant_positions or set()) if pos}
+                if 'DST' in allowed_positions:
+                    allowed_positions.add('DEF')
+                if 'DEF' in allowed_positions:
+                    allowed_positions.add('DST')
+                serialized = []
+                for item in notes:
+                    if len(serialized) >= 3:
+                        break
+                    if isinstance(item, dict):
+                        pos_raw = item.get('position')
+                        pos_upper = (pos_raw or '').upper()
+                        if pos_upper and allowed_positions and pos_upper not in allowed_positions:
+                            continue
+                        entry = {
+                            'position': pos_raw,
+                            'gap_points': item.get('gap_points'),
+                            'our_bench_avg': item.get('our_bench_avg'),
+                            'their_bench_avg': item.get('their_bench_avg')
+                        }
+                        # Remove empty keys but keep note fallback if provided
+                        entry = {k: v for k, v in entry.items() if v is not None}
+                        if entry:
+                            serialized.append(entry)
+                            continue
+                        note_val = item.get('note')
+                        if note_val:
+                            serialized.append({'note': note_val})
+                    elif item:
+                        serialized.append({'note': str(item)})
+                return serialized
 
             team_candidates = []
 
@@ -4899,15 +5048,18 @@ def trade_suggestions():
                             continue
                         if not (parity >= 70 or their_delta >= 1.0):
                             continue
-                        if accept_prob < 0.15:
+                        if accept_prob < debug_acceptance_floor:
                             continue
                     else:
                         if my_delta <= 0:
                             continue
                         if not (parity >= 92 or their_delta >= 5.0):
                             continue
-                        if accept_prob < 0.35:
+                        if accept_prob < max(effective_acceptance_floor, 0.35):
                             continue
+
+                    relevant_positions = _positions_for_names([my_name])
+                    pos_gap_serialized = _serialize_pos_gaps(pos_gap_notes, relevant_positions)
 
                     team_candidates.append({
                         'trade_id': f"1x1-{normalize_player_name(my_name)}-{normalize_player_name(th_name)}",
@@ -4920,7 +5072,8 @@ def trade_suggestions():
                         'flags': ['bench_target'] if their in opp_targets_bench else [],
                         'opponent_team': opp_team_name,
                         'opponent_team_name': opp_team_name,
-                        'opponent_team_key': opp_team_key
+                        'opponent_team_key': opp_team_key,
+                        'opponent_needs': pos_gap_serialized
                     })
 
             # 2-for-1 seeds (my two for their one)
@@ -4980,16 +5133,18 @@ def trade_suggestions():
                                 continue
                             if not (parity >= 70 or their_delta >= 1.0):
                                 continue
-                            if accept_prob < 0.15:
+                            if accept_prob < debug_acceptance_floor:
                                 continue
                         else:
                             if my_delta <= -5.0:
                                 continue
-                            if not (parity >= 50 or their_delta >= 1.0):
+                            if not (parity >= 45 or their_delta >= 1.0):
                                 continue
-                            if accept_prob < 0.10:
+                            if accept_prob < effective_acceptance_floor:
                                 continue
                         bench_flag = their in opp_targets_bench
+                        relevant_positions = _positions_for_names(my_names)
+                        pos_gap_serialized = _serialize_pos_gaps(pos_gap_notes, relevant_positions)
                         team_candidates.append({
                             'trade_id': f"2x1-{normalize_player_name(my_names[0])}+{normalize_player_name(my_names[1])}-{normalize_player_name(th_name)}",
                             'my_side': my_names,
@@ -5001,7 +5156,8 @@ def trade_suggestions():
                             'flags': ['bench_target'] if bench_flag else [],
                             'opponent_team': opp_team_name,
                             'opponent_team_name': opp_team_name,
-                            'opponent_team_key': opp_team_key
+                            'opponent_team_key': opp_team_key,
+                            'opponent_needs': pos_gap_serialized
                         })
 
             # 1-for-2 seeds (my one for their two) — add suggested drop on my side
@@ -5059,14 +5215,14 @@ def trade_suggestions():
                                 continue
                             if not (parity >= 70 or their_delta >= 1.0):
                                 continue
-                            if accept_prob < 0.15:
+                            if accept_prob < debug_acceptance_floor:
                                 continue
                         else:
                             if my_delta <= -5.0:
                                 continue
-                            if not (parity >= 50 or their_delta >= 1.0):
+                            if not (parity >= 45 or their_delta >= 1.0):
                                 continue
-                            if accept_prob < 0.10:
+                            if accept_prob < effective_acceptance_floor:
                                 continue
 
                         bench_pool = [p for p in my_enriched if p.get('name') not in starters and p.get('name') not in ([my_name] + th_names)]
@@ -5074,6 +5230,8 @@ def trade_suggestions():
                         if bench_pool:
                             drop_cand = min(bench_pool, key=lambda p: _window_points(p.get('name') or ''))
                         bench_flag = any(tp in opp_targets_bench for tp in their_pair)
+                        relevant_positions = _positions_for_names([my_name])
+                        pos_gap_serialized = _serialize_pos_gaps(pos_gap_notes, relevant_positions)
                         team_candidates.append({
                             'trade_id': f"1x2-{normalize_player_name(my_name)}-{normalize_player_name(th_names[0])}+{normalize_player_name(th_names[1])}",
                             'my_side': [my_name],
@@ -5086,7 +5244,8 @@ def trade_suggestions():
                             'suggested_drop': (drop_cand.get('name') if drop_cand else None),
                             'opponent_team': opp_team_name,
                             'opponent_team_name': opp_team_name,
-                            'opponent_team_key': opp_team_key
+                            'opponent_team_key': opp_team_key,
+                            'opponent_needs': pos_gap_serialized
                         })
 
             # 2-for-2 seeds
@@ -5146,16 +5305,18 @@ def trade_suggestions():
                                 continue
                             if not (parity >= 70 or their_delta >= 1.0):
                                 continue
-                            if accept_prob < 0.15:
+                            if accept_prob < debug_acceptance_floor:
                                 continue
                         else:
                             if my_delta <= -5.0:
                                 continue
-                            if not (parity >= 50 or their_delta >= 1.0):
+                            if not (parity >= 45 or their_delta >= 1.0):
                                 continue
-                            if accept_prob < 0.10:
+                            if accept_prob < effective_acceptance_floor:
                                 continue
                         bench_flag = any(tp in opp_targets_bench for tp in their_pair)
+                        relevant_positions = _positions_for_names(my_names)
+                        pos_gap_serialized = _serialize_pos_gaps(pos_gap_notes, relevant_positions)
                         team_candidates.append({
                             'trade_id': f"2x2-{normalize_player_name(my_names[0])}+{normalize_player_name(my_names[1])}-{normalize_player_name(th_names[0])}+{normalize_player_name(th_names[1])}",
                             'my_side': my_names,
@@ -5167,18 +5328,19 @@ def trade_suggestions():
                             'flags': ['bench_target'] if bench_flag else [],
                             'opponent_team': opp_team_name,
                             'opponent_team_name': opp_team_name,
-                            'opponent_team_key': opp_team_key
+                            'opponent_team_key': opp_team_key,
+                            'opponent_needs': pos_gap_serialized
                         })
 
             if team_candidates:
                 per_team_candidates[opp_team_key] = team_candidates
 
         if per_team_candidates:
-            diversity_penalty = 0.12
+            diversity_penalty = 0.18
             proposals = []
             heap = []
             per_team_ordered = {}
-            per_team_cap = max(4, top_k // 3)
+            per_team_cap = max(3, max(1, top_k // 4))
             for team_key, candidates in per_team_candidates.items():
                 ordered = sorted(candidates, key=_score, reverse=True)[:per_team_cap]
                 per_team_ordered[team_key] = ordered

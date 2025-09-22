@@ -2,7 +2,7 @@
 
 > **File Type**: CURRENT STATUS
 > **Review Priority**: High
-> **Last Updated**: September 24, 2025
+> **Last Updated**: September 26, 2025
 > **Purpose**: Accurate status of trade suggestions development
 
 ## Current Implementation Status
@@ -23,7 +23,7 @@
 - ✅ **Roster Legality**: Validates pre/post-trade rosters
 - ✅ **Debug Capabilities**: Comprehensive troubleshooting info
 
-**VERIFIED Test Results (September 24, 2025):**
+**VERIFIED Test Results (September 26, 2025):**
 ```json
 {
   "meta": {
@@ -31,7 +31,12 @@
     "proposals_returned": 12,
     "teams_considered": 11,
     "opponent_counts": {
-      "Black Sheep": 12
+      "18th Street Macs": 1,
+      "Black Sheep": 3,
+      "CeeDee in your ENDzone": 2,
+      "Gary's Glorious Team": 3,
+      "Not this year Steve": 2,
+      "St. Brown’s Touchdown Town": 1
     }
   },
   "proposals": [
@@ -50,10 +55,10 @@
 ```
 
 **Optimized Filter Settings (CONFIRMED WORKING):**
-- Value Parity: 50% (relaxed from 75%)
-- Acceptance Threshold: 0.10 (relaxed from 0.25)
-- Delta Tolerance: -5.0 points (relaxed from -2.0)
-- **Result**: 12 realistic trade proposals generated successfully
+- Value parity guard now admits trades down to ~45% (was 50%) provided the opponent gains ≥1 point.
+- Acceptance floor auto-slackens to ~75% of the requested slider value with a 0.02 hard minimum (default slider 0.10 → effective ~0.075).
+- Delta tolerance remains -5.0 points to prevent catastrophic losses.
+- **Result**: 12 realistic, multi-opponent trade proposals generated successfully.
 
 ### ✅ **AI Integration**
 
@@ -61,6 +66,7 @@
 - Gemini-backed `_enhance_proposals_with_ai()` enriches the deterministic list with reasons, negotiation pitch, confidence, and optional rank adjustment.
 - Trade IDs are normalized so explanations survive Gemini formatting changes; prompts/responses (per chunk) are logged to `backend/ai_debug.log`.
 - AI enhancement now processes proposals in 6-item chunks (up to 12) so extended lists keep explanations; metadata reports how many trades received AI fields.
+- Position-aware guardrails in the prompt plus post-processing filters strip any Gemini lines that reference positions not present in the swap and replace them with deterministic fairness copy when needed.
 
 ### 🟡 **Frontend Trade Center MVP**
 
@@ -71,17 +77,17 @@
 - Opponent need scoring + per-team beam search with diversity penalty (per-team cap tightened, penalty increased) surfaces a more balanced mix of trades across teams; metadata exposes per-opponent counts.
 
 **Still Needed:**
-- Continue tuning the new diversity heuristics (need weighting, penalty strength) with telemetry to ensure balanced output in edge leagues
-- Continue AI copy polish (tone/length) and consider richer tooltips/empty-state guidance
-- Additional UX polish once backend scoring refinements land
+- Continue tuning the new diversity heuristics (need weighting, penalty strength) with telemetry to ensure balanced output in edge leagues.
+- Normalize Gemini `null` responses so fallback reasons/pitches always surface, then keep polishing tone/length.
+- Additional UX polish once backend scoring refinements land.
 
 ## Next Steps Priority Order
 
-### 1. **HIGH: Instrument Diversity Heuristics (BACKEND)**
-**Goal:** Capture telemetry (distribution logs, score breakdowns) so we can validate the new cap/penalty settings across leagues and adjust if necessary.
+### 1. **HIGH: Instrument Diversity & Acceptance Telemetry (BACKEND)**
+**Goal:** Log per-opponent counts, effective acceptance floors, and parity guards so we can validate the relaxed thresholds across leagues and adjust dynamically if clustering returns.
 
-### 2. **HIGH: AI Copy/Tone Polish (FRONTEND/BACKEND PROMPT)**
-**Goal:** Tighten explanation length, ensure negotiation pitches stay opponent-specific as diversity work lands.
+### 2. **HIGH: Gemini Null Handling (BACKEND/FRONTEND)**
+**Goal:** Normalize `null`/empty AI payloads so fallback reasons and negotiation pitches always render, keeping the UI consistent when the model declines to answer.
 
 ### 3. **OPTIONAL: Advanced Trade Center Features**
 - Playoff emphasis, schedule blending
@@ -91,13 +97,13 @@
 ## Technical Debt
 
 **Issues Introduced During Development:**
-1. Proposal diversity heuristics can still funnel toward a single opponent under current filters
-2. Need additional logging/telemetry around candidate pruning once diversification work begins
-3. Additional logging around Yahoo auth failures would aid UX (league snapshot 401s)
+1. Need telemetry to confirm the new acceptance/diversity parameters stay healthy across varied leagues.
+2. Gemini can still return `null` reason arrays, which currently surface as empty sections in the UI.
+3. Additional logging around Yahoo auth failures would aid UX (league snapshot 401s).
 
 **Code Quality:**
 - Core deterministic engine: ✅ Production ready
-- AI integration layer: ✅ Normalized IDs + logging; monitor for future prompt drift
+- AI integration layer: ✅ Guardrails + logging in place; monitor for prompt drift or null payloads
 - Error handling: ⚠️ Add contextual messaging in frontend
 - Documentation: ⚠️ Update UX notes once slider/metric polish ships
 
@@ -119,17 +125,15 @@
 ## Deployment Status
 
 **Backend:**
-- ✅ Core functionality deployed and working
-- ❌ AI integration disabled
+- ✅ Core functionality deployed and working (deterministic + AI guardrails)
 - ✅ Debug endpoints available
 
 **Frontend:**
-- ❌ No Trade Center component exists
-- ❌ No navigation or routing for trades
-- ❌ No UI integration points
+- ✅ Trade Center MVP shipped with filters, chips, and debug flows
+- ⚠️ Needs additional polish (telemetry surfacing, richer empty states)
 
 **Overall:**
 - Deterministic backend: **✅ Production Ready & Verified Working**
-- AI integration: **❌ Broken, needs immediate fix**
-- Frontend: **❌ Not started**
-- Full feature: **40% complete** (deterministic engine fully verified)
+- AI integration: **🟡 Online with guardrails; monitor null fallback handling**
+- Frontend: **🟡 MVP live; ongoing UX polish**
+- Full feature: **~75% complete** (deterministic + AI + MVP UI functional)

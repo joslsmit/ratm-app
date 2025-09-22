@@ -48,18 +48,19 @@
 - ✅ **Phase 2 AI Integration**: **ONLINE WITH GEMINI EXPLANATIONS**
   - ✅ `_enhance_proposals_with_ai()` now augments deterministic proposals with reasons, negotiation pitch, confidence, and rank adjustment
   - ✅ Trade ID normalization + logging (`ai_debug.log`) protect against formatting drift in Gemini responses
-  - 🔍 Follow-up: continue refining copy so explanations stay concise and league-aware
+  - ✅ Position-aware guardrails prevent Gemini from referencing positions not included in the proposal; invalid lines are replaced with deterministic parity/acceptance context when needed.
+  - 🔍 Follow-up: continue refining copy so explanations stay concise; normalize Gemini `null` payloads so fallback reasons always surface.
 
 - 🟡 **Phase 3 Frontend Trade Center**: **MVP LIVE — UX POLISH IN PROGRESS**
   - ✅ React Trade Center component renders proposals with filters, player dossier links, AI context, and debug drilldowns
   - ✅ Yahoo-auth bootstrap + acceptance fallback keeps proposals visible even when below threshold
   - ✅ Horizon & acceptance sliders now have inline helper copy; parity/acceptance metrics show plain-English badges and an education callout; opponent team label appears on every card.
-  - ✅ Backend now seeds opponents by need score and runs a per-team beam search with diversity penalties so proposal lists are less dominated by one roster (per-team cap tightened to max 4/top_k//3, penalty raised to 0.12); metadata surfaces opponent counts for sanity checks.
+  - ✅ Backend now seeds opponents by need score and runs a per-team beam search with diversity penalties so proposal lists are less dominated by one roster (per-team cap tightened to max(3, top_k//4), penalty raised to 0.18); metadata surfaces opponent counts for sanity checks.
   - 🔧 Outstanding polish: continue tuning need score weighting and AI copy tone, and explore richer tooltips/empty-state guidance once further scoring refinements land.
 
 **IMMEDIATE PRIORITIES:**
-1. **HIGH**: Monitor and fine-tune the new need-score + beam-search heuristics (adjust penalties, add telemetry) to ensure balanced proposal mixes across leagues.
-2. **HIGH**: Continue AI narrative polish (tone/length) now that proposals span more opponents; consider short opponent-specific notes for low-acceptance trades.
+1. **HIGH**: Monitor the relaxed acceptance/filter thresholds and updated diversity cap to confirm proposal variety holds across leagues; add telemetry if drift persists.
+2. **HIGH**: Harden AI fallback handling so trades with null Gemini responses still surface at least one grounded reason/pitch.
 3. **OPTIONAL**: Phase 3+ enhancements (playoff emphasis, waiver tie-ins, advanced filtering) after the diversity heuristics prove stable.
 
 ### 🔧 PRODUCTION ISSUE RESOLVED - CORS Fix Applied:

@@ -592,9 +592,10 @@ const TradeCenter = () => {
       <section className={styles.educationBox}>
         <h2>How to read the metrics</h2>
         <ul>
-          <li><strong>Parity</strong> compares total value on each side. 100% means the swap is even; 90% is roughly a 10% value edge for us. When parity drops further, expect the other manager to ask for more.
-          </li>
+          <li><strong>Parity</strong> compares total value on each side. 100% means the swap is even; 90% is roughly a 10% value edge for us. When parity drops further, expect the other manager to ask for more.</li>
           <li><strong>Acceptance</strong> is our modeled probability they say yes. Use it as a vibe check—pair high parity with a solid acceptance number for the smoothest deals.</li>
+          <li><strong>Opponent needs</strong> chips flag where their bench lags our surplus (for example, RB depth). They make the negotiation reason feel targeted.</li>
+          <li><strong>Roster spot tips</strong> appear when inbound players exceed outbound. Use the Waiver Assistant link if you want a different drop.</li>
         </ul>
       </section>
 
@@ -621,7 +622,9 @@ const TradeCenter = () => {
       {!isGenerating && displayProposals.length === 0 && (
         <EmptyState
           title="No trade ideas yet"
-          message={selectedLeagueKey ? 'Adjust your filters or broaden the target teams to discover more trades.' : 'Pick a league to start generating proposals.'}
+          message={selectedLeagueKey
+            ? 'No proposals cleared your current filters. Try lowering the acceptance slider, enabling "Relax filters & enable debug view", or expanding target teams.'
+            : 'Pick a league to start generating proposals.'}
         />
       )}
 
@@ -647,6 +650,28 @@ const TradeCenter = () => {
               const parityToneClass = styles[`context${parityToneKey}`] || styles.contextNeutral;
               const acceptanceToneClass = styles[`context${acceptanceToneKey}`] || styles.contextNeutral;
               const opponentLabel = proposal.opponent_team_name || proposal.opponent_team || proposal.opponent_team_key || 'Opposing team';
+              const opponentNeeds = Array.isArray(proposal.opponent_needs)
+                ? proposal.opponent_needs
+                    .map((need) => {
+                      if (need && typeof need === 'object') {
+                        const label = need.note || need.position;
+                        const gap = Number(need.gap_points);
+                        if (label && Number.isFinite(gap) && gap > 0) {
+                          return `${label} depth (+${gap.toFixed(1)} pts)`;
+                        }
+                        if (label) {
+                          return label;
+                        }
+                      }
+                      if (typeof need === 'string') {
+                        return need;
+                      }
+                      return null;
+                    })
+                    .filter(Boolean)
+                : [];
+              const parityTooltip = `We gain ${proposal.my_delta_points ?? '—'} pts; opponent ${proposal.their_delta_points ?? '—'} pts; parity ${proposal.value_parity_pct ?? '—'}%.`;
+              const acceptanceTooltip = `Acceptance estimate ${formatPercent(proposal.acceptance_prob)}. Lower slider = more long shots; higher = safer.`;
 
               return (
                 <article key={tradeId} className={styles.proposalCard}>
@@ -669,13 +694,26 @@ const TradeCenter = () => {
                         ))}
                       </div>
                       <div className={styles.contextRow}>
-                        <span className={`${styles.contextBadge} ${parityToneClass}`}>
+                        <span className={`${styles.contextBadge} ${parityToneClass}`} title={parityTooltip}>
                           {parityDescriptor.label}
                         </span>
-                        <span className={`${styles.contextBadge} ${acceptanceToneClass}`}>
+                        <span className={`${styles.contextBadge} ${acceptanceToneClass}`} title={acceptanceTooltip}>
                           {acceptanceDescriptor.label}
                         </span>
                       </div>
+                      {opponentNeeds.length > 0 && (
+                        <div className={styles.needRow}>
+                          {opponentNeeds.map((need, index) => (
+                            <span
+                              key={`${tradeId}-need-${index}`}
+                              className={styles.needChip}
+                              title="Opponent roster gap we're addressing"
+                            >
+                              {need}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <button
                       type="button"
@@ -698,7 +736,19 @@ const TradeCenter = () => {
                           </li>
                         ))}
                         {proposal.suggested_drop && (
-                          <li className={styles.dropSuggestion}>Drop: {proposal.suggested_drop}</li>
+                          <li className={styles.dropSuggestion}>
+                            <span title="We need a roster spot for the inbound talent.">
+                              Roster spot: drop {proposal.suggested_drop}
+                            </span>
+                            <a
+                              href="/?tool=waiver-wire"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={styles.dropLink}
+                            >
+                              Open Waiver Assistant
+                            </a>
+                          </li>
                         )}
                       </ul>
                     </div>

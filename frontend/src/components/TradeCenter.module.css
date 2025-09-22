@@ -401,6 +401,36 @@
 .dropSuggestion {
   color: #be123c;
   font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dropLink {
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.dropLink:hover {
+  text-decoration: underline;
+}
+
+.needRow {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.needChip {
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(221, 214, 254, 0.5);
+  color: #4c1d95;
+  border: 1px solid rgba(124, 58, 237, 0.4);
 }
 
 .reasonSection h4,
