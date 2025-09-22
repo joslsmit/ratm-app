@@ -2,7 +2,7 @@
 
 > **File Type**: CURRENT STATUS
 > **Review Priority**: High
-> **Last Updated**: September 19, 2025
+> **Last Updated**: September 24, 2025
 > **Purpose**: Accurate status of trade suggestions development
 
 ## Current Implementation Status
@@ -23,13 +23,16 @@
 - ✅ **Roster Legality**: Validates pre/post-trade rosters
 - ✅ **Debug Capabilities**: Comprehensive troubleshooting info
 
-**VERIFIED Test Results (September 19, 2025):**
+**VERIFIED Test Results (September 24, 2025):**
 ```json
 {
   "meta": {
     "league_key": "461.l.42889",
     "proposals_returned": 12,
-    "teams_considered": 11
+    "teams_considered": 11,
+    "opponent_counts": {
+      "Black Sheep": 12
+    }
   },
   "proposals": [
     {
@@ -52,40 +55,32 @@
 - Delta Tolerance: -5.0 points (relaxed from -2.0)
 - **Result**: 12 realistic trade proposals generated successfully
 
-### ❌ **BROKEN: AI Integration**
-
-**Current Issue:**
-- AI enhancement function `_enhance_proposals_with_ai()` exists but causes 0 proposals to be returned
-- When `use_ai=true` is passed, endpoint returns empty proposals array
-- When `use_ai=false`, 12+ proposals are returned successfully
-- AI integration temporarily disabled to restore basic functionality
+### ✅ **AI Integration**
 
 **Current Behaviour:**
-- Gemini-backed `_enhance_proposals_with_ai()` enriches the deterministic list with reasons, negotiation pitch, confidence, and optional rank adjustment
-- Trade IDs are normalized so explanations survive Gemini formatting changes; prompts/responses are logged to `backend/ai_debug.log`
-- AI explanations surface in the Trade Center cards whenever `use_ai=true`
+- Gemini-backed `_enhance_proposals_with_ai()` enriches the deterministic list with reasons, negotiation pitch, confidence, and optional rank adjustment.
+- Trade IDs are normalized so explanations survive Gemini formatting changes; prompts/responses (per chunk) are logged to `backend/ai_debug.log`.
+- AI enhancement now processes proposals in 6-item chunks (up to 12) so extended lists keep explanations; metadata reports how many trades received AI fields.
 
 ### 🟡 **Frontend Trade Center MVP**
 
 **Delivered:**
 - React Trade Center page with Yahoo league bootstrap, filters (horizon, acceptance, package size), dossier links, and debug drilldowns
 - Acceptance fallback keeps proposals visible even when below the slider threshold and flags the relaxed filter state
-- Light/raised styling improves readability on dark theme
+- Inline slider helper copy, parity/acceptance context badges, education callout, and opponent labels improve comprehension
 
 **Still Needed:**
-- Clearer copy/tooltips for horizon slider vs. rest-of-season blend
-- Plain-English context for parity/acceptance percentages (rename, badges, or helper text)
-- Additional UX polish (e.g., metric legends, contextual help)
+- Improve proposal diversity/heuristics so lists aren’t dominated by a single opponent when filters are strict
+- Continue AI copy polish (tone/length) and consider richer tooltips/empty-state guidance
+- Additional UX polish once backend scoring refinements land
 
 ## Next Steps Priority Order
 
-### 1. **HIGH: Clarify Trade Center Controls (FRONTEND)**
-**Goal:** Help managers understand how the horizon slider and acceptance threshold impact results.
-**Ideas:** Inline helper copy, mini legends, example tooltips, default descriptions near the sliders.
+### 1. **HIGH: Diversify Proposal Set (BACKEND/FRONTEND)**
+**Goal:** Adjust candidate expansion and scoring so multiple opponents surface when quality trades exist. Add telemetry to confirm distribution.
 
-### 2. **HIGH: Humanize Parity & Acceptance Metrics (FRONTEND/BACKEND COPY)**
-**Goal:** Translate raw percentages into quick insights (e.g., "Fair within 5%" or "Long-shot ~10% chance").
-**Ideas:** Rename badges, add color-coded descriptors, extend API to include short labels.
+### 2. **HIGH: AI Copy/Tone Polish (FRONTEND/BACKEND PROMPT)**
+**Goal:** Tighten explanation length, ensure negotiation pitches stay opponent-specific as diversity work lands.
 
 ### 3. **OPTIONAL: Advanced Trade Center Features**
 - Playoff emphasis, schedule blending
@@ -95,8 +90,8 @@
 ## Technical Debt
 
 **Issues Introduced During Development:**
-1. Trade Center metrics still use raw parity/acceptance numbers without helper copy
-2. Horizon slider semantics need explicit documentation and inline hints
+1. Proposal diversity heuristics can still funnel toward a single opponent under current filters
+2. Need additional logging/telemetry around candidate pruning once diversification work begins
 3. Additional logging around Yahoo auth failures would aid UX (league snapshot 401s)
 
 **Code Quality:**
@@ -116,9 +111,8 @@
 - Acceptance probability scoring functional
 
 **Not Tested:**
-- AI explanations and reasoning
-- Frontend display of proposals
-- User interaction flows
+- Diversified scoring heuristics (pending)
+- User interaction flows post-diversity changes
 - Error handling edge cases
 
 ## Deployment Status

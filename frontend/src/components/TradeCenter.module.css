@@ -129,6 +129,53 @@
   color: inherit;
 }
 
+.helperText {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: #64748b;
+}
+
+.educationBox {
+  padding: 16px 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(237, 242, 247, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.educationBox h2 {
+  margin: 0;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.educationBox ul {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: #1f2937;
+}
+
+.educationBox li strong {
+  color: #0f172a;
+}
+
+.opponentTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 0.85rem;
+  color: #1e293b;
+}
+
 .buttonRow {
   display: flex;
   gap: 12px;
@@ -259,6 +306,46 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 8px;
+}
+
+.contextRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.contextBadge {
+  font-size: 0.78rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(226, 232, 240, 0.9);
+  color: #0f172a;
+}
+
+.contextPositive {
+  background: rgba(34, 197, 94, 0.16);
+  border-color: rgba(22, 163, 74, 0.36);
+  color: #166534;
+}
+
+.contextCaution {
+  background: rgba(251, 191, 36, 0.18);
+  border-color: rgba(217, 119, 6, 0.36);
+  color: #92400e;
+}
+
+.contextWarning {
+  background: rgba(248, 113, 113, 0.18);
+  border-color: rgba(220, 38, 38, 0.36);
+  color: #b91c1c;
+}
+
+.contextNeutral {
+  background: rgba(148, 163, 184, 0.18);
+  border-color: rgba(148, 163, 184, 0.36);
+  color: #475569;
 }
 
 .metric {

@@ -4502,49 +4502,16 @@ def _enhance_proposals_with_ai(proposals: list, my_team: dict, teams: list, acce
 
         team_lookup = {t.get('team_key'): t for t in teams if isinstance(t, dict)}
 
-        context_sections = [
+        max_ai_packages = min(len(proposals), 12)
+        chunk_size = 6
+        total_chunks = max(1, math.ceil(max_ai_packages / chunk_size))
+
+        base_context = [
             "=== MY TEAM OVERVIEW ===",
             f"Team: {my_team.get('name', 'Unknown')}" if isinstance(my_team, dict) else "Team: Unknown",
             f"Starters ({len(starters)}): {', '.join([p.get('name') for p in starters if p.get('name')])}",
-            f"Bench ({len(bench)}): {', '.join([p.get('name') for p in bench if p.get('name')])}",
-            "",
-            "=== TRADE PROPOSALS (TOP 6) ==="
+            f"Bench ({len(bench)}): {', '.join([p.get('name') for p in bench if p.get('name')])}"
         ]
-
-        proposal_summaries = []
-        for idx, proposal in enumerate(proposals[:6], 1):
-            trade_id = proposal.get('trade_id')
-            their_side = proposal.get('their_side', [])
-            opp_team = None
-            for team_key, team_obj in team_lookup.items():
-                roster_names = {normalize_player_name(p.get('name')) for p in team_obj.get('roster', []) or []}
-                if any(normalize_player_name(tp) in roster_names for tp in their_side):
-                    opp_team = _team_snapshot(team_obj)
-                    break
-
-            my_players = [ _player_summary(name) for name in proposal.get('my_side', []) ]
-            their_players = [ _player_summary(name) for name in their_side ]
-
-            summary_lines = [
-                f"PROPOSAL {idx}: {trade_id}",
-                f"  My Side Out: {('; '.join(my_players)) or 'None'}",
-                f"  Their Side Out: {('; '.join(their_players)) or 'None'}",
-                f"  My Delta: {proposal.get('my_delta_points')} pts",
-                f"  Their Delta: {proposal.get('their_delta_points')} pts",
-                f"  Value Parity: {proposal.get('value_parity_pct')}%",
-                f"  Acceptance Prob: {proposal.get('acceptance_prob')}",
-                f"  Flags: {', '.join(proposal.get('flags', [])) or 'None'}"
-            ]
-
-            if opp_team:
-                summary_lines.append(f"  Opponent Team: {opp_team['name']}")
-                summary_lines.append(f"  Opponent Starters Snapshot: {', '.join(opp_team['starters'][:8])}")
-                summary_lines.append(f"  Opponent Bench Snapshot: {', '.join(opp_team['bench'][:8])}")
-
-            proposal_summaries.append("\n".join(summary_lines))
-
-        context_sections.extend(proposal_summaries)
-        context_str = "\n\n".join(context_sections)
 
         example_json = {
             "enhanced_proposals": [
@@ -4562,7 +4529,59 @@ def _enhance_proposals_with_ai(proposals: list, my_team: dict, teams: list, acce
             ]
         }
 
-        prompt = f"""{PromptBuilder.get_base_system_prompt()}
+        def _norm_trade_id(value: str) -> str:
+            if not value:
+                return ''
+            return re.sub(r'[^a-z0-9]+', '', value.lower())
+
+        enhanced_lookup = {}
+
+        for chunk_idx, start in enumerate(range(0, max_ai_packages, chunk_size)):
+            chunk = proposals[start:start + chunk_size]
+            if not chunk:
+                continue
+
+            proposal_summaries = []
+            for offset, proposal in enumerate(chunk):
+                global_idx = start + offset + 1
+                trade_id = proposal.get('trade_id')
+                their_side = proposal.get('their_side', [])
+                opp_team = None
+                for team_key, team_obj in team_lookup.items():
+                    roster_names = {normalize_player_name(p.get('name')) for p in team_obj.get('roster', []) or []}
+                    if any(normalize_player_name(tp) in roster_names for tp in their_side):
+                        opp_team = _team_snapshot(team_obj)
+                        break
+
+                my_players = [_player_summary(name) for name in proposal.get('my_side', [])]
+                their_players = [_player_summary(name) for name in their_side]
+
+                summary_lines = [
+                    f"PROPOSAL {global_idx}: {trade_id}",
+                    f"  My Side Out: {('; '.join(my_players)) or 'None'}",
+                    f"  Their Side Out: {('; '.join(their_players)) or 'None'}",
+                    f"  My Delta: {proposal.get('my_delta_points')} pts",
+                    f"  Their Delta: {proposal.get('their_delta_points')} pts",
+                    f"  Value Parity: {proposal.get('value_parity_pct')}%",
+                    f"  Acceptance Prob: {proposal.get('acceptance_prob')}",
+                    f"  Flags: {', '.join(proposal.get('flags', [])) or 'None'}"
+                ]
+
+                if opp_team:
+                    summary_lines.append(f"  Opponent Team: {opp_team['name']}")
+                    summary_lines.append(f"  Opponent Starters Snapshot: {', '.join(opp_team['starters'][:8])}")
+                    summary_lines.append(f"  Opponent Bench Snapshot: {', '.join(opp_team['bench'][:8])}")
+
+                proposal_summaries.append("\n".join(summary_lines))
+
+            context_sections = base_context + [
+                "",
+                f"=== TRADE PROPOSALS SET {chunk_idx + 1} / {total_chunks} ==="
+            ] + proposal_summaries
+
+            context_str = "\n\n".join(context_sections)
+
+            prompt = f"""{PromptBuilder.get_base_system_prompt()}
 
 TASK: Enhance trade proposals with strategic reasoning, opponent-aware negotiation pitches, and confidence labels.
 
@@ -4588,64 +4607,58 @@ REQUIREMENTS:
 - Do not include markdown or extra prose outside the JSON object.
 """
 
-        try:
-            response_text = make_gemini_request(prompt, user_key)
             try:
-                with open(os.path.join(basedir, 'ai_debug.log'), 'a') as dbg_file:
-                    dbg_file.write('\n=== AI REQUEST @ %s ===\n' % datetime.now())
-                    dbg_file.write('PROMPT:\n%s\n' % prompt)
-                    dbg_file.write('RAW RESPONSE:\n%s\n' % (response_text or ''))
-            except Exception:
-                pass
-        except Exception as exc:
-            print(f"AI enhancement request failed: {exc}")
-            return proposals
-
-        if not response_text:
-            print("AI enhancement returned empty response")
-            return proposals
-
-        raw_text = response_text.strip()
-        if raw_text.startswith('```'):
-            raw_text = re.sub(r'^```json\s*', '', raw_text, flags=re.IGNORECASE).strip()
-            if raw_text.endswith('```'):
-                raw_text = raw_text[:-3].strip()
-
-        start_idx = raw_text.find('{')
-        end_idx = raw_text.rfind('}')
-        if start_idx == -1 or end_idx == -1:
-            print("AI enhancement: could not locate JSON payload; returning deterministic proposals")
-            return proposals
-
-        json_blob = raw_text[start_idx:end_idx+1]
-        try:
-            ai_payload = json.loads(json_blob)
-        except json.JSONDecodeError as exc:
-            print(f"AI enhancement JSON decode error: {exc}")
-            print(f"AI raw snippet: {raw_text[:400]}")
-            return proposals
-
-        def _norm_trade_id(value: str) -> str:
-            if not value:
-                return ''
-            return re.sub(r'[^a-z0-9]+', '', value.lower())
-
-        enhanced_lookup = {}
-        for item in ai_payload.get('enhanced_proposals', []) or []:
-            trade_id = (item.get('trade_id') or '').strip()
-            if not trade_id:
+                response_text = make_gemini_request(prompt, user_key)
+                try:
+                    with open(os.path.join(basedir, 'ai_debug.log'), 'a') as dbg_file:
+                        dbg_file.write('\n=== AI REQUEST @ %s (chunk %d/%d) ===\n' % (datetime.now(), chunk_idx + 1, total_chunks))
+                        dbg_file.write('PROMPT:\n%s\n' % prompt)
+                        dbg_file.write('RAW RESPONSE:\n%s\n' % (response_text or ''))
+                except Exception:
+                    pass
+            except Exception as exc:
+                print(f"AI enhancement request failed (chunk {chunk_idx + 1}): {exc}")
                 continue
-            reasons = item.get('reasons') or []
-            if isinstance(reasons, list):
-                reasons = [str(r).strip() for r in reasons if r]
-            else:
-                reasons = [str(reasons).strip()]
-            enhanced_lookup[trade_id] = {
-                'reasons': reasons,
-                'negotiation_pitch': str(item.get('negotiation_pitch', '')).strip(),
-                'ai_confidence': str(item.get('confidence', 'Medium')).strip().title(),
-                'ai_rank_adjustment': item.get('ai_rank_adjustment')
-            }
+
+            if not response_text:
+                print(f"AI enhancement returned empty response (chunk {chunk_idx + 1})")
+                continue
+
+            raw_text = response_text.strip()
+            if raw_text.startswith('```'):
+                raw_text = re.sub(r'^```json\s*', '', raw_text, flags=re.IGNORECASE).strip()
+                if raw_text.endswith('```'):
+                    raw_text = raw_text[:-3].strip()
+
+            start_idx = raw_text.find('{')
+            end_idx = raw_text.rfind('}')
+            if start_idx == -1 or end_idx == -1:
+                print(f"AI enhancement: could not locate JSON payload (chunk {chunk_idx + 1})")
+                continue
+
+            json_blob = raw_text[start_idx:end_idx+1]
+            try:
+                ai_payload = json.loads(json_blob)
+            except json.JSONDecodeError as exc:
+                print(f"AI enhancement JSON decode error (chunk {chunk_idx + 1}): {exc}")
+                print(f"AI raw snippet: {raw_text[:400]}")
+                continue
+
+            for item in ai_payload.get('enhanced_proposals', []) or []:
+                trade_id = (item.get('trade_id') or '').strip()
+                if not trade_id:
+                    continue
+                reasons = item.get('reasons') or []
+                if isinstance(reasons, list):
+                    reasons = [str(r).strip() for r in reasons if r]
+                else:
+                    reasons = [str(reasons).strip()]
+                enhanced_lookup[trade_id] = {
+                    'reasons': reasons,
+                    'negotiation_pitch': str(item.get('negotiation_pitch', '')).strip(),
+                    'ai_confidence': str(item.get('confidence', 'Medium')).strip().title(),
+                    'ai_rank_adjustment': item.get('ai_rank_adjustment')
+                }
 
         enhanced_output = []
         for proposal in proposals:
@@ -4755,6 +4768,10 @@ def trade_suggestions():
             if t.get('team_key') not in target_team_set:
                 continue
             opp_roster = t.get('roster', [])
+            opp_team_key = t.get('team_key')
+            opp_team_name = (t.get('name') or t.get('team_name') or '').strip()
+            if not opp_team_name:
+                opp_team_name = opp_team_key
             # Bench-first target pool
             opp_targets_bench = []
             opp_targets_starters = []
@@ -4864,6 +4881,9 @@ def trade_suggestions():
                         'value_parity_pct': parity,
                         'acceptance_prob': round(accept_prob, 2),
                         'flags': ['bench_target'] if their in opp_targets_bench else [],
+                        'opponent_team': opp_team_name,
+                        'opponent_team_name': opp_team_name,
+                        'opponent_team_key': opp_team_key
                     })
 
             # 2-for-1 seeds (my two for their one)
@@ -4948,6 +4968,9 @@ def trade_suggestions():
                             'value_parity_pct': parity,
                             'acceptance_prob': round(accept_prob, 2),
                             'flags': ['bench_target'] if bench_flag else [],
+                            'opponent_team': opp_team_name,
+                            'opponent_team_name': opp_team_name,
+                            'opponent_team_key': opp_team_key
                         })
 
             # 1-for-2 seeds (my one for their two) — add suggested drop on my side
@@ -5036,7 +5059,10 @@ def trade_suggestions():
                             'value_parity_pct': parity,
                             'acceptance_prob': round(accept_prob, 2),
                             'flags': ['bench_target'] if bench_flag else [],
-                            'suggested_drop': (drop_cand.get('name') if drop_cand else None)
+                            'suggested_drop': (drop_cand.get('name') if drop_cand else None),
+                            'opponent_team': opp_team_name,
+                            'opponent_team_name': opp_team_name,
+                            'opponent_team_key': opp_team_key
                         })
 
             # 2-for-2 seeds
@@ -5121,6 +5147,9 @@ def trade_suggestions():
                             'value_parity_pct': parity,
                             'acceptance_prob': round(accept_prob, 2),
                             'flags': ['bench_target'] if bench_flag else [],
+                            'opponent_team': opp_team_name,
+                            'opponent_team_name': opp_team_name,
+                            'opponent_team_key': opp_team_key
                         })
 
         # Debug info for troubleshooting
@@ -5182,9 +5211,10 @@ def trade_suggestions():
                     return base
 
                 proposals = sorted(proposals, key=_ai_score, reverse=True)
+                enhanced_count = sum(1 for p in proposals if p.get('ai_confidence') or (p.get('reasons') and isinstance(p.get('reasons'), list)))
                 ai_meta = {
                     'ai_enabled': True,
-                    'ai_enhanced_count': len(proposals),
+                    'ai_enhanced_count': enhanced_count,
                     'ai_latency_ms': duration_ms
                 }
             except Exception as ai_exc:
@@ -5198,7 +5228,14 @@ def trade_suggestions():
             'league_key': league_key,
             'teams_considered': len(target_team_keys),
             'proposals_returned': len(proposals),
+            'opponent_counts': {},
+            'target_team_keys': list(target_team_keys)
         }
+        opponent_counts = {}
+        for proposal in proposals:
+            opp_label = proposal.get('opponent_team_name') or proposal.get('opponent_team') or proposal.get('opponent_team_key') or 'unknown'
+            opponent_counts[opp_label] = opponent_counts.get(opp_label, 0) + 1
+        meta['opponent_counts'] = opponent_counts
         if debug_flag:
             meta.update(debug_info)
         meta.update(ai_meta)

@@ -10,15 +10,16 @@ This document tracks the progress of the RATM Draft Kit project against the defi
 ## 📁 Memory Bank Organization
 **Historical Records**: Completed implementation guides, phase logs, and AI enhancement documentation are archived in the `memory-bank/records/` subdirectory for reference. Active files remain at the root level for easy access.
 
-### September 19, 2025 — Yahoo‑Aware Trade Suggestions — PARTIAL IMPLEMENTATION
-- Added detailed development plan at `memory-bank/trade_suggestions_yahoo_aware_development_plan.md`.
-- Defaults relaxed for initial implementation: Next3=0.50, ROS=0.30, PO=0.20; w_pp=0.55, w_vorp=0.30, w_tv=0.10, w_risk=0.05; alpha=0.70; ParityMin=75%; AcceptanceMin=0.25; DEF/K excluded.
+### September 24, 2025 — Yahoo‑Aware Trade Suggestions — UX & AI Polish Continues
+- Added inline education for Trade Center sliders, parity/acceptance context badges, an education callout, and opponent labels on cards so users understand the knobs and matchups instantly.
+- Backend AI enhancer now processes proposals in 6-item chunks (up to 12) so extended lists keep explanations; response metadata reports opponent distribution for confidence checks.
+- Opponent metadata shipped with each proposal to support clearer UI and debugging.
 
 **IMPLEMENTATION STATUS:**
 - ✅ **Backend Deterministic Engine COMPLETE**: League snapshot, trade generation, scoring system, all package types working
-- ✅ **AI Explanations ONLINE**: Gemini layer enriches the 12+ deterministic proposals with reasons, negotiation pitch, and confidence while preserving baseline results (normalized trade IDs, debug logging in place)
-- 🟡 **Frontend Trade Center MVP**: React surface live with filters, dossier links, and debug drilldowns; needs UX polish to clarify sliders and translate parity/acceptance into plain language
-- **Next Priority**: Add user-facing guidance for horizon/acceptance controls and human-readable parity/acceptance summaries before layering advanced Trade Center features
+- ✅ **AI Explanations ONLINE**: Gemini layer enriches proposals with reasons, negotiation pitch, and confidence; chunked requests prevent drop-off beyond the top six
+- 🟡 **Frontend Trade Center MVP**: Core UX guidance shipped; next focus is improving trade diversity/quality heuristics and tightening AI tone ahead of advanced filters
+- **Next Priority**: Enhance proposal diversity and scoring heuristics so results aren’t dominated by a single opponent, then revisit playoff/waiver tie-in features
 
 ## 🎉 DEPLOYMENT GOAL ACHIEVED! 
 **The RATM Draft Kit app is now live and operational for public use at `https://ratm-app.vercel.app`** - Successfully deployed with full feature set, reliable hosting, and 24/7 availability for Yahoo API connections and comprehensive fantasy football analysis.

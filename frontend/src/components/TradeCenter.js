@@ -13,6 +13,47 @@ const formatPercent = (value) => {
   return `${Math.round(Number(value) * 100)}%`;
 };
 
+const describeAcceptance = (value) => {
+  const pct = Number(value) * 100;
+  if (!Number.isFinite(pct)) {
+    return { label: 'Acceptance: No estimate', tone: 'neutral' };
+  }
+
+  if (pct >= 40) {
+    return { label: `Acceptance: Likely (~${Math.round(pct)}%)`, tone: 'positive' };
+  }
+  if (pct >= 28) {
+    return { label: `Acceptance: Plausible (~${Math.round(pct)}%)`, tone: 'positive' };
+  }
+  if (pct >= 18) {
+    return { label: `Acceptance: Needs persuasion (~${Math.round(pct)}%)`, tone: 'caution' };
+  }
+  if (pct > 0) {
+    return { label: `Acceptance: Long shot (~${Math.round(pct)}%)`, tone: 'warning' };
+  }
+  return { label: 'Acceptance: No estimate', tone: 'neutral' };
+};
+
+const describeParity = (value) => {
+  const pct = Number(value);
+  if (!Number.isFinite(pct)) {
+    return { label: 'Parity: No estimate', tone: 'neutral' };
+  }
+
+  const gap = Math.max(0, 100 - pct);
+
+  if (gap <= 4) {
+    return { label: `Parity: Even (within ≈${gap}% value)`, tone: 'positive' };
+  }
+  if (gap <= 9) {
+    return { label: `Parity: Close (≈${gap}% gap)`, tone: 'positive' };
+  }
+  if (gap <= 15) {
+    return { label: `Parity: Slight gap (≈${gap}% difference)`, tone: 'caution' };
+  }
+  return { label: `Parity: Ask for a sweetener (≈${gap}% gap)`, tone: 'warning' };
+};
+
 const toDossierLink = (name) => {
   if (!name) return '#';
   return `/?tool=dossier&player=${encodeURIComponent(name)}`;
@@ -468,6 +509,9 @@ const TradeCenter = () => {
             <strong>{horizonFocus >= 50 ? 'Balanced' : horizonFocus <= 10 ? 'Immediate' : 'Near term'}</strong>
             <span>Rest of season</span>
           </div>
+          <p className={styles.helperText}>
+            Adjusts how we rank the list: left leans into quick weekly gains, right favors steady rest-of-season upgrades. The pool of trades stays the same.
+          </p>
         </div>
 
         <div className={styles.controlGroup}>
@@ -486,6 +530,9 @@ const TradeCenter = () => {
             <strong>{formatPercent(minAcceptance)}</strong>
             <span>Conservative</span>
           </div>
+          <p className={styles.helperText}>
+            Hides proposals below this acceptance estimate. Lower the slider to surface long-shot ideas—if nothing clears the bar we still bubble up the closest matches.
+          </p>
         </div>
 
         <div className={styles.controlGroup}>
@@ -542,6 +589,15 @@ const TradeCenter = () => {
         </div>
       </section>
 
+      <section className={styles.educationBox}>
+        <h2>How to read the metrics</h2>
+        <ul>
+          <li><strong>Parity</strong> compares total value on each side. 100% means the swap is even; 90% is roughly a 10% value edge for us. When parity drops further, expect the other manager to ask for more.
+          </li>
+          <li><strong>Acceptance</strong> is our modeled probability they say yes. Use it as a vibe check—pair high parity with a solid acceptance number for the smoothest deals.</li>
+        </ul>
+      </section>
+
       {(filteredOutCount > 0 || relaxedAcceptance) && (
         <div className={styles.filteredNotice}>
           {filteredOutCount > 0 && (
@@ -584,12 +640,20 @@ const TradeCenter = () => {
               const reasons = Array.isArray(proposal.reasons) ? proposal.reasons : [];
               const negotiationPitch = proposal.negotiation_pitch || '';
               const flags = proposal.flags || [];
+              const acceptanceDescriptor = describeAcceptance(proposal.acceptance_prob);
+              const parityDescriptor = describeParity(proposal.value_parity_pct);
+              const parityToneKey = parityDescriptor.tone ? parityDescriptor.tone.charAt(0).toUpperCase() + parityDescriptor.tone.slice(1) : 'Neutral';
+              const acceptanceToneKey = acceptanceDescriptor.tone ? acceptanceDescriptor.tone.charAt(0).toUpperCase() + acceptanceDescriptor.tone.slice(1) : 'Neutral';
+              const parityToneClass = styles[`context${parityToneKey}`] || styles.contextNeutral;
+              const acceptanceToneClass = styles[`context${acceptanceToneKey}`] || styles.contextNeutral;
+              const opponentLabel = proposal.opponent_team_name || proposal.opponent_team || proposal.opponent_team_key || 'Opposing team';
 
               return (
                 <article key={tradeId} className={styles.proposalCard}>
                   <header className={styles.proposalHeader}>
                     <div>
                       <h2>{tradeId.replace(/-/g, ' → ')}</h2>
+                      <div className={styles.opponentTag}>vs {opponentLabel}</div>
                       <div className={styles.flagRow}>
                         <span className={`${styles.metric} ${styles.metricPositive}`}>My Δ {proposal.my_delta_points?.toFixed?.(1) ?? proposal.my_delta_points}</span>
                         <span className={`${styles.metric} ${Number(proposal.their_delta_points) >= 0 ? styles.metricPositive : styles.metricNegative}`}>
@@ -603,6 +667,14 @@ const TradeCenter = () => {
                         {flags.map((flag) => (
                           <span key={flag} className={`${styles.chip} ${styles.chipMuted}`}>{flag.replace('_', ' ')}</span>
                         ))}
+                      </div>
+                      <div className={styles.contextRow}>
+                        <span className={`${styles.contextBadge} ${parityToneClass}`}>
+                          {parityDescriptor.label}
+                        </span>
+                        <span className={`${styles.contextBadge} ${acceptanceToneClass}`}>
+                          {acceptanceDescriptor.label}
+                        </span>
                       </div>
                     </div>
                     <button
