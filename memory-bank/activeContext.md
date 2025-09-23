@@ -63,7 +63,8 @@
 1. **HIGH**: Monitor the relaxed acceptance/filter thresholds and updated diversity cap to confirm proposal variety holds across leagues; add telemetry if drift persists.
 2. **HIGH**: Harden AI fallback handling so trades with null Gemini responses still surface at least one grounded reason/pitch.
 3. **HIGH**: Evaluate minimum gain heuristics—current settings keep offers to 6–7 proposals in test league; consider alternative knobs (e.g., net elite allowance) if users want broader coverage.
-4. **OPTIONAL**: Phase 3+ enhancements (playoff emphasis, waiver tie-ins, advanced filtering) after the diversity heuristics prove stable.
+4. **HIGH**: Always restart or ensure auto-reload before testing `backend/app.py` changes; `python3 -m compileall` is just a syntax check.
+5. **OPTIONAL**: Phase 3+ enhancements (playoff emphasis, waiver tie-ins, advanced filtering) after the diversity heuristics prove stable.
 
 ### 🔧 PRODUCTION ISSUE RESOLVED - CORS Fix Applied:
 **Problem**: Frontend blocked by CORS policy - "Access-Control-Allow-Origin" header missing
