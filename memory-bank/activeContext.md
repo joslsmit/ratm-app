@@ -56,12 +56,14 @@
   - ✅ Yahoo-auth bootstrap + acceptance fallback keeps proposals visible even when below threshold
   - ✅ Horizon & acceptance sliders now have inline helper copy; parity/acceptance metrics show plain-English badges and an education callout; opponent team label appears on every card.
   - ✅ Backend now seeds opponents by need score and runs a per-team beam search with diversity penalties so proposal lists are less dominated by one roster (per-team cap tightened to max(3, top_k//4), penalty raised to 0.18); metadata surfaces opponent counts for sanity checks.
+  - ✅ Bench-first truly prioritises bench pieces: trades are dropped when we raid more elite assets than we send, and a new scoring floor hides offers where our delta < 0.4 unless the opponent gains 2+ points.
   - 🔧 Outstanding polish: continue tuning need score weighting and AI copy tone, and explore richer tooltips/empty-state guidance once further scoring refinements land.
 
 **IMMEDIATE PRIORITIES:**
 1. **HIGH**: Monitor the relaxed acceptance/filter thresholds and updated diversity cap to confirm proposal variety holds across leagues; add telemetry if drift persists.
 2. **HIGH**: Harden AI fallback handling so trades with null Gemini responses still surface at least one grounded reason/pitch.
-3. **OPTIONAL**: Phase 3+ enhancements (playoff emphasis, waiver tie-ins, advanced filtering) after the diversity heuristics prove stable.
+3. **HIGH**: Evaluate minimum gain heuristics—current settings keep offers to 6–7 proposals in test league; consider alternative knobs (e.g., net elite allowance) if users want broader coverage.
+4. **OPTIONAL**: Phase 3+ enhancements (playoff emphasis, waiver tie-ins, advanced filtering) after the diversity heuristics prove stable.
 
 ### 🔧 PRODUCTION ISSUE RESOLVED - CORS Fix Applied:
 **Problem**: Frontend blocked by CORS policy - "Access-Control-Allow-Origin" header missing

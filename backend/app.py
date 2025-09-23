@@ -91,6 +91,29 @@ player_data_cache, player_name_to_id, static_ecr_overall_data, static_ecr_positi
 yahoo_id_to_key = {}
 
 POSITION_TOKENS = {'QB', 'RB', 'WR', 'TE', 'DST', 'DEF', 'K'}
+MIN_MY_GAIN_HARD = 0.4
+MIN_MY_GAIN_SOFT = 0.25
+ELITE_ALLOWANCE_DELTA = 2.0
+
+
+def _is_elite_asset(name: str) -> bool:
+    try:
+        ci = _get_combined_info_by_name(name)
+        if not ci:
+            return False
+        ecr = ci.get('ecr_overall')
+        if isinstance(ecr, (int, float)) and ecr <= 36:
+            return True
+        pos = (ci.get('position') or '').upper()
+        if pos == 'QB' and isinstance(ecr, (int, float)) and ecr <= 20:
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _count_elite_assets(names: list[str]) -> int:
+    return sum(1 for nm in names or [] if _is_elite_asset(nm))
 
 
 def _positions_for_names(names: list[str]) -> set[str]:
@@ -173,15 +196,32 @@ def _parity_pct(a_value: float, b_value: float) -> int:
     except Exception:
         return 0
 
-def _acceptance_prob(their_delta: float, parity_pct: int) -> float:
-    # Simple proxy: scale and pass through a sigmoid-like mapping
+def _acceptance_prob(their_delta: float, parity_pct: int, starters_taken: int = 0, elite_taken: int = 0) -> float:
+    """Estimate acceptance probability with penalties for raiding starters/elite assets."""
+    import math
     try:
-        x = 0.20 * float(their_delta) + 0.04 * float(parity_pct) - 5.0 * 0  # other penalties currently 0
-        # fast sigmoid approximation
-        import math
-        return 1.0 / (1.0 + math.exp(-0.25 * (x - 10)))
+        delta = float(their_delta)
+        parity = float(parity_pct)
+        if delta <= 0:
+            base = 0.02
+        else:
+            delta_term = min(0.70, delta / 10.0)
+            parity_term = min(0.30, max(0.0, parity - 60.0) / 120.0)
+            base = 0.05 + delta_term + parity_term
+
+        starter_penalty = 0.30 * max(0, starters_taken)
+        elite_penalty = 0.70 * max(0, elite_taken)
+
+        adjusted = base
+        if starters_taken:
+            adjusted *= 0.28 ** starters_taken
+        if elite_taken:
+            adjusted *= 0.12 ** elite_taken
+
+        adjusted *= math.exp(-(starter_penalty + elite_penalty))
+        return max(0.0, min(0.95, adjusted))
     except Exception:
-        return 0.3
+        return 0.02
 name_aliases = {}
 
 # --- Name Aliases (optional file: backend/name_aliases.json) ---
@@ -4748,22 +4788,29 @@ REQUIREMENTS:
                                 return True
                     return False
 
-                if ai_fields['reasons']:
-                    filtered_reasons = [r for r in ai_fields['reasons'] if not _mentions_forbidden(r)]
+                def _fallback_reason() -> str:
+                    parity_val = proposal.get('value_parity_pct')
+                    acceptance_val = proposal.get('acceptance_prob')
+                    return (
+                        f"Fairness: parity {parity_val if parity_val is not None else '—'}%"
+                        f"; acceptance {acceptance_val if acceptance_val is not None else '—'}."
+                    )
+
+                reasons_payload = ai_fields['reasons'] or []
+                if reasons_payload:
+                    filtered_reasons = [r for r in reasons_payload if not _mentions_forbidden(r)]
                     if not filtered_reasons:
-                        parity_val = proposal.get('value_parity_pct')
-                        acceptance_val = proposal.get('acceptance_prob')
-                        fallback_reason = (
-                            f"Fairness: Value parity {parity_val if parity_val is not None else '—'}% with acceptance "
-                            f"{acceptance_val if acceptance_val is not None else '—'}."
-                        )
-                        filtered_reasons = [fallback_reason]
+                        filtered_reasons = [_fallback_reason()]
                     enriched['reasons'] = filtered_reasons
-                if ai_fields['negotiation_pitch']:
-                    pitch = ai_fields['negotiation_pitch']
-                    if _mentions_forbidden(pitch):
-                        pitch = ''
+                else:
+                    enriched['reasons'] = [_fallback_reason()]
+
+                pitch = ai_fields.get('negotiation_pitch', '')
+                if pitch and not _mentions_forbidden(pitch):
                     enriched['negotiation_pitch'] = pitch
+                else:
+                    opp_name = enriched.get('opponent_team_name') or enriched.get('opponent_team') or 'Opponent'
+                    enriched['negotiation_pitch'] = f"{opp_name} - balance depth on both sides."
                 enriched['ai_confidence'] = ai_fields['ai_confidence']
                 rank_adj = ai_fields.get('ai_rank_adjustment')
                 if isinstance(rank_adj, (int, float)):
@@ -4861,12 +4908,27 @@ def trade_suggestions():
 
         def _score(p):
             try:
-                base = 0.70 * float(p.get('my_delta_points', 0)) + 0.30 * float(p.get('acceptance_prob', 0))
+                my_delta = float(p.get('my_delta_points', 0))
+                acceptance = float(p.get('acceptance_prob', 0))
+                base = 0.70 * my_delta + 0.30 * acceptance
                 if 'bench_target' in (p.get('flags') or []):
                     base += 0.03
+                if my_delta < 1.0:
+                    base -= (1.0 - my_delta) * 1.2
+                if my_delta < MIN_MY_GAIN_HARD:
+                    base -= (MIN_MY_GAIN_HARD - my_delta) * 3.5
                 return base
             except Exception:
                 return 0.0
+
+        def _passes_min_gain(my_delta: float, their_delta: float, elite_diff: int = 0) -> bool:
+            if my_delta >= MIN_MY_GAIN_HARD:
+                return True
+            if my_delta >= MIN_MY_GAIN_SOFT and their_delta <= -ELITE_ALLOWANCE_DELTA:
+                return True
+            if elite_diff <= 0 and my_delta >= (MIN_MY_GAIN_SOFT - 0.05):
+                return True
+            return False
 
         my_surplus_pos_points = {}
         for pl in my_surplus:
@@ -4961,6 +5023,7 @@ def trade_suggestions():
             if not opp_targets_sorted:
                 continue
             opp_targets_bench = ctx['opp_targets_bench']
+            opp_bench_name_set = {p.get('name') for p in opp_targets_bench if p.get('name')}
             opp_enriched_base = ctx['opp_enriched']
             opp_slots = ctx['opp_slots']
             opp_baseline = ctx['opp_baseline']
@@ -5041,7 +5104,15 @@ def trade_suggestions():
                     va = _get_value_1qb(my_name)
                     vb = _get_value_1qb(th_name)
                     parity = _parity_pct(va, vb)
-                    accept_prob = _acceptance_prob(their_delta, parity)
+                    their_names = [th_name]
+                    their_starters = sum(1 for n in their_names if n not in opp_bench_name_set)
+                    elite_hits = _count_elite_assets(their_names)
+                    bench_flag = their_starters < len(their_names)
+                    if bench_first and their_starters >= len(their_names):
+                        continue
+                    if bench_first and elite_hits > _count_elite_assets([my_name]):
+                        continue
+                    accept_prob = _acceptance_prob(their_delta, parity, their_starters, elite_hits)
 
                     if debug_flag:
                         if my_delta <= -5.0:
@@ -5069,7 +5140,7 @@ def trade_suggestions():
                         'their_delta_points': their_delta,
                         'value_parity_pct': parity,
                         'acceptance_prob': round(accept_prob, 2),
-                        'flags': ['bench_target'] if their in opp_targets_bench else [],
+                        'flags': ['bench_target'] if bench_flag else [],
                         'opponent_team': opp_team_name,
                         'opponent_team_name': opp_team_name,
                         'opponent_team_key': opp_team_key,
@@ -5127,7 +5198,16 @@ def trade_suggestions():
                         va = sum(_get_value_1qb(n) for n in my_names)
                         vb = _get_value_1qb(th_name)
                         parity = _parity_pct(va, vb)
-                        accept_prob = _acceptance_prob(their_delta, parity)
+                        their_names = [th_name]
+                        their_starters = sum(1 for n in their_names if n not in opp_bench_name_set)
+                        elite_hits = _count_elite_assets(their_names)
+                        bench_flag = their in opp_targets_bench
+                        if bench_first and their_starters >= len(their_names):
+                            continue
+                        if bench_first and elite_hits > _count_elite_assets(my_names):
+                            continue
+                        accept_prob = _acceptance_prob(their_delta, parity, their_starters, elite_hits)
+
                         if debug_flag:
                             if my_delta <= -5.0:
                                 continue
@@ -5142,6 +5222,9 @@ def trade_suggestions():
                                 continue
                             if accept_prob < effective_acceptance_floor:
                                 continue
+
+                        if not _passes_min_gain(my_delta, their_delta):
+                            continue
                         bench_flag = their in opp_targets_bench
                         relevant_positions = _positions_for_names(my_names)
                         pos_gap_serialized = _serialize_pos_gaps(pos_gap_notes, relevant_positions)
@@ -5209,7 +5292,14 @@ def trade_suggestions():
                         va = _get_value_1qb(my_name)
                         vb = sum(_get_value_1qb(n) for n in th_names)
                         parity = _parity_pct(va, vb)
-                        accept_prob = _acceptance_prob(their_delta, parity)
+                        their_starters = sum(1 for n in th_names if n not in opp_bench_name_set)
+                        elite_hits = _count_elite_assets(th_names)
+                        bench_flag = any(tp in opp_targets_bench for tp in their_pair)
+                        if bench_first and their_starters >= len(th_names):
+                            continue
+                        if bench_first and elite_hits > _count_elite_assets([my_name]):
+                            continue
+                        accept_prob = _acceptance_prob(their_delta, parity, their_starters, elite_hits)
                         if debug_flag:
                             if my_delta <= -5.0:
                                 continue
@@ -5225,11 +5315,13 @@ def trade_suggestions():
                             if accept_prob < effective_acceptance_floor:
                                 continue
 
+                        if not _passes_min_gain(my_delta, their_delta):
+                            continue
+
                         bench_pool = [p for p in my_enriched if p.get('name') not in starters and p.get('name') not in ([my_name] + th_names)]
                         drop_cand = None
                         if bench_pool:
                             drop_cand = min(bench_pool, key=lambda p: _window_points(p.get('name') or ''))
-                        bench_flag = any(tp in opp_targets_bench for tp in their_pair)
                         relevant_positions = _positions_for_names([my_name])
                         pos_gap_serialized = _serialize_pos_gaps(pos_gap_notes, relevant_positions)
                         team_candidates.append({
@@ -5299,7 +5391,14 @@ def trade_suggestions():
                         va = sum(_get_value_1qb(n) for n in my_names)
                         vb = sum(_get_value_1qb(n) for n in th_names)
                         parity = _parity_pct(va, vb)
-                        accept_prob = _acceptance_prob(their_delta, parity)
+                        their_starters = sum(1 for n in th_names if n not in opp_bench_name_set)
+                        elite_hits = _count_elite_assets(th_names)
+                        bench_flag = any(tp in opp_targets_bench for tp in their_pair)
+                        if bench_first and their_starters >= len(th_names):
+                            continue
+                        if bench_first and elite_hits > _count_elite_assets(my_names):
+                            continue
+                        accept_prob = _acceptance_prob(their_delta, parity, their_starters, elite_hits)
                         if debug_flag:
                             if my_delta <= -5.0:
                                 continue
@@ -5314,7 +5413,9 @@ def trade_suggestions():
                                 continue
                             if accept_prob < effective_acceptance_floor:
                                 continue
-                        bench_flag = any(tp in opp_targets_bench for tp in their_pair)
+
+                        if not _passes_min_gain(my_delta, their_delta):
+                            continue
                         relevant_positions = _positions_for_names(my_names)
                         pos_gap_serialized = _serialize_pos_gaps(pos_gap_notes, relevant_positions)
                         team_candidates.append({
@@ -5576,7 +5677,17 @@ def trade_suggestions_debug():
         va = sum(_get_value_1qb(n) for n in my_names)
         vb = sum(_get_value_1qb(n) for n in their_names)
         parity = _parity_pct(va, vb)
-        accept_prob = _acceptance_prob(their_delta, parity)
+        opp_bench_normalized = {
+            normalize_player_name(p.get('name'))
+            for p in opp_roster
+            if str(p.get('selected_position', '')).upper().startswith(('BN', 'IR'))
+        }
+        their_starters = sum(
+            1 for n in their_names
+            if normalize_player_name(n) not in opp_bench_normalized
+        )
+        elite_hits = sum(1 for n in their_names if _is_elite_asset(n))
+        accept_prob = _acceptance_prob(their_delta, parity, their_starters, elite_hits)
 
         def lineup_to_simple(lu):
             simple = []

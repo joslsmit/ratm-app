@@ -2,7 +2,7 @@
 
 > **File Type**: CURRENT STATUS
 > **Review Priority**: High
-> **Last Updated**: September 26, 2025
+> **Last Updated**: September 27, 2025
 > **Purpose**: Accurate status of trade suggestions development
 
 ## Current Implementation Status
@@ -23,31 +23,27 @@
 - ✅ **Roster Legality**: Validates pre/post-trade rosters
 - ✅ **Debug Capabilities**: Comprehensive troubleshooting info
 
-**VERIFIED Test Results (September 26, 2025):**
+**VERIFIED Test Results (September 27, 2025):**
 ```json
 {
   "meta": {
     "league_key": "461.l.42889",
-    "proposals_returned": 12,
+    "proposals_returned": 6,
     "teams_considered": 11,
     "opponent_counts": {
-      "18th Street Macs": 1,
-      "Black Sheep": 3,
-      "CeeDee in your ENDzone": 2,
-      "Gary's Glorious Team": 3,
-      "Not this year Steve": 2,
-      "St. Brown’s Touchdown Town": 1
+      "Back 2 Back": 3,
+      "RIP PAC-12": 3
     }
   },
   "proposals": [
     {
-      "trade_id": "2x2-jordan love+rashee rice-christian mccaffrey+calvin ridley",
-      "my_side": ["Jordan Love", "Rashee Rice"],
-      "their_side": ["Christian McCaffrey", "Calvin Ridley"],
-      "my_delta_points": 12.3,
-      "their_delta_points": -11.8,
-      "value_parity_pct": 98,
-      "acceptance_prob": 0.11,
+      "trade_id": "2x1-jordan love+zach charbonnet-jameson williams",
+      "my_side": ["Jordan Love", "Zach Charbonnet"],
+      "their_side": ["Jameson Williams"],
+      "my_delta_points": 0.6,
+      "their_delta_points": -1.8,
+      "value_parity_pct": 80,
+      "acceptance_prob": 0.29,
       "flags": ["bench_target"]
     }
   ]
@@ -57,8 +53,8 @@
 **Optimized Filter Settings (CONFIRMED WORKING):**
 - Value parity guard now admits trades down to ~45% (was 50%) provided the opponent gains ≥1 point.
 - Acceptance floor auto-slackens to ~75% of the requested slider value with a 0.02 hard minimum (default slider 0.10 → effective ~0.075).
-- Delta tolerance remains -5.0 points to prevent catastrophic losses.
-- **Result**: 12 realistic, multi-opponent trade proposals generated successfully.
+- New scoring floor hides trades unless our gain ≥0.4 (or ≥0.25 when the opponent gains ≥2.0) so we only surface offers that move our roster forward.
+- **Result**: 6 realistic bench-first proposals (Back 2 Back & RIP PAC-12) with acceptance 0.08–0.44, focused on actual bench pieces.
 
 ### ✅ **AI Integration**
 
@@ -78,18 +74,22 @@
 
 **Still Needed:**
 - Continue tuning the new diversity heuristics (need weighting, penalty strength) with telemetry to ensure balanced output in edge leagues.
+- Loosen/telemetry-check the new minimum-gain threshold so we can decide whether to reintroduce additional opponents without sacrificing realism.
 - Normalize Gemini `null` responses so fallback reasons/pitches always surface, then keep polishing tone/length.
 - Additional UX polish once backend scoring refinements land.
 
 ## Next Steps Priority Order
 
 ### 1. **HIGH: Instrument Diversity & Acceptance Telemetry (BACKEND)**
-**Goal:** Log per-opponent counts, effective acceptance floors, and parity guards so we can validate the relaxed thresholds across leagues and adjust dynamically if clustering returns.
+**Goal:** Log per-opponent counts, effective acceptance floors, and parity/min-gain gates so we can validate the new thresholds across leagues and adjust dynamically if clustering returns.
 
 ### 2. **HIGH: Gemini Null Handling (BACKEND/FRONTEND)**
 **Goal:** Normalize `null`/empty AI payloads so fallback reasons and negotiation pitches always render, keeping the UI consistent when the model declines to answer.
 
-### 3. **OPTIONAL: Advanced Trade Center Features**
+### 3. **HIGH: Evaluate Bench-First Min Gain (BACKEND)**
+**Goal:** Collect metrics on how often min-gain filters drop proposals and whether we should allow a small net-elite exception to broaden opponent coverage.
+
+### 4. **OPTIONAL: Advanced Trade Center Features**
 - Playoff emphasis, schedule blending
 - Waiver tie-ins and advanced filters
 - Observability/performance optimisations
@@ -97,7 +97,7 @@
 ## Technical Debt
 
 **Issues Introduced During Development:**
-1. Need telemetry to confirm the new acceptance/diversity parameters stay healthy across varied leagues.
+1. Need telemetry to confirm the new acceptance/diversity/min-gain parameters stay healthy across varied leagues.
 2. Gemini can still return `null` reason arrays, which currently surface as empty sections in the UI.
 3. Additional logging around Yahoo auth failures would aid UX (league snapshot 401s).
 
