@@ -9,6 +9,7 @@ import MarketInefficiencyFinder from './components/MarketInefficiencyFinder';
 import TrendingPlayers from './components/TrendingPlayers';
 import KeeperEvaluator from './components/KeeperEvaluator';
 import TradeAnalyzer from './components/TradeAnalyzer'; // Import TradeAnalyzer
+import TradeCenter from './components/TradeCenter';
 import DraftAssistant from './components/DraftAssistant'; // Import DraftAssistant
 import TargetList from './components/TargetList'; // Import TargetList
 import Settings from './components/Settings'; // Import Settings
@@ -1067,6 +1068,10 @@ function App() {
               allPlayers={allPlayers}
               converter={converter}
             />
+          )}
+
+          {activeTool === 'trade-center' && (
+            <TradeCenter />
           )}
 
           {activeTool === 'draft' && (

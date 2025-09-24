@@ -2,7 +2,7 @@
 
 > **File Type**: GO-FORWARD  
 > **Review Priority**: High  
-> **Last Updated**: August 27, 2025 (Production Deployment Complete)  
+> **Last Updated**: September 19, 2025 (Trade Suggestions plan added)  
 > **Purpose**: Current status, priorities, and next steps
 
 ## 1. Current Status - PRODUCTION DEPLOYMENT SUCCESSFUL! 🎉
@@ -28,6 +28,43 @@
 - Deterministic, league‑aware Sleepers/Traps from available FA/W only; roster‑exclusion via Yahoo auth.
 - Structured outputs with headline + typed reasons; UI shows concise bullets, not numeric walls.
 - Removed league score chip; default Yahoo‑aware = ON; sidebar “Y” badges removed.
+
+### 🧠 September 19, 2025 — Trade Suggestions (Yahoo‑aware) — PARTIALLY IMPLEMENTED
+- Plan added: `memory-bank/trade_suggestions_yahoo_aware_development_plan.md`.
+- Scope: Bench‑first targets, package trades (1‑for‑1, 2‑for‑1, 1‑for‑2, 2‑for‑2), roster legality checks.
+- Scoring: Season‑focused defaults locked (Next3=0.50, ROS=0.30, PO=0.20; w_pp=0.55, w_vorp=0.30, w_tv=0.10, w_risk=0.05; alpha=0.70; ParityMin=75% relaxed; AcceptanceMin=0.25 relaxed; DEF/K excluded by default).
+
+**VERIFIED STATUS (September 19, 2025):**
+- ✅ **Phase 1 Deterministic Engine**: ✅ **COMPLETE AND VERIFIED WORKING**
+  - ✅ `/api/yahoo/league_snapshot` - League data aggregation confirmed working
+  - ✅ `/api/trade_suggestions` - **12 realistic trade proposals generated successfully**
+  - ✅ `/api/trade_suggestions/debug` - Debug functionality working
+  - ✅ All package types (1x1, 2x1, 1x2, 2x2) confirmed generating realistic proposals
+  - ✅ **Filter optimization complete**: 50% parity, 0.10 acceptance, -5.0 delta tolerance
+  - ✅ **Example working trade**: Rashee Rice + Jordan Love → Christian McCaffrey + Calvin Ridley
+  - ✅ Lineup optimizer and scoring system functional
+  - ✅ Bench-first targeting and value parity calculations working
+  - ✅ Relaxed filters producing realistic trade proposals (12+ working suggestions)
+- ✅ **Phase 2 AI Integration**: **ONLINE WITH GEMINI EXPLANATIONS**
+  - ✅ `_enhance_proposals_with_ai()` now augments deterministic proposals with reasons, negotiation pitch, confidence, and rank adjustment
+  - ✅ Trade ID normalization + logging (`ai_debug.log`) protect against formatting drift in Gemini responses
+  - ✅ Position-aware guardrails prevent Gemini from referencing positions not included in the proposal; invalid lines are replaced with deterministic parity/acceptance context when needed.
+  - 🔍 Follow-up: continue refining copy so explanations stay concise; normalize Gemini `null` payloads so fallback reasons always surface.
+
+- 🟡 **Phase 3 Frontend Trade Center**: **MVP LIVE — UX POLISH IN PROGRESS**
+  - ✅ React Trade Center component renders proposals with filters, player dossier links, AI context, and debug drilldowns
+  - ✅ Yahoo-auth bootstrap + acceptance fallback keeps proposals visible even when below threshold
+  - ✅ Horizon & acceptance sliders now have inline helper copy; parity/acceptance metrics show plain-English badges and an education callout; opponent team label appears on every card.
+  - ✅ Backend now seeds opponents by need score and runs a per-team beam search with diversity penalties so proposal lists are less dominated by one roster (per-team cap tightened to max(3, top_k//4), penalty raised to 0.18); metadata surfaces opponent counts for sanity checks.
+  - ✅ Bench-first truly prioritises bench pieces: trades are dropped when we raid more elite assets than we send, and a new scoring floor hides offers where our delta < 0.4 unless the opponent gains 2+ points.
+  - 🔧 Outstanding polish: continue tuning need score weighting and AI copy tone, and explore richer tooltips/empty-state guidance once further scoring refinements land.
+
+**IMMEDIATE PRIORITIES:**
+1. **HIGH**: Monitor the relaxed acceptance/filter thresholds and updated diversity cap to confirm proposal variety holds across leagues; add telemetry if drift persists.
+2. **HIGH**: Harden AI fallback handling so trades with null Gemini responses still surface at least one grounded reason/pitch.
+3. **HIGH**: Evaluate minimum gain heuristics—current settings keep offers to 6–7 proposals in test league; consider alternative knobs (e.g., net elite allowance) if users want broader coverage.
+4. **HIGH**: Always restart or ensure auto-reload before testing `backend/app.py` changes; `python3 -m compileall` is just a syntax check.
+5. **OPTIONAL**: Phase 3+ enhancements (playoff emphasis, waiver tie-ins, advanced filtering) after the diversity heuristics prove stable.
 
 ### 🔧 PRODUCTION ISSUE RESOLVED - CORS Fix Applied:
 **Problem**: Frontend blocked by CORS policy - "Access-Control-Allow-Origin" header missing

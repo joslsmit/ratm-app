@@ -1,0 +1,498 @@
+.tradeCenter {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  color: var(--text-primary, #0f172a);
+  background: rgba(248, 250, 252, 0.9);
+  border-radius: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  box-shadow: 0 26px 52px rgba(15, 23, 42, 0.18);
+}
+
+.headerRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.headerRow h1 {
+  margin: 0;
+  font-size: 1.75rem;
+}
+
+.subtitle {
+  margin: 4px 0 0;
+  color: #475569;
+  font-size: 0.95rem;
+}
+
+.metaChips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.12);
+  color: #0f172a;
+  font-size: 0.8rem;
+  border: 1px solid rgba(15, 118, 110, 0.28);
+}
+
+.chipSuccess {
+  background: rgba(34, 197, 94, 0.18);
+  color: #166534;
+  border-color: rgba(34, 197, 94, 0.34);
+}
+
+.chipMuted {
+  background: rgba(148, 163, 184, 0.22);
+  color: #475569;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+}
+
+.controlsPanel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 16px;
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.16);
+}
+
+.controlGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.controlGroup label {
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: inherit;
+}
+
+.controlGroup select,
+.controlGroup input[type="range"] {
+  width: 100%;
+}
+
+.targetList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 160px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  background: rgba(241, 245, 249, 0.85);
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+}
+
+.checkboxLabel input[type="checkbox"] {
+  transform: scale(1.05);
+}
+
+.targetActions {
+  display: flex;
+  gap: 12px;
+  font-size: 0.85rem;
+}
+
+.rangeLabels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.rangeLabels strong {
+  color: inherit;
+}
+
+.helperText {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: #64748b;
+}
+
+.educationBox {
+  padding: 16px 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(237, 242, 247, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.educationBox h2 {
+  margin: 0;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.educationBox ul {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: #1f2937;
+}
+
+.educationBox li strong {
+  color: #0f172a;
+}
+
+.opponentTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 0.85rem;
+  color: #1e293b;
+}
+
+.buttonRow {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.primaryButton,
+.secondaryButton {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.primaryButton {
+  background: linear-gradient(135deg, #4c6ef5, #805ad5);
+  color: #fff;
+}
+
+.primaryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.secondaryButton {
+  background: rgba(148, 163, 184, 0.16);
+  color: inherit;
+}
+
+.primaryButton:not(:disabled):hover,
+.secondaryButton:hover {
+  transform: translateY(-1px);
+}
+
+.linkButton {
+  background: none;
+  border: none;
+  color: #60a5fa;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.linkButton:hover {
+  text-decoration: underline;
+}
+
+.errorText {
+  color: #f87171;
+  font-size: 0.85rem;
+}
+
+.mutedText {
+  color: var(--text-muted, #a0aec0);
+  font-size: 0.85rem;
+}
+
+.filteredNotice {
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(253, 186, 116, 0.2);
+  color: #92400e;
+  font-size: 0.85rem;
+  border: 1px solid rgba(217, 119, 6, 0.32);
+}
+
+.filteredNoticeSecondary {
+  color: #b45309;
+}
+
+.loadingPanel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.95rem;
+}
+
+.proposalsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.surplusBox {
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+  font-size: 0.9rem;
+}
+
+.proposalsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.proposalCard {
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: 0 22px 40px rgba(15, 23, 42, 0.18);
+  color: #0f172a;
+}
+
+.proposalHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.proposalHeader h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.flagRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.contextRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.contextBadge {
+  font-size: 0.78rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(226, 232, 240, 0.9);
+  color: #0f172a;
+}
+
+.contextPositive {
+  background: rgba(34, 197, 94, 0.16);
+  border-color: rgba(22, 163, 74, 0.36);
+  color: #166534;
+}
+
+.contextCaution {
+  background: rgba(251, 191, 36, 0.18);
+  border-color: rgba(217, 119, 6, 0.36);
+  color: #92400e;
+}
+
+.contextWarning {
+  background: rgba(248, 113, 113, 0.18);
+  border-color: rgba(220, 38, 38, 0.36);
+  color: #b91c1c;
+}
+
+.contextNeutral {
+  background: rgba(148, 163, 184, 0.18);
+  border-color: rgba(148, 163, 184, 0.36);
+  color: #475569;
+}
+
+.metric {
+  font-size: 0.78rem;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.9);
+  color: #0f172a;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.metricPositive {
+  color: #166534;
+}
+
+.metricNegative {
+  color: #b91c1c;
+}
+
+.playerColumns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.playerColumn {
+  flex: 1 1 220px;
+}
+
+.playerColumn h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.playerColumn ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.playerLink {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.playerLink:hover {
+  text-decoration: underline;
+}
+
+.dropSuggestion {
+  color: #be123c;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dropLink {
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.dropLink:hover {
+  text-decoration: underline;
+}
+
+.needRow {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.needChip {
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(221, 214, 254, 0.5);
+  color: #4c1d95;
+  border: 1px solid rgba(124, 58, 237, 0.4);
+}
+
+.reasonSection h4,
+.pitchSection h4,
+.debugSection h5 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+}
+
+.reasonSection ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pitchSection p {
+  margin: 0;
+  font-style: italic;
+  color: #475569;
+}
+
+.debugSection {
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  padding-top: 16px;
+}
+
+.loadingInline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+}
+
+.debugGrid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.debugGrid ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+.debugGrid strong {
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .controlsPanel {
+    grid-template-columns: 1fr;
+  }
+
+  .headerRow {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

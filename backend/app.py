@@ -15,6 +15,9 @@ from datetime import datetime # Import datetime class
 from apscheduler.schedulers.background import BackgroundScheduler
 from data_importer import import_data
 from utils import normalize_player_name, fuzzy_find_player_key, get_player_context, make_gemini_request, process_ai_response, process_ai_response_v2
+from typing import Optional, Tuple
+import itertools
+import heapq
 from prompt_templates import PromptBuilder
 from few_shot_examples import ExampleLibrary
 from chain_of_thought import ChainOfThoughtBuilder, ReasoningType
@@ -86,6 +89,139 @@ def _dev_save_cfg(cfg: dict):
 # --- Data Caching ---
 player_data_cache, player_name_to_id, static_ecr_overall_data, static_ecr_positional_data, static_ecr_rookie_data, player_values_cache, pick_values_cache, weekly_projections_cache, combined_player_data_cache = None, None, {}, {}, {}, None, None, {}, None
 yahoo_id_to_key = {}
+
+POSITION_TOKENS = {'QB', 'RB', 'WR', 'TE', 'DST', 'DEF', 'K'}
+MIN_MY_GAIN_HARD = 0.4
+MIN_MY_GAIN_SOFT = 0.25
+ELITE_ALLOWANCE_DELTA = 2.0
+
+
+def _is_elite_asset(name: str) -> bool:
+    try:
+        ci = _get_combined_info_by_name(name)
+        if not ci:
+            return False
+        ecr = ci.get('ecr_overall')
+        if isinstance(ecr, (int, float)) and ecr <= 36:
+            return True
+        pos = (ci.get('position') or '').upper()
+        if pos == 'QB' and isinstance(ecr, (int, float)) and ecr <= 20:
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _count_elite_assets(names: list[str]) -> int:
+    return sum(1 for nm in names or [] if _is_elite_asset(nm))
+
+
+def _positions_for_names(names: list[str]) -> set[str]:
+    positions = set()
+    for nm in names or []:
+        if not nm:
+            continue
+        ci = _get_combined_info_by_name(nm)
+        pos = (ci.get('position') or '').upper() if ci else ''
+        if not pos:
+            continue
+        primary = pos.split('/')[0].strip()
+        if primary in ('DEF', 'DST'):
+            positions.add('DST')
+        elif primary:
+            positions.add(primary)
+    return positions
+
+# --- Trade Suggestions (Deterministic Core Helpers) ---
+def _get_value_1qb(name: str) -> float:
+    try:
+        ci = _get_combined_info_by_name(name)
+        v = ci.get('value_1qb')
+        if isinstance(v, (int, float)):
+            return float(v)
+        if v is not None:
+            return float(v)
+    except Exception:
+        pass
+    return 0.0
+
+def _window_points(name: str) -> float:
+    """Season-focused window metric using weekly projection fallback to ECR-derived estimate."""
+    return _player_weekly_score(name, None)
+
+def _enrich_for_lineup_from_roster(roster_players: list, week: Optional[str] = None) -> Tuple[list, list[str]]:
+    """
+    Build enriched players list and slot list from a Yahoo roster payload (already parsed via parse_yahoo_roster_response).
+    Excludes DEF/K from slot construction by design; marks Out/IR and BYE as blocked.
+    """
+    enriched = []
+    for p in roster_players:
+        name = p.get('name')
+        if not name:
+            continue
+        ci = _get_combined_info_by_name(name)
+        pos = (ci.get('position') or p.get('selected_position') or '').upper()
+        status = str(p.get('status', '')).upper()
+        bye_week = ci.get('bye_week')
+        blocked = False
+        if status in ('OUT', 'IR'):
+            blocked = True
+        if week and bye_week and str(bye_week) == str(week):
+            blocked = True
+        enriched.append({
+            'name': name,
+            'position': pos,
+            'selected_position': p.get('selected_position'),
+            'weekly_points': ci.get('projected_points'),
+            'ecr_overall': ci.get('ecr_overall'),
+            'bye_week': bye_week,
+            'status': status,
+            'blocked': blocked
+        })
+    slots = _build_required_slots_from_roster(roster_players)
+    return enriched, slots
+
+def _lineup_total(enriched_players: list, slots: list[str]) -> float:
+    _, total = _best_lineup(enriched_players, slots)
+    return total
+
+def _parity_pct(a_value: float, b_value: float) -> int:
+    try:
+        a = float(a_value)
+        b = float(b_value)
+        m = max(a, b)
+        if m <= 0:
+            return 0
+        return int(round(100 * (1.0 - abs(a - b) / m)))
+    except Exception:
+        return 0
+
+def _acceptance_prob(their_delta: float, parity_pct: int, starters_taken: int = 0, elite_taken: int = 0) -> float:
+    """Estimate acceptance probability with penalties for raiding starters/elite assets."""
+    import math
+    try:
+        delta = float(their_delta)
+        parity = float(parity_pct)
+        if delta <= 0:
+            base = 0.02
+        else:
+            delta_term = min(0.70, delta / 10.0)
+            parity_term = min(0.30, max(0.0, parity - 60.0) / 120.0)
+            base = 0.05 + delta_term + parity_term
+
+        starter_penalty = 0.30 * max(0, starters_taken)
+        elite_penalty = 0.70 * max(0, elite_taken)
+
+        adjusted = base
+        if starters_taken:
+            adjusted *= 0.28 ** starters_taken
+        if elite_taken:
+            adjusted *= 0.12 ** elite_taken
+
+        adjusted *= math.exp(-(starter_penalty + elite_penalty))
+        return max(0.0, min(0.95, adjusted))
+    except Exception:
+        return 0.02
 name_aliases = {}
 
 # --- Name Aliases (optional file: backend/name_aliases.json) ---
@@ -4252,6 +4388,1345 @@ def optimize_lineup():
     except Exception as e:
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/yahoo/league_snapshot')
+def yahoo_league_snapshot():
+    """
+    Aggregate league teams and rosters into a concise snapshot for trade analysis.
+    Query: league_key (required). Uses Authorization Bearer token.
+    Returns: { league_key, teams: [{ team_key, name, roster: [{player_key, player_id, name, selected_position, eligible_positions, status}] }] }
+    """
+    try:
+        league_key = request.args.get('league_key')
+        if not league_key:
+            return jsonify({"error": "league_key parameter is required"}), 400
+
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({"error": "Valid Authorization header with Bearer token is required"}), 401
+        access_token = auth_header.split(' ')[1]
+
+        headers = {'Authorization': f'Bearer {access_token}', 'Accept': 'application/json'}
+        base = 'https://fantasysports.yahooapis.com/fantasy/v2'
+
+        # Fetch teams list for the league
+        teams_resp = requests.get(f"{base}/league/{league_key}/teams?format=json", headers=headers, timeout=10)
+        teams_resp.raise_for_status()
+        teams_data = teams_resp.json()
+
+        # Parse teams
+        fantasy_content = teams_data.get('fantasy_content', {}) if isinstance(teams_data, dict) else {}
+        league_arr = fantasy_content.get('league', [])
+        if not (isinstance(league_arr, list) and len(league_arr) >= 2):
+            return jsonify({"error": "Unexpected Yahoo teams response"}), 500
+        teams_container = league_arr[1].get('teams', {})
+        if not isinstance(teams_container, dict):
+            return jsonify({"error": "Unexpected Yahoo teams container"}), 500
+
+        result = {'league_key': league_key, 'teams': []}
+        team_entries = []
+
+        def _scan_for_field(container, key):
+            try:
+                if isinstance(container, dict):
+                    return container.get(key)
+                if isinstance(container, list):
+                    for item in container:
+                        if isinstance(item, dict) and key in item:
+                            return item.get(key)
+                        if isinstance(item, list):
+                            for sub in item:
+                                if isinstance(sub, dict) and key in sub:
+                                    return sub.get(key)
+                return None
+            except Exception:
+                return None
+
+        def _extract_team_key_name(team_obj):
+            team_key = None
+            name = ''
+            if isinstance(team_obj, list):
+                for el in team_obj:
+                    if isinstance(el, dict):
+                        team_key = team_key or el.get('team_key') or _scan_for_field(el, 'team_key')
+                        name = name or el.get('name') or _scan_for_field(el, 'name') or ''
+                    elif isinstance(el, list):
+                        team_key = team_key or _scan_for_field(el, 'team_key')
+                        name = name or (_scan_for_field(el, 'name') or '')
+            elif isinstance(team_obj, dict):
+                team_key = team_obj.get('team_key')
+                name = team_obj.get('name', '')
+            return team_key, name
+
+        for k, v in teams_container.items():
+            if not str(k).isdigit():
+                continue
+            arr = v.get('team', [])
+            if not arr:
+                continue
+            team_key, name = _extract_team_key_name(arr)
+            if not team_key and isinstance(arr, list) and len(arr) > 0:
+                team_key = _scan_for_field(arr[0], 'team_key') or team_key
+                name = name or (_scan_for_field(arr[0], 'name') or '')
+            if team_key:
+                team_entries.append({'team_key': team_key, 'name': name})
+
+        # For each team, fetch roster and parse
+        for t in team_entries:
+            tk = t['team_key']
+            # Prefer explicit players subresource
+            urlp = f"{base}/team/{tk}/roster/players?format=json"
+            urlf = f"{base}/team/{tk}/roster?format=json"
+            rr = requests.get(urlp, headers=headers, timeout=10)
+            if rr.status_code == 404:
+                rr = requests.get(urlf, headers=headers, timeout=10)
+            roster_raw = rr.json() if rr.ok else {}
+            roster_players = parse_yahoo_roster_response(roster_raw) or []
+            # Optionally enrich eligible positions via batch (best-effort)
+            try:
+                pkeys = [p['player_key'] for p in roster_players if p.get('player_key')]
+                det = _fetch_yahoo_player_details_by_keys(access_token, league_key, pkeys)
+                if det:
+                    for p in roster_players:
+                        if p.get('player_key') in det:
+                            p['eligible_positions'] = det[p['player_key']].get('eligible_positions', p.get('eligible_positions'))
+            except Exception:
+                pass
+            # Normalize is_starter flag
+            for p in roster_players:
+                sp = str(p.get('selected_position') or '').upper()
+                p['is_starter'] = not (sp.startswith('BN') or sp.startswith('IR'))
+            result['teams'].append({'team_key': tk, 'name': t['name'], 'roster': roster_players})
+
+        return jsonify(result)
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': 'Failed to connect to Yahoo API', 'details': str(e)}), 500
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+def _enhance_proposals_with_ai(proposals: list, my_team: dict, teams: list, access_token: str, api_key_override: str = None) -> list:
+    """Attach AI generated explanations / negotiation angles while preserving deterministic proposals."""
+    try:
+        if not proposals:
+            _dbg("AI enhancement skipped: no proposals")
+            return proposals
+
+        user_key = api_key_override or os.getenv('GEMINI_API_KEY')
+        if not user_key:
+            _dbg("AI enhancement skipped: GEMINI_API_KEY missing")
+            return proposals
+
+        my_roster = my_team.get('roster', []) if isinstance(my_team, dict) else []
+        starters = [p for p in my_roster if not str(p.get('selected_position', '')).upper().startswith(('BN', 'IR'))]
+        bench = [p for p in my_roster if str(p.get('selected_position', '')).upper().startswith('BN')]
+
+        def _player_summary(name: str) -> str:
+            ci = _get_combined_info_by_name(name)
+            if not ci:
+                return name
+            parts = [name]
+            pos = (ci.get('position') or '').upper()
+            team = ci.get('team')
+            if pos:
+                parts.append(f"{pos}")
+            if team:
+                parts.append(team)
+            weekly = ci.get('projected_points')
+            if isinstance(weekly, (int, float)):
+                parts.append(f"proj {weekly:.1f} pts")
+            ecr = ci.get('ecr_overall')
+            if isinstance(ecr, (int, float)):
+                parts.append(f"ECR {int(ecr)}")
+            return " | ".join(parts)
+
+        def _team_snapshot(team_obj: dict) -> dict:
+            roster = team_obj.get('roster', []) if isinstance(team_obj, dict) else []
+            starters_local = []
+            bench_local = []
+            for pl in roster:
+                nm = pl.get('name')
+                if not nm:
+                    continue
+                slot = str(pl.get('selected_position', '')).upper()
+                entry = _player_summary(nm)
+                if slot.startswith(('BN', 'IR')):
+                    bench_local.append(entry)
+                else:
+                    starters_local.append(entry)
+            return {
+                'name': team_obj.get('name', 'Unknown'),
+                'starters': starters_local,
+                'bench': bench_local
+            }
+
+        team_lookup = {t.get('team_key'): t for t in teams if isinstance(t, dict)}
+
+        max_ai_packages = min(len(proposals), 12)
+        chunk_size = 6
+        total_chunks = max(1, math.ceil(max_ai_packages / chunk_size))
+
+        base_context = [
+            "=== MY TEAM OVERVIEW ===",
+            f"Team: {my_team.get('name', 'Unknown')}" if isinstance(my_team, dict) else "Team: Unknown",
+            f"Starters ({len(starters)}): {', '.join([p.get('name') for p in starters if p.get('name')])}",
+            f"Bench ({len(bench)}): {', '.join([p.get('name') for p in bench if p.get('name')])}"
+        ]
+
+        example_json = {
+            "enhanced_proposals": [
+                {
+                    "trade_id": "1x1-jordan love-tee higgins",
+                    "reasons": [
+                        "Lineup: Higgins slides into WR2, adding ~3.2 pts to our weekly floor.",
+                        "Opponent: Black Sheep land QB depth for bye week gaps and bench injuries.",
+                        "Fairness: Value gap under 4% with their delta +1.2 pts, so pitch feels balanced."
+                    ],
+                    "negotiation_pitch": "Black Sheep - this swaps your excess WR for needed QB cover while we steady our WR room.",
+                    "confidence": "Medium",
+                    "ai_rank_adjustment": 0.6
+                }
+            ]
+        }
+
+        def _norm_trade_id(value: str) -> str:
+            if not value:
+                return ''
+            return re.sub(r'[^a-z0-9]+', '', value.lower())
+
+        enhanced_lookup = {}
+
+        for chunk_idx, start in enumerate(range(0, max_ai_packages, chunk_size)):
+            chunk = proposals[start:start + chunk_size]
+            if not chunk:
+                continue
+
+            proposal_summaries = []
+            for offset, proposal in enumerate(chunk):
+                global_idx = start + offset + 1
+                trade_id = proposal.get('trade_id')
+                their_side = proposal.get('their_side', [])
+                opp_team = None
+                for team_key, team_obj in team_lookup.items():
+                    roster_names = {normalize_player_name(p.get('name')) for p in team_obj.get('roster', []) or []}
+                    if any(normalize_player_name(tp) in roster_names for tp in their_side):
+                        opp_team = _team_snapshot(team_obj)
+                        break
+
+                my_players = [_player_summary(name) for name in proposal.get('my_side', [])]
+                their_players = [_player_summary(name) for name in their_side]
+                positions_in_play = sorted(_positions_for_names((proposal.get('my_side') or []) + their_side))
+
+                summary_lines = [
+                    f"PROPOSAL {global_idx}: {trade_id}",
+                    f"  My Side Out: {('; '.join(my_players)) or 'None'}",
+                    f"  Their Side Out: {('; '.join(their_players)) or 'None'}",
+                    f"  My Delta: {proposal.get('my_delta_points')} pts",
+                    f"  Their Delta: {proposal.get('their_delta_points')} pts",
+                    f"  Value Parity: {proposal.get('value_parity_pct')}%",
+                    f"  Acceptance Prob: {proposal.get('acceptance_prob')}",
+                    f"  Flags: {', '.join(proposal.get('flags', [])) or 'None'}"
+                ]
+
+                if positions_in_play:
+                    summary_lines.append(f"  Positions In Play: {', '.join(positions_in_play)}")
+
+                if opp_team:
+                    summary_lines.append(f"  Opponent Team: {opp_team['name']}")
+                    summary_lines.append(f"  Opponent Starters Snapshot: {', '.join(opp_team['starters'][:8])}")
+                    summary_lines.append(f"  Opponent Bench Snapshot: {', '.join(opp_team['bench'][:8])}")
+
+                needs = proposal.get('opponent_needs') or []
+                needs_rendered = []
+                if isinstance(needs, list):
+                    for entry in needs:
+                        if isinstance(entry, dict):
+                            pos = entry.get('position')
+                            gap = entry.get('gap_points')
+                            if pos and isinstance(gap, (int, float)):
+                                needs_rendered.append(f"{pos} depth gap ~+{gap:.1f} pts")
+                                continue
+                            note_val = entry.get('note')
+                            if note_val:
+                                needs_rendered.append(str(note_val))
+                        elif entry:
+                            needs_rendered.append(str(entry))
+                if needs_rendered:
+                    summary_lines.append(f"  Opponent Needs: {', '.join(needs_rendered)}")
+
+                suggested_drop = proposal.get('suggested_drop')
+                if suggested_drop:
+                    summary_lines.append(f"  Suggested Drop: {suggested_drop}")
+
+                proposal_summaries.append("\n".join(summary_lines))
+
+            context_sections = base_context + [
+                "",
+                f"=== TRADE PROPOSALS SET {chunk_idx + 1} / {total_chunks} ==="
+            ] + proposal_summaries
+
+            context_str = "\n\n".join(context_sections)
+
+            prompt = f"""{PromptBuilder.get_base_system_prompt()}
+
+TASK: Enhance trade proposals with strategic reasoning, opponent-aware negotiation pitches, and confidence labels.
+
+ANALYSIS METHODOLOGY:
+1. Evaluate how the trade impacts our starting lineup and positional balance.
+2. Identify why the opponent could be motivated (roster gaps, depth issues, schedule).
+3. Highlight fairness signals (value parity, acceptance probability, mutual benefit).
+4. Surface key risks (injury volatility, role uncertainty, short-term vs ROS).
+5. Provide a one-sentence negotiation pitch tailored to the opponent's needs.
+6. If a suggested drop appears, confirm why the roster spot is safe to free or note the waiver follow-up.
+
+STYLE & TONE GUARDRAILS:
+- Provide 2-3 reasons total. Reason 1 = our lineup/roster benefit; Reason 2 = opponent benefit referencing their team name; Reason 3 (optional) = fairness, risk, or playoff outlook.
+- Each reason must be <= 18 words, declarative, and grounded in provided context (include numbers when meaningful).
+- Weave any listed opponent needs into the opponent-focused reason.
+- If a suggested drop is present, justify in a reason why that player is expendable (bench role, waiver pivot, etc.).
+- negotiation_pitch: single sentence <= 18 words. Start with the opponent team name (e.g., "Black Sheep - ...") and keep the tone collaborative.
+- Mention only positions that appear in the proposal (My Side Out or Their Side Out). Do not reference other positions.
+
+CONTEXT DATA:
+{context_str}
+
+RESPONSE FORMAT (JSON ONLY):
+{json.dumps(example_json, indent=2)}
+
+REQUIREMENTS:
+- Return the original trade_id values exactly as provided.
+- Provide 2-3 reasons following the guardrails (plain text, no numbering or markdown).
+- Each reason must remain <= 18 words.
+- Mention the opponent team name at least once (reason or negotiation pitch).
+- negotiation_pitch must be a single sentence (<= 18 words) starting with the opponent team name.
+- confidence must be one of "High", "Medium", or "Low".
+- ai_rank_adjustment is a float; positive values mean AI prefers ranking it higher.
+- Do not include markdown or extra prose outside the JSON object.
+"""
+
+            try:
+                response_text = make_gemini_request(prompt, user_key)
+                try:
+                    with open(os.path.join(basedir, 'ai_debug.log'), 'a') as dbg_file:
+                        dbg_file.write('\n=== AI REQUEST @ %s (chunk %d/%d) ===\n' % (datetime.now(), chunk_idx + 1, total_chunks))
+                        dbg_file.write('PROMPT:\n%s\n' % prompt)
+                        dbg_file.write('RAW RESPONSE:\n%s\n' % (response_text or ''))
+                except Exception:
+                    pass
+            except Exception as exc:
+                print(f"AI enhancement request failed (chunk {chunk_idx + 1}): {exc}")
+                continue
+
+            if not response_text:
+                print(f"AI enhancement returned empty response (chunk {chunk_idx + 1})")
+                continue
+
+            raw_text = response_text.strip()
+            if raw_text.startswith('```'):
+                raw_text = re.sub(r'^```json\s*', '', raw_text, flags=re.IGNORECASE).strip()
+                if raw_text.endswith('```'):
+                    raw_text = raw_text[:-3].strip()
+
+            start_idx = raw_text.find('{')
+            end_idx = raw_text.rfind('}')
+            if start_idx == -1 or end_idx == -1:
+                print(f"AI enhancement: could not locate JSON payload (chunk {chunk_idx + 1})")
+                continue
+
+            json_blob = raw_text[start_idx:end_idx+1]
+            try:
+                ai_payload = json.loads(json_blob)
+            except json.JSONDecodeError as exc:
+                print(f"AI enhancement JSON decode error (chunk {chunk_idx + 1}): {exc}")
+                print(f"AI raw snippet: {raw_text[:400]}")
+                continue
+
+            for item in ai_payload.get('enhanced_proposals', []) or []:
+                trade_id = (item.get('trade_id') or '').strip()
+                if not trade_id:
+                    continue
+                reasons = item.get('reasons') or []
+                if isinstance(reasons, list):
+                    reasons = [str(r).strip() for r in reasons if r]
+                else:
+                    reasons = [str(reasons).strip()]
+                enhanced_lookup[trade_id] = {
+                    'reasons': reasons,
+                    'negotiation_pitch': str(item.get('negotiation_pitch', '')).strip(),
+                    'ai_confidence': str(item.get('confidence', 'Medium')).strip().title(),
+                    'ai_rank_adjustment': item.get('ai_rank_adjustment')
+                }
+
+        enhanced_output = []
+        for proposal in proposals:
+            trade_id = proposal.get('trade_id')
+            enriched = proposal.copy()
+            ai_fields = enhanced_lookup.get(trade_id)
+            if not ai_fields:
+                norm_id = _norm_trade_id(trade_id)
+                for key, value in enhanced_lookup.items():
+                    norm_key = _norm_trade_id(key)
+                    if norm_key == norm_id or (norm_id and norm_id in norm_key) or (norm_key and norm_key in norm_id):
+                        ai_fields = value
+                        break
+            if ai_fields:
+                allowed_positions = _positions_for_names((proposal.get('my_side') or []) + (proposal.get('their_side') or []))
+                allowed_positions = set(allowed_positions or [])
+                if 'DST' in allowed_positions:
+                    allowed_positions.add('DEF')
+                if 'DEF' in allowed_positions:
+                    allowed_positions.add('DST')
+
+                def _mentions_forbidden(text: str) -> bool:
+                    if not text:
+                        return False
+                    upper_text = text.upper()
+                    for token in POSITION_TOKENS:
+                        if re.search(rf"\\b{token}\\b", upper_text):
+                            canonical = 'DST' if token in ('DST', 'DEF') else token
+                            if canonical not in allowed_positions:
+                                return True
+                    return False
+
+                def _fallback_reason() -> str:
+                    parity_val = proposal.get('value_parity_pct')
+                    acceptance_val = proposal.get('acceptance_prob')
+                    return (
+                        f"Fairness: parity {parity_val if parity_val is not None else '—'}%"
+                        f"; acceptance {acceptance_val if acceptance_val is not None else '—'}."
+                    )
+
+                reasons_payload = ai_fields['reasons'] or []
+                if reasons_payload:
+                    filtered_reasons = [r for r in reasons_payload if not _mentions_forbidden(r)]
+                    if not filtered_reasons:
+                        filtered_reasons = [_fallback_reason()]
+                    enriched['reasons'] = filtered_reasons
+                else:
+                    enriched['reasons'] = [_fallback_reason()]
+
+                pitch = ai_fields.get('negotiation_pitch', '')
+                if pitch and not _mentions_forbidden(pitch):
+                    enriched['negotiation_pitch'] = pitch
+                else:
+                    opp_name = enriched.get('opponent_team_name') or enriched.get('opponent_team') or 'Opponent'
+                    enriched['negotiation_pitch'] = f"{opp_name} - balance depth on both sides."
+                enriched['ai_confidence'] = ai_fields['ai_confidence']
+                rank_adj = ai_fields.get('ai_rank_adjustment')
+                if isinstance(rank_adj, (int, float)):
+                    enriched['ai_rank_adjustment'] = round(float(rank_adj), 3)
+            enhanced_output.append(enriched)
+
+        return enhanced_output
+
+    except Exception as e:
+        print(f"AI enhancement error: {e}")
+        return proposals
+
+@app.route('/api/trade_suggestions', methods=['POST'])
+def trade_suggestions():
+    """
+    Deterministic, season-focused trade suggestions (1-for-1 MVP).
+    Body: {
+      league_key, my_team_key, target_team_keys?, horizon_weeks?, ros_weight?, playoff_weight?,
+      max_package_size?, include_injured?, bench_first?, debug?
+    }
+    Returns: { proposals: [...], meta: {...} }
+    """
+    try:
+        payload = request.get_json(force=True, silent=True) or {}
+        league_key = payload.get('league_key')
+        my_team_key = payload.get('my_team_key')
+        target_team_keys = payload.get('target_team_keys') or []
+        include_injured = bool(payload.get('include_injured', False))
+        bench_first = True if payload.get('bench_first', True) else False
+        top_k = int(payload.get('top_k', 12))
+        max_pkg = int(payload.get('max_package_size', 2))
+        use_ai = bool(payload.get('use_ai', False))
+        api_key_override = payload.get('gemini_api_key') or payload.get('ai_api_key')
+        try:
+            acceptance_floor = float(payload.get('acceptance_floor', 0.10))
+        except (TypeError, ValueError):
+            acceptance_floor = 0.10
+        acceptance_floor = max(0.0, min(0.5, acceptance_floor))
+        effective_acceptance_floor = max(0.02, min(0.5, acceptance_floor * 0.75))
+        debug_acceptance_floor = max(0.01, min(0.1, effective_acceptance_floor * 0.6))
+        if not league_key or not my_team_key:
+            return jsonify({'error': 'league_key and my_team_key are required'}), 400
+
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'Valid Authorization header with Bearer token is required'}), 401
+        access_token = auth_header.split(' ')[1]
+
+        # Fetch league snapshot (teams + rosters)
+        with app.test_request_context(environ_base={'HTTP_AUTHORIZATION': f'Bearer {access_token}'}, query_string={'league_key': league_key}):
+            snap_resp = yahoo_league_snapshot()
+        if hasattr(snap_resp, 'status_code') and snap_resp.status_code != 200:
+            return snap_resp
+        snapshot = snap_resp.get_json() if hasattr(snap_resp, 'get_json') else snap_resp
+        teams = snapshot.get('teams', []) if isinstance(snapshot, dict) else []
+
+        # Identify my team and targets
+        my_team = next((t for t in teams if t.get('team_key') == my_team_key), None)
+        if not my_team:
+            return jsonify({'error': 'my_team_key not found in snapshot'}), 400
+        if not target_team_keys:
+            target_team_keys = [t['team_key'] for t in teams if t.get('team_key') != my_team_key]
+
+        # Prepare my enriched roster and slots
+        my_roster = my_team.get('roster', [])
+        my_enriched, my_slots = _enrich_for_lineup_from_roster(my_roster)
+        my_baseline = _lineup_total(my_enriched, my_slots)
+
+        # Check debug mode for relaxed filters
+        debug_flag = bool(payload.get('debug')) or str(request.args.get('debug','')).strip() in ('1','true','True')
+
+        # Build my starter set for surplus calc
+        my_lineup, _ = _best_lineup(my_enriched, my_slots)
+        starters = set()
+        for sl in my_lineup:
+            if sl.get('player') and sl['player'].get('name'):
+                starters.add(sl['player']['name'])
+        # Surplus candidates: bench players with positive weekly score, excluding DEF/K
+        my_surplus = []
+        for pl in my_enriched:
+            name = pl.get('name')
+            pos = (pl.get('position') or '').upper()
+            if name in starters:
+                continue
+            if pos in ('DEF', 'DST', 'K'):
+                continue
+            if (not include_injured) and (pl.get('status') in ('OUT','IR')):
+                continue
+            if _window_points(name) > 0.0:
+                my_surplus.append(pl)
+
+        proposals = []
+        per_team_candidates = {}
+        target_team_set = set(target_team_keys)
+
+        def _score(p):
+            try:
+                my_delta = float(p.get('my_delta_points', 0))
+                acceptance = float(p.get('acceptance_prob', 0))
+                base = 0.70 * my_delta + 0.30 * acceptance
+                if 'bench_target' in (p.get('flags') or []):
+                    base += 0.03
+                if my_delta < 1.0:
+                    base -= (1.0 - my_delta) * 1.2
+                if my_delta < MIN_MY_GAIN_HARD:
+                    base -= (MIN_MY_GAIN_HARD - my_delta) * 3.5
+                return base
+            except Exception:
+                return 0.0
+
+        def _passes_min_gain(my_delta: float, their_delta: float, elite_diff: int = 0) -> bool:
+            if my_delta >= MIN_MY_GAIN_HARD:
+                return True
+            if my_delta >= MIN_MY_GAIN_SOFT and their_delta <= -ELITE_ALLOWANCE_DELTA:
+                return True
+            if elite_diff <= 0 and my_delta >= (MIN_MY_GAIN_SOFT - 0.05):
+                return True
+            return False
+
+        my_surplus_pos_points = {}
+        for pl in my_surplus:
+            pos = (pl.get('position') or '').upper()
+            if not pos:
+                continue
+            my_surplus_pos_points.setdefault(pos, []).append(_window_points(pl.get('name')))
+        my_surplus_pos_avg = {
+            pos: (sum(vals) / len(vals)) if vals else 0.0
+            for pos, vals in my_surplus_pos_points.items()
+        }
+        my_surplus_sorted = sorted(my_surplus, key=lambda pl: _window_points(pl.get('name')), reverse=True)[:10]
+
+        opponent_contexts = []
+        for t in teams:
+            if t.get('team_key') not in target_team_set:
+                continue
+            opp_roster = t.get('roster', [])
+            opp_team_key = t.get('team_key')
+            opp_team_name = (t.get('name') or t.get('team_name') or '').strip() or opp_team_key
+
+            opp_targets_bench = []
+            opp_targets_starters = []
+            bench_points_by_pos = {}
+            for p in opp_roster:
+                name = p.get('name')
+                if not name:
+                    continue
+                pos = (_get_combined_info_by_name(name).get('position') or '').upper()
+                if pos in ('DEF','DST','K'):
+                    continue
+                status = str(p.get('status','')).upper()
+                if (not include_injured) and status in ('OUT','IR'):
+                    continue
+                if _window_points(name) <= 0.0:
+                    continue
+                target_container = opp_targets_bench if str(p.get('selected_position') or '').upper().startswith(('BN','IR')) else opp_targets_starters
+                target_container.append(p)
+                if target_container is opp_targets_bench:
+                    bench_points_by_pos.setdefault(pos, []).append(_window_points(name))
+
+            pos_gap_details = []
+            total_gap = 0.0
+            if my_surplus_pos_avg:
+                for pos, my_avg in my_surplus_pos_avg.items():
+                    if my_avg is None:
+                        continue
+                    try:
+                        my_avg_val = float(my_avg)
+                    except (TypeError, ValueError):
+                        continue
+                    if my_avg_val <= 0:
+                        continue
+                    opp_vals = bench_points_by_pos.get(pos) or []
+                    opp_avg = (sum(opp_vals) / len(opp_vals)) if opp_vals else 0.0
+                    gap = round(my_avg_val - opp_avg, 2)
+                    if gap <= 0:
+                        continue
+                    total_gap += gap
+                    pos_gap_details.append({
+                        'position': pos,
+                        'gap_points': gap,
+                        'our_bench_avg': round(my_avg_val, 2),
+                        'their_bench_avg': round(opp_avg, 2) if opp_vals else None
+                    })
+            pos_gap_details.sort(key=lambda entry: entry.get('gap_points', 0), reverse=True)
+
+            opp_targets = (opp_targets_bench + opp_targets_starters) if bench_first else (opp_targets_starters + opp_targets_bench)
+            opp_enriched, opp_slots = _enrich_for_lineup_from_roster(opp_roster)
+            opp_baseline = _lineup_total(opp_enriched, opp_slots)
+            opp_targets_sorted = sorted(opp_targets, key=lambda p: _window_points(p.get('name')), reverse=True)[:12]
+
+            need_score = total_gap
+
+            opponent_contexts.append({
+                'team': t,
+                'team_key': opp_team_key,
+                'team_name': opp_team_name,
+                'opp_targets_sorted': opp_targets_sorted,
+                'opp_targets_bench': opp_targets_bench,
+                'opp_enriched': opp_enriched,
+                'opp_slots': opp_slots,
+                'opp_baseline': opp_baseline,
+                'need_score': need_score,
+                'pos_gap_details': pos_gap_details
+            })
+
+        opponent_contexts.sort(key=lambda ctx: (-ctx['need_score'], ctx['team_name']))
+
+        for ctx in opponent_contexts:
+            opp_targets_sorted = ctx['opp_targets_sorted']
+            if not opp_targets_sorted:
+                continue
+            opp_targets_bench = ctx['opp_targets_bench']
+            opp_bench_name_set = {p.get('name') for p in opp_targets_bench if p.get('name')}
+            opp_enriched_base = ctx['opp_enriched']
+            opp_slots = ctx['opp_slots']
+            opp_baseline = ctx['opp_baseline']
+            opp_team_key = ctx['team_key']
+            opp_team_name = ctx['team_name']
+            pos_gap_notes = ctx.get('pos_gap_details') or []
+
+            def _serialize_pos_gaps(notes: list, relevant_positions: set[str]) -> list:
+                if not notes:
+                    return []
+                allowed_positions = {pos.upper() for pos in (relevant_positions or set()) if pos}
+                if 'DST' in allowed_positions:
+                    allowed_positions.add('DEF')
+                if 'DEF' in allowed_positions:
+                    allowed_positions.add('DST')
+                serialized = []
+                for item in notes:
+                    if len(serialized) >= 3:
+                        break
+                    if isinstance(item, dict):
+                        pos_raw = item.get('position')
+                        pos_upper = (pos_raw or '').upper()
+                        if pos_upper and allowed_positions and pos_upper not in allowed_positions:
+                            continue
+                        entry = {
+                            'position': pos_raw,
+                            'gap_points': item.get('gap_points'),
+                            'our_bench_avg': item.get('our_bench_avg'),
+                            'their_bench_avg': item.get('their_bench_avg')
+                        }
+                        # Remove empty keys but keep note fallback if provided
+                        entry = {k: v for k, v in entry.items() if v is not None}
+                        if entry:
+                            serialized.append(entry)
+                            continue
+                        note_val = item.get('note')
+                        if note_val:
+                            serialized.append({'note': note_val})
+                    elif item:
+                        serialized.append({'note': str(item)})
+                return serialized
+
+            team_candidates = []
+
+            # 1-for-1 seeds
+            for mine in my_surplus_sorted:
+                for their in opp_targets_sorted:
+                    my_name = mine.get('name')
+                    th_name = their.get('name')
+                    if not my_name or not th_name:
+                        continue
+                    my_post = [p.copy() for p in my_enriched]
+                    opp_post = [p.copy() for p in opp_enriched_base]
+                    for arr_from, arr_to, out_name, in_name in [
+                        (my_post, opp_post, my_name, th_name),
+                        (opp_post, my_post, th_name, my_name)
+                    ]:
+                        for pl in arr_from:
+                            if pl.get('name') == out_name:
+                                pl['blocked'] = True
+                        ci_in = _get_combined_info_by_name(in_name)
+                        arr_to.append({
+                            'name': in_name,
+                            'position': (ci_in.get('position') or '').upper(),
+                            'selected_position': None,
+                            'weekly_points': ci_in.get('projected_points'),
+                            'ecr_overall': ci_in.get('ecr_overall'),
+                            'bye_week': ci_in.get('bye_week'),
+                            'status': '',
+                            'blocked': False
+                        })
+
+                    my_after = _lineup_total(my_post, my_slots)
+                    opp_after = _lineup_total(opp_post, opp_slots)
+                    my_delta = round(my_after - my_baseline, 2)
+                    their_delta = round(opp_after - opp_baseline, 2)
+
+                    va = _get_value_1qb(my_name)
+                    vb = _get_value_1qb(th_name)
+                    parity = _parity_pct(va, vb)
+                    their_names = [th_name]
+                    their_starters = sum(1 for n in their_names if n not in opp_bench_name_set)
+                    elite_hits = _count_elite_assets(their_names)
+                    bench_flag = their_starters < len(their_names)
+                    if bench_first and their_starters >= len(their_names):
+                        continue
+                    if bench_first and elite_hits > _count_elite_assets([my_name]):
+                        continue
+                    accept_prob = _acceptance_prob(their_delta, parity, their_starters, elite_hits)
+
+                    if debug_flag:
+                        if my_delta <= -5.0:
+                            continue
+                        if not (parity >= 70 or their_delta >= 1.0):
+                            continue
+                        if accept_prob < debug_acceptance_floor:
+                            continue
+                    else:
+                        if my_delta <= 0:
+                            continue
+                        if not (parity >= 92 or their_delta >= 5.0):
+                            continue
+                        if accept_prob < max(effective_acceptance_floor, 0.35):
+                            continue
+
+                    relevant_positions = _positions_for_names([my_name])
+                    pos_gap_serialized = _serialize_pos_gaps(pos_gap_notes, relevant_positions)
+
+                    team_candidates.append({
+                        'trade_id': f"1x1-{normalize_player_name(my_name)}-{normalize_player_name(th_name)}",
+                        'my_side': [my_name],
+                        'their_side': [th_name],
+                        'my_delta_points': my_delta,
+                        'their_delta_points': their_delta,
+                        'value_parity_pct': parity,
+                        'acceptance_prob': round(accept_prob, 2),
+                        'flags': ['bench_target'] if bench_flag else [],
+                        'opponent_team': opp_team_name,
+                        'opponent_team_name': opp_team_name,
+                        'opponent_team_key': opp_team_key,
+                        'opponent_needs': pos_gap_serialized
+                    })
+
+            # 2-for-1 seeds (my two for their one)
+            if max_pkg >= 2:
+                for mine_pair in itertools.combinations(my_surplus_sorted[:6], 2):
+                    for their in opp_targets_sorted:
+                        my_names = [mine_pair[0].get('name'), mine_pair[1].get('name')]
+                        th_name = their.get('name')
+                        if not th_name or any(not n for n in my_names):
+                            continue
+                        my_post = [p.copy() for p in my_enriched]
+                        opp_post = [p.copy() for p in opp_enriched_base]
+                        for out_n in my_names:
+                            for pl in my_post:
+                                if pl.get('name') == out_n:
+                                    pl['blocked'] = True
+                        for pl in opp_post:
+                            if pl.get('name') == th_name:
+                                pl['blocked'] = True
+                        ci_in = _get_combined_info_by_name(th_name)
+                        opp_in_entries = []
+                        for out_n in my_names:
+                            ci_to_opp = _get_combined_info_by_name(out_n)
+                            opp_in_entries.append({
+                                'name': out_n,
+                                'position': (ci_to_opp.get('position') or '').upper(),
+                                'selected_position': None,
+                                'weekly_points': ci_to_opp.get('projected_points'),
+                                'ecr_overall': ci_to_opp.get('ecr_overall'),
+                                'bye_week': ci_to_opp.get('bye_week'),
+                                'status': '',
+                                'blocked': False
+                            })
+                        my_post.append({
+                            'name': th_name,
+                            'position': (ci_in.get('position') or '').upper(),
+                            'selected_position': None,
+                            'weekly_points': ci_in.get('projected_points'),
+                            'ecr_overall': ci_in.get('ecr_overall'),
+                            'bye_week': ci_in.get('bye_week'),
+                            'status': '',
+                            'blocked': False
+                        })
+                        opp_post.extend(opp_in_entries)
+
+                        my_after = _lineup_total(my_post, my_slots)
+                        opp_after = _lineup_total(opp_post, opp_slots)
+                        my_delta = round(my_after - my_baseline, 2)
+                        their_delta = round(opp_after - opp_baseline, 2)
+
+                        va = sum(_get_value_1qb(n) for n in my_names)
+                        vb = _get_value_1qb(th_name)
+                        parity = _parity_pct(va, vb)
+                        their_names = [th_name]
+                        their_starters = sum(1 for n in their_names if n not in opp_bench_name_set)
+                        elite_hits = _count_elite_assets(their_names)
+                        bench_flag = their in opp_targets_bench
+                        if bench_first and their_starters >= len(their_names):
+                            continue
+                        if bench_first and elite_hits > _count_elite_assets(my_names):
+                            continue
+                        accept_prob = _acceptance_prob(their_delta, parity, their_starters, elite_hits)
+
+                        if debug_flag:
+                            if my_delta <= -5.0:
+                                continue
+                            if not (parity >= 70 or their_delta >= 1.0):
+                                continue
+                            if accept_prob < debug_acceptance_floor:
+                                continue
+                        else:
+                            if my_delta <= -5.0:
+                                continue
+                            if not (parity >= 45 or their_delta >= 1.0):
+                                continue
+                            if accept_prob < effective_acceptance_floor:
+                                continue
+
+                        if not _passes_min_gain(my_delta, their_delta):
+                            continue
+                        bench_flag = their in opp_targets_bench
+                        relevant_positions = _positions_for_names(my_names)
+                        pos_gap_serialized = _serialize_pos_gaps(pos_gap_notes, relevant_positions)
+                        team_candidates.append({
+                            'trade_id': f"2x1-{normalize_player_name(my_names[0])}+{normalize_player_name(my_names[1])}-{normalize_player_name(th_name)}",
+                            'my_side': my_names,
+                            'their_side': [th_name],
+                            'my_delta_points': my_delta,
+                            'their_delta_points': their_delta,
+                            'value_parity_pct': parity,
+                            'acceptance_prob': round(accept_prob, 2),
+                            'flags': ['bench_target'] if bench_flag else [],
+                            'opponent_team': opp_team_name,
+                            'opponent_team_name': opp_team_name,
+                            'opponent_team_key': opp_team_key,
+                            'opponent_needs': pos_gap_serialized
+                        })
+
+            # 1-for-2 seeds (my one for their two) — add suggested drop on my side
+            if max_pkg >= 2:
+                for mine in my_surplus_sorted:
+                    for their_pair in itertools.combinations(opp_targets_sorted[:8], 2):
+                        my_name = mine.get('name')
+                        th_names = [their_pair[0].get('name'), their_pair[1].get('name')]
+                        if not my_name or any(not n for n in th_names):
+                            continue
+                        my_post = [p.copy() for p in my_enriched]
+                        opp_post = [p.copy() for p in opp_enriched_base]
+                        for pl in my_post:
+                            if pl.get('name') == my_name:
+                                pl['blocked'] = True
+                        for out_n in th_names:
+                            for pl in opp_post:
+                                if pl.get('name') == out_n:
+                                    pl['blocked'] = True
+                        for in_name in th_names:
+                            ci_in = _get_combined_info_by_name(in_name)
+                            my_post.append({
+                                'name': in_name,
+                                'position': (ci_in.get('position') or '').upper(),
+                                'selected_position': None,
+                                'weekly_points': ci_in.get('projected_points'),
+                                'ecr_overall': ci_in.get('ecr_overall'),
+                                'bye_week': ci_in.get('bye_week'),
+                                'status': '',
+                                'blocked': False
+                            })
+                        opp_in_ci = _get_combined_info_by_name(my_name)
+                        opp_post.append({
+                            'name': my_name,
+                            'position': (opp_in_ci.get('position') or '').upper(),
+                            'selected_position': None,
+                            'weekly_points': opp_in_ci.get('projected_points'),
+                            'ecr_overall': opp_in_ci.get('ecr_overall'),
+                            'bye_week': opp_in_ci.get('bye_week'),
+                            'status': '',
+                            'blocked': False
+                        })
+
+                        my_after = _lineup_total(my_post, my_slots)
+                        opp_after = _lineup_total(opp_post, opp_slots)
+                        my_delta = round(my_after - my_baseline, 2)
+                        their_delta = round(opp_after - opp_baseline, 2)
+
+                        va = _get_value_1qb(my_name)
+                        vb = sum(_get_value_1qb(n) for n in th_names)
+                        parity = _parity_pct(va, vb)
+                        their_starters = sum(1 for n in th_names if n not in opp_bench_name_set)
+                        elite_hits = _count_elite_assets(th_names)
+                        bench_flag = any(tp in opp_targets_bench for tp in their_pair)
+                        if bench_first and their_starters >= len(th_names):
+                            continue
+                        if bench_first and elite_hits > _count_elite_assets([my_name]):
+                            continue
+                        accept_prob = _acceptance_prob(their_delta, parity, their_starters, elite_hits)
+                        if debug_flag:
+                            if my_delta <= -5.0:
+                                continue
+                            if not (parity >= 70 or their_delta >= 1.0):
+                                continue
+                            if accept_prob < debug_acceptance_floor:
+                                continue
+                        else:
+                            if my_delta <= -5.0:
+                                continue
+                            if not (parity >= 45 or their_delta >= 1.0):
+                                continue
+                            if accept_prob < effective_acceptance_floor:
+                                continue
+
+                        if not _passes_min_gain(my_delta, their_delta):
+                            continue
+
+                        bench_pool = [p for p in my_enriched if p.get('name') not in starters and p.get('name') not in ([my_name] + th_names)]
+                        drop_cand = None
+                        if bench_pool:
+                            drop_cand = min(bench_pool, key=lambda p: _window_points(p.get('name') or ''))
+                        relevant_positions = _positions_for_names([my_name])
+                        pos_gap_serialized = _serialize_pos_gaps(pos_gap_notes, relevant_positions)
+                        team_candidates.append({
+                            'trade_id': f"1x2-{normalize_player_name(my_name)}-{normalize_player_name(th_names[0])}+{normalize_player_name(th_names[1])}",
+                            'my_side': [my_name],
+                            'their_side': th_names,
+                            'my_delta_points': my_delta,
+                            'their_delta_points': their_delta,
+                            'value_parity_pct': parity,
+                            'acceptance_prob': round(accept_prob, 2),
+                            'flags': ['bench_target'] if bench_flag else [],
+                            'suggested_drop': (drop_cand.get('name') if drop_cand else None),
+                            'opponent_team': opp_team_name,
+                            'opponent_team_name': opp_team_name,
+                            'opponent_team_key': opp_team_key,
+                            'opponent_needs': pos_gap_serialized
+                        })
+
+            # 2-for-2 seeds
+            if max_pkg >= 2:
+                for mine_pair in itertools.combinations(my_surplus_sorted[:6], 2):
+                    for their_pair in itertools.combinations(opp_targets_sorted[:8], 2):
+                        my_names = [mine_pair[0].get('name'), mine_pair[1].get('name')]
+                        th_names = [their_pair[0].get('name'), their_pair[1].get('name')]
+                        if any(not n for n in my_names + th_names):
+                            continue
+                        my_post = [p.copy() for p in my_enriched]
+                        opp_post = [p.copy() for p in opp_enriched_base]
+                        for out_n in my_names:
+                            for pl in my_post:
+                                if pl.get('name') == out_n:
+                                    pl['blocked'] = True
+                        for out_n in th_names:
+                            for pl in opp_post:
+                                if pl.get('name') == out_n:
+                                    pl['blocked'] = True
+                        for in_name in th_names:
+                            ci_in = _get_combined_info_by_name(in_name)
+                            my_post.append({
+                                'name': in_name,
+                                'position': (ci_in.get('position') or '').upper(),
+                                'selected_position': None,
+                                'weekly_points': ci_in.get('projected_points'),
+                                'ecr_overall': ci_in.get('ecr_overall'),
+                                'bye_week': ci_in.get('bye_week'),
+                                'status': '',
+                                'blocked': False
+                            })
+                        for in_name in my_names:
+                            ci_in = _get_combined_info_by_name(in_name)
+                            opp_post.append({
+                                'name': in_name,
+                                'position': (ci_in.get('position') or '').upper(),
+                                'selected_position': None,
+                                'weekly_points': ci_in.get('projected_points'),
+                                'ecr_overall': ci_in.get('ecr_overall'),
+                                'bye_week': ci_in.get('bye_week'),
+                                'status': '',
+                                'blocked': False
+                            })
+
+                        my_after = _lineup_total(my_post, my_slots)
+                        opp_after = _lineup_total(opp_post, opp_slots)
+                        my_delta = round(my_after - my_baseline, 2)
+                        their_delta = round(opp_after - opp_baseline, 2)
+
+                        va = sum(_get_value_1qb(n) for n in my_names)
+                        vb = sum(_get_value_1qb(n) for n in th_names)
+                        parity = _parity_pct(va, vb)
+                        their_starters = sum(1 for n in th_names if n not in opp_bench_name_set)
+                        elite_hits = _count_elite_assets(th_names)
+                        bench_flag = any(tp in opp_targets_bench for tp in their_pair)
+                        if bench_first and their_starters >= len(th_names):
+                            continue
+                        if bench_first and elite_hits > _count_elite_assets(my_names):
+                            continue
+                        accept_prob = _acceptance_prob(their_delta, parity, their_starters, elite_hits)
+                        if debug_flag:
+                            if my_delta <= -5.0:
+                                continue
+                            if not (parity >= 70 or their_delta >= 1.0):
+                                continue
+                            if accept_prob < debug_acceptance_floor:
+                                continue
+                        else:
+                            if my_delta <= -5.0:
+                                continue
+                            if not (parity >= 45 or their_delta >= 1.0):
+                                continue
+                            if accept_prob < effective_acceptance_floor:
+                                continue
+
+                        if not _passes_min_gain(my_delta, their_delta):
+                            continue
+                        relevant_positions = _positions_for_names(my_names)
+                        pos_gap_serialized = _serialize_pos_gaps(pos_gap_notes, relevant_positions)
+                        team_candidates.append({
+                            'trade_id': f"2x2-{normalize_player_name(my_names[0])}+{normalize_player_name(my_names[1])}-{normalize_player_name(th_names[0])}+{normalize_player_name(th_names[1])}",
+                            'my_side': my_names,
+                            'their_side': th_names,
+                            'my_delta_points': my_delta,
+                            'their_delta_points': their_delta,
+                            'value_parity_pct': parity,
+                            'acceptance_prob': round(accept_prob, 2),
+                            'flags': ['bench_target'] if bench_flag else [],
+                            'opponent_team': opp_team_name,
+                            'opponent_team_name': opp_team_name,
+                            'opponent_team_key': opp_team_key,
+                            'opponent_needs': pos_gap_serialized
+                        })
+
+            if team_candidates:
+                per_team_candidates[opp_team_key] = team_candidates
+
+        if per_team_candidates:
+            diversity_penalty = 0.18
+            proposals = []
+            heap = []
+            per_team_ordered = {}
+            per_team_cap = max(3, max(1, top_k // 4))
+            for team_key, candidates in per_team_candidates.items():
+                ordered = sorted(candidates, key=_score, reverse=True)[:per_team_cap]
+                per_team_ordered[team_key] = ordered
+                if ordered:
+                    initial_score = _score(ordered[0])
+                    heapq.heappush(heap, (-initial_score, team_key, 0))
+            diversity_counts = {k: 0 for k in per_team_ordered.keys()}
+            while heap and len(proposals) < top_k:
+                priority, team_key, idx = heapq.heappop(heap)
+                candidate = per_team_ordered[team_key][idx]
+                proposals.append(candidate)
+                diversity_counts[team_key] += 1
+                next_idx = idx + 1
+                if next_idx < len(per_team_ordered[team_key]):
+                    penalty = diversity_penalty * diversity_counts[team_key]
+                    next_score = _score(per_team_ordered[team_key][next_idx]) - penalty
+                    heapq.heappush(heap, (-next_score, team_key, next_idx))
+
+        # Debug info for troubleshooting
+        debug_info = {}
+        if debug_flag:
+            debug_info = {
+                'my_baseline': my_baseline,
+                'my_slots': my_slots,
+                'my_surplus_count': len(my_surplus),
+                'my_surplus_names': [p.get('name') for p in my_surplus[:5]],
+                'target_teams_count': len(target_team_keys),
+                'sample_team_targets': {}
+            }
+            # Add sample of opponent targets for first team
+            if teams:
+                for t in teams[:1]:
+                    if t.get('team_key') in target_team_keys:
+                        opp_roster = t.get('roster', [])
+                        bench_count = sum(1 for p in opp_roster if str(p.get('selected_position', '')).upper().startswith('BN'))
+                        starter_count = len(opp_roster) - bench_count
+                        debug_info['sample_team_targets'][t.get('team_key')] = {
+                            'total_roster': len(opp_roster),
+                            'bench_players': bench_count,
+                            'starter_players': starter_count
+                        }
+
+        proposals = sorted(proposals, key=_score, reverse=True)[:top_k]
+
+        ai_meta = {'ai_enabled': False}
+        if use_ai and proposals:
+            import time as _t
+            ai_start = _t.perf_counter()
+            try:
+                enhanced = _enhance_proposals_with_ai(
+                    proposals=proposals,
+                    my_team=my_team,
+                    teams=teams,
+                    access_token=access_token,
+                    api_key_override=api_key_override
+                )
+                if enhanced:
+                    proposals = enhanced
+                duration_ms = round((_t.perf_counter() - ai_start) * 1000, 1)
+
+                def _ai_score(p):
+                    base = _score(p)
+                    adj = p.get('ai_rank_adjustment')
+                    if isinstance(adj, (int, float)):
+                        return base + float(adj)
+                    return base
+
+                proposals = sorted(proposals, key=_ai_score, reverse=True)
+                enhanced_count = sum(1 for p in proposals if p.get('ai_confidence') or (p.get('reasons') and isinstance(p.get('reasons'), list)))
+                ai_meta = {
+                    'ai_enabled': True,
+                    'ai_enhanced_count': enhanced_count,
+                    'ai_latency_ms': duration_ms
+                }
+            except Exception as ai_exc:
+                print(f"AI enhancement failed: {ai_exc}")
+                ai_meta = {
+                    'ai_enabled': True,
+                    'ai_error': str(ai_exc)[:160]
+                }
+
+        meta = {
+            'league_key': league_key,
+            'teams_considered': len(target_team_keys),
+            'proposals_returned': len(proposals),
+            'opponent_counts': {},
+            'target_team_keys': list(target_team_keys)
+        }
+        opponent_counts = {}
+        for proposal in proposals:
+            opp_label = proposal.get('opponent_team_name') or proposal.get('opponent_team') or proposal.get('opponent_team_key') or 'unknown'
+            opponent_counts[opp_label] = opponent_counts.get(opp_label, 0) + 1
+        meta['opponent_counts'] = opponent_counts
+        if debug_flag:
+            meta.update(debug_info)
+        meta.update(ai_meta)
+        return jsonify({'proposals': proposals, 'meta': meta})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/trade_suggestions/debug')
+def trade_suggestions_debug():
+    """
+    Debug a specific proposal by recomputing pre/post lineups and deltas.
+    Query: league_key (req), my_team_key (req), trade_id (req), include_injured? false, bench_first? true
+    Auth: Authorization Bearer Yahoo token required.
+    """
+    try:
+        league_key = request.args.get('league_key')
+        my_team_key = request.args.get('my_team_key')
+        trade_id = request.args.get('trade_id')
+        include_injured = str(request.args.get('include_injured','')).strip() in ('1','true','True')
+        bench_first = str(request.args.get('bench_first','1')).strip() in ('1','true','True')
+        if not (league_key and my_team_key and trade_id):
+            return jsonify({'error': 'league_key, my_team_key, and trade_id are required'}), 400
+
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'Valid Authorization header with Bearer token is required'}), 401
+        access_token = auth_header.split(' ')[1]
+
+        # Parse trade_id
+        # Formats: 1x1-a-b, 2x1-a+b-c, 1x2-a-b+c, 2x2-a+b-c+d
+        try:
+            typ, rest = trade_id.split('-', 1)
+            left, right = rest.split('-', 1)
+            my_names_n = [s for s in left.split('+') if s]
+            their_names_n = [s for s in right.split('+') if s]
+        except Exception:
+            return jsonify({'error': 'Invalid trade_id format'}), 400
+
+        # Fetch snapshot
+        with app.test_request_context(environ_base={'HTTP_AUTHORIZATION': f'Bearer {access_token}'}, query_string={'league_key': league_key}):
+            snap_resp = yahoo_league_snapshot()
+        if hasattr(snap_resp, 'status_code') and snap_resp.status_code != 200:
+            return snap_resp
+        snapshot = snap_resp.get_json() if hasattr(snap_resp, 'get_json') else snap_resp
+        teams = snapshot.get('teams', []) if isinstance(snapshot, dict) else []
+
+        my_team = next((t for t in teams if t.get('team_key') == my_team_key), None)
+        if not my_team:
+            return jsonify({'error': 'my_team_key not found'}), 400
+
+        # Find opponent by matching their names to roster
+        def norm(n):
+            return normalize_player_name(n) if n else n
+        their_norm_set = set(their_names_n)
+        best_team = None
+        best_hits = -1
+        for t in teams:
+            if t.get('team_key') == my_team_key:
+                continue
+            hits = 0
+            for p in (t.get('roster') or []):
+                n = norm(p.get('name'))
+                if n in their_norm_set:
+                    hits += 1
+            if hits > best_hits:
+                best_hits = hits
+                best_team = t
+        if not best_team:
+            return jsonify({'error': 'Unable to identify opponent team for trade_id'}), 400
+
+        # Helper to map normalized names back to display names using snapshot
+        def resolve_display_names(names_n: list[str], roster: list) -> list[str]:
+            resolved = []
+            for nn in names_n:
+                found = None
+                for p in roster:
+                    if norm(p.get('name')) == nn:
+                        found = p.get('name')
+                        break
+                if not found:
+                    # fallback to title-cased normalized
+                    found = (nn or '').replace('-', ' ').title()
+                resolved.append(found)
+            return resolved
+
+        my_roster = my_team.get('roster', [])
+        opp_roster = best_team.get('roster', [])
+        my_names = resolve_display_names(my_names_n, my_roster)
+        their_names = resolve_display_names(their_names_n, opp_roster)
+
+        # Build enriched and slots
+        my_enriched, my_slots = _enrich_for_lineup_from_roster(my_roster)
+        opp_enriched, opp_slots = _enrich_for_lineup_from_roster(opp_roster)
+        my_baseline_lineup, my_baseline_total = _best_lineup(my_enriched, my_slots)
+        opp_baseline_lineup, opp_baseline_total = _best_lineup(opp_enriched, opp_slots)
+
+        # Build post-trade rosters
+        my_post = [p.copy() for p in my_enriched]
+        opp_post = [p.copy() for p in opp_enriched]
+        for out_n in my_names:
+            for pl in my_post:
+                if normalize_player_name(pl.get('name')) == normalize_player_name(out_n):
+                    pl['blocked'] = True
+        for out_n in their_names:
+            for pl in opp_post:
+                if normalize_player_name(pl.get('name')) == normalize_player_name(out_n):
+                    pl['blocked'] = True
+        for in_name in their_names:
+            ci_in = _get_combined_info_by_name(in_name)
+            my_post.append({
+                'name': in_name,
+                'position': (ci_in.get('position') or '').upper(),
+                'selected_position': None,
+                'weekly_points': ci_in.get('projected_points'),
+                'ecr_overall': ci_in.get('ecr_overall'),
+                'bye_week': ci_in.get('bye_week'),
+                'status': '',
+                'blocked': False
+            })
+        for in_name in my_names:
+            ci_in = _get_combined_info_by_name(in_name)
+            opp_post.append({
+                'name': in_name,
+                'position': (ci_in.get('position') or '').upper(),
+                'selected_position': None,
+                'weekly_points': ci_in.get('projected_points'),
+                'ecr_overall': ci_in.get('ecr_overall'),
+                'bye_week': ci_in.get('bye_week'),
+                'status': '',
+                'blocked': False
+            })
+
+        my_after_lineup, my_after_total = _best_lineup(my_post, my_slots)
+        opp_after_lineup, opp_after_total = _best_lineup(opp_post, opp_slots)
+        my_delta = round(my_after_total - my_baseline_total, 2)
+        their_delta = round(opp_after_total - opp_baseline_total, 2)
+
+        # Parity and acceptance
+        va = sum(_get_value_1qb(n) for n in my_names)
+        vb = sum(_get_value_1qb(n) for n in their_names)
+        parity = _parity_pct(va, vb)
+        opp_bench_normalized = {
+            normalize_player_name(p.get('name'))
+            for p in opp_roster
+            if str(p.get('selected_position', '')).upper().startswith(('BN', 'IR'))
+        }
+        their_starters = sum(
+            1 for n in their_names
+            if normalize_player_name(n) not in opp_bench_normalized
+        )
+        elite_hits = sum(1 for n in their_names if _is_elite_asset(n))
+        accept_prob = _acceptance_prob(their_delta, parity, their_starters, elite_hits)
+
+        def lineup_to_simple(lu):
+            simple = []
+            for slot in lu:
+                s = slot.get('slot')
+                pl = slot.get('player')
+                if pl and pl.get('name'):
+                    simple.append({
+                        'slot': s,
+                        'name': pl.get('name'),
+                        'position': pl.get('position'),
+                        'weekly_points': _window_points(pl.get('name'))
+                    })
+                else:
+                    simple.append({'slot': s, 'name': None})
+            return simple
+
+        return jsonify({
+            'trade_id': trade_id,
+            'my_team_key': my_team_key,
+            'opp_team_key': best_team.get('team_key'),
+            'my_side': my_names,
+            'their_side': their_names,
+            'my_baseline_total': my_baseline_total,
+            'their_baseline_total': opp_baseline_total,
+            'my_after_total': my_after_total,
+            'their_after_total': opp_after_total,
+            'my_delta_points': my_delta,
+            'their_delta_points': their_delta,
+            'value_parity_pct': parity,
+            'acceptance_prob': round(accept_prob, 2),
+            'my_baseline_lineup': lineup_to_simple(my_baseline_lineup),
+            'their_baseline_lineup': lineup_to_simple(opp_baseline_lineup),
+            'my_after_lineup': lineup_to_simple(my_after_lineup),
+            'their_after_lineup': lineup_to_simple(opp_after_lineup)
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 def parse_yahoo_roster_response(data):
     """
     Parse Yahoo API roster response with defensive JSON parsing.
@@ -7074,6 +8549,6 @@ if __name__ == '__main__':
     # Data loading is handled by the `load_all_data()` call at the top level.
     if static_ecr_overall_data and player_data_cache is not None:
         # Use SSL context for HTTPS
-        app.run(debug=True, host='0.0.0.0', port=5000, ssl_context=('certs/localhost.pem', 'certs/localhost-key.pem'))
+        app.run(debug=True, host='0.0.0.0', port=5000, ssl_context=('certs/localhost.pem', 'certs/localhost-key.pem'), use_reloader=False)
     else:
         print("Application will not start because essential data failed to load.")

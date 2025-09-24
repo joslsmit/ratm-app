@@ -36,8 +36,11 @@ const Sidebar = ({ activeTool, targetList }) => {
     { key: 'targets', label: `Target List`, icon: '🎯', badge: targetList.length },
   ];
   const inSeason = [
-    ...(isYahooLoggedIn ? [{ key: 'my-team', label: 'My Team', icon: '👥', yahoo: true }] : []),
-    ...(isYahooLoggedIn ? [{ key: 'lineup', label: 'Sit/Start Optimizer', icon: '🏈', yahoo: true }] : []),
+    ...(isYahooLoggedIn ? [
+      { key: 'my-team', label: 'My Team', icon: '👥', yahoo: true },
+      { key: 'lineup', label: 'Sit/Start Optimizer', icon: '🏈', yahoo: true },
+      { key: 'trade-center', label: 'Trade Center', icon: '💼', yahoo: true }
+    ] : []),
     { key: 'waiver', label: 'Waiver Wire Assistant', icon: '🔄' },
     { key: 'market', label: 'Sleepers & Traps', icon: '💡' },
     { key: 'trade', label: 'Trade Analyzer', icon: '🤝' },
